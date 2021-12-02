@@ -30,7 +30,7 @@ type Value interface {
 // StringValue type alias for string to implement Value
 type StringValue string
 
-// Serialize serialize the StringValue to byte array.
+// Serialize the StringValue to byte array.
 func (s StringValue) Serialize() []byte {
 	return []byte(s)
 }
