@@ -48,6 +48,7 @@ macro( build_rocksdb )
          "-DWITH_GFLAGS=OFF"
          "-DROCKSDB_BUILD_SHARED=OFF"
          "-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}"
+         "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} -Wno-error"
          #This is used to solve 'illegal instruction' problem in some machine
          "-DPORTABLE=ON"
         )
