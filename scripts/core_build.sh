@@ -144,7 +144,6 @@ if [[ ${MAKE_CLEAN} == "ON" ]]; then
   exit 0
 fi
 
-
 unameOut="$(uname -s)"
 case "${unameOut}" in
     Darwin*)
@@ -153,7 +152,7 @@ case "${unameOut}" in
         export CC="${llvm_prefix}/bin/clang"
         export CXX="${llvm_prefix}/bin/clang++"
         export LDFLAGS="-L${llvm_prefix}/lib -L/usr/local/opt/libomp/lib"
-        export CXXFLAGS="-I${llvm_prefix}/include -I/usr/local/include -I/usr/local/opt/libomp/include -Wno-error=deprecated-declarations -Wno-deprecated-declarations -DBOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1"
+        export CXXFLAGS="-I${llvm_prefix}/include -I/usr/local/include -I/usr/local/opt/libomp/include"
         ;;
           *)   echo "==System:${unameOut}";
 esac
