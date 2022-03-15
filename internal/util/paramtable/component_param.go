@@ -83,6 +83,10 @@ func (p *ComponentParam) PulsarEnable() bool {
 	return p.PulsarCfg.Address != ""
 }
 
+func (p *ComponentParam) KafkaEnable() bool {
+	return p.KafkaCfg.Address != ""
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // --- common ---
 type commonConfig struct {

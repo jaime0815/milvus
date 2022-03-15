@@ -54,8 +54,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-var Params paramtable.ComponentParam
-
 // all milvus related metrics is in a separate registry
 var Registry *prometheus.Registry
 
@@ -65,14 +63,48 @@ func init() {
 	Registry.MustRegister(prometheus.NewGoCollector())
 }
 
-func newMsgFactory(localMsg bool) msgstream.Factory {
+// TODO only support one mq at the same time.
+// newMsgFactory create a msg factory
+// In order to guarantee backward compatibility of config file, we still support multiple mq configs.
+// 1. Rocksmq only run on local mode, and it has the highest priority
+// 2. Pulsar has higher priority than Kafka within remote msg
+func newMsgFactory(localMsg bool, params paramtable.ComponentParam) msgstream.Factory {
 	if localMsg {
-		if Params.RocksmqEnable() {
-			return msgstream.NewRmsFactory()
+		fct := newLocalMsgFactory(params)
+		if fct == nil {
+			fct = newRemoteMsgFactory(params)
+			if fct == nil {
+				panic("no available MQ configuration, must config rocksmq, Pulsar or Kafka at least one of these!")
+			}
 		}
+		return fct
+	}
+
+	fct := newRemoteMsgFactory(params)
+	if fct == nil {
+		panic("no available remote mq configuration, must config Pulsar or Kafka at least one of these!")
+	}
+	return fct
+}
+
+func newLocalMsgFactory(params paramtable.ComponentParam) msgstream.Factory {
+	if params.RocksmqEnable() {
+		return msgstream.NewRmsFactory()
+	}
+	return nil
+}
+
+// newRemoteMsgFactory Pulsar has higher priority than Kafka.
+func newRemoteMsgFactory(params paramtable.ComponentParam) msgstream.Factory {
+	if params.PulsarEnable() {
 		return msgstream.NewPmsFactory()
 	}
-	return msgstream.NewPmsFactory()
+
+	if params.KafkaEnable() {
+		return msgstream.NewKmsFactory()
+	}
+
+	return nil
 }
 
 func initRocksmq() error {
@@ -116,7 +148,7 @@ func (mr *MilvusRoles) runRootCoord(ctx context.Context, localMsg bool) *compone
 			rootcoord.Params.SetLogConfig(typeutil.RootCoordRole)
 		}
 
-		factory := newMsgFactory(localMsg)
+		factory := newMsgFactory(localMsg, rootcoord.Params)
 		var err error
 		rc, err = components.NewRootCoord(ctx, factory)
 		if err != nil {
@@ -148,7 +180,7 @@ func (mr *MilvusRoles) runProxy(ctx context.Context, localMsg bool, alias string
 			proxy.Params.SetLogConfig(typeutil.ProxyRole)
 		}
 
-		factory := newMsgFactory(localMsg)
+		factory := newMsgFactory(localMsg, proxy.Params)
 		var err error
 		pn, err = components.NewProxy(ctx, factory)
 		if err != nil {
@@ -179,7 +211,7 @@ func (mr *MilvusRoles) runQueryCoord(ctx context.Context, localMsg bool) *compon
 			querycoord.Params.SetLogConfig(typeutil.QueryCoordRole)
 		}
 
-		factory := newMsgFactory(localMsg)
+		factory := newMsgFactory(localMsg, querycoord.Params)
 		var err error
 		qs, err = components.NewQueryCoord(ctx, factory)
 		if err != nil {
@@ -211,7 +243,7 @@ func (mr *MilvusRoles) runQueryNode(ctx context.Context, localMsg bool, alias st
 			querynode.Params.SetLogConfig(typeutil.QueryNodeRole)
 		}
 
-		factory := newMsgFactory(localMsg)
+		factory := newMsgFactory(localMsg, querynode.Params)
 		var err error
 		qn, err = components.NewQueryNode(ctx, factory)
 		if err != nil {
@@ -242,7 +274,7 @@ func (mr *MilvusRoles) runDataCoord(ctx context.Context, localMsg bool) *compone
 			datacoord.Params.SetLogConfig(typeutil.DataCoordRole)
 		}
 
-		factory := newMsgFactory(localMsg)
+		factory := newMsgFactory(localMsg, datacoord.Params)
 
 		dctx := logutil.WithModule(ctx, "DataCoord")
 		var err error
@@ -276,7 +308,7 @@ func (mr *MilvusRoles) runDataNode(ctx context.Context, localMsg bool, alias str
 			datanode.Params.SetLogConfig(typeutil.DataNodeRole)
 		}
 
-		factory := newMsgFactory(localMsg)
+		factory := newMsgFactory(localMsg, datanode.Params)
 		var err error
 		dn, err = components.NewDataNode(ctx, factory)
 		if err != nil {
@@ -364,16 +396,21 @@ func (mr *MilvusRoles) Run(local bool, alias string) {
 		if err := os.Setenv(metricsinfo.DeployModeEnvKey, metricsinfo.StandaloneDeployMode); err != nil {
 			log.Error("Failed to set deploy mode: ", zap.Error(err))
 		}
-		Params.Init()
 
-		if err := initRocksmq(); err != nil {
-			panic(err)
+		var params paramtable.ComponentParam
+		params.Init()
+
+		// TODO:: we need a high level abstraction to process initialize and close for global resource
+		if params.RocksmqEnable() {
+			if err := initRocksmq(); err != nil {
+				panic(err)
+			}
+			defer stopRocksmq()
 		}
-		defer stopRocksmq()
 
-		if Params.EtcdCfg.UseEmbedEtcd {
+		if params.EtcdCfg.UseEmbedEtcd {
 			// Start etcd server.
-			etcd.InitEtcdServer(&Params.EtcdCfg)
+			etcd.InitEtcdServer(&params.EtcdCfg)
 			defer etcd.StopEtcdServer()
 		}
 	} else {

@@ -19,11 +19,14 @@ package msgstream
 import (
 	"context"
 
+	"github.com/mitchellh/mapstructure"
+
 	"github.com/milvus-io/milvus/internal/util/paramtable"
 
 	rmqimplserver "github.com/milvus-io/milvus/internal/mq/mqimpl/rocksmq/server"
 
 	"github.com/apache/pulsar-client-go/pulsar"
+	kafkawrapper "github.com/milvus-io/milvus/internal/mq/msgstream/mqwrapper/kafka"
 	puslarmqwrapper "github.com/milvus-io/milvus/internal/mq/msgstream/mqwrapper/pulsar"
 	rmqwrapper "github.com/milvus-io/milvus/internal/mq/msgstream/mqwrapper/rmq"
 )
@@ -39,8 +42,6 @@ type PmsFactory struct {
 
 // Init is used to set parameters for PmsFactory
 func (f *PmsFactory) Init(params *paramtable.ComponentParam) error {
-	f.PulsarBufSize = 1024
-	f.ReceiveBufSize = 1024
 	f.PulsarAddress = params.PulsarCfg.Address
 	return nil
 }
@@ -72,8 +73,8 @@ func (f *PmsFactory) NewQueryMsgStream(ctx context.Context) (MsgStream, error) {
 func NewPmsFactory() Factory {
 	f := &PmsFactory{
 		dispatcherFactory: ProtoUDFactory{},
-		ReceiveBufSize:    64,
-		PulsarBufSize:     64,
+		ReceiveBufSize:    1024,
+		PulsarBufSize:     1024,
 	}
 	return f
 }
@@ -127,7 +128,44 @@ func NewRmsFactory() Factory {
 		ReceiveBufSize:    1024,
 		RmqBufSize:        1024,
 	}
-
 	rmqimplserver.InitRocksMQ()
+
+	return f
+}
+
+type KmsFactory struct {
+	dispatcherFactory ProtoUDFactory
+	KafkaAddress      string
+	ReceiveBufSize    int64
+}
+
+func (f *KmsFactory) Init(params *paramtable.ComponentParam) error {
+	f.KafkaAddress = params.KafkaCfg.Address
+	err := mapstructure.Decode(params, f)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (f *KmsFactory) NewMsgStream(ctx context.Context) (MsgStream, error) {
+	kafkaClient := kafkawrapper.NewKafkaClientInstance(f.KafkaAddress)
+	return NewMqMsgStream(ctx, f.ReceiveBufSize, -1, kafkaClient, f.dispatcherFactory.NewUnmarshalDispatcher())
+}
+
+func (f *KmsFactory) NewTtMsgStream(ctx context.Context) (MsgStream, error) {
+	kafkaClient := kafkawrapper.NewKafkaClientInstance(f.KafkaAddress)
+	return NewMqTtMsgStream(ctx, f.ReceiveBufSize, -1, kafkaClient, f.dispatcherFactory.NewUnmarshalDispatcher())
+}
+
+func (f *KmsFactory) NewQueryMsgStream(ctx context.Context) (MsgStream, error) {
+	return f.NewMsgStream(ctx)
+}
+
+func NewKmsFactory() Factory {
+	f := &KmsFactory{
+		dispatcherFactory: ProtoUDFactory{},
+		ReceiveBufSize:    1024,
+	}
 	return f
 }

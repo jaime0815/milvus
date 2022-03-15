@@ -29,6 +29,8 @@ import (
 	"time"
 	"unsafe"
 
+	kafkawrapper "github.com/milvus-io/milvus/internal/mq/msgstream/mqwrapper/kafka"
+
 	"github.com/milvus-io/milvus/internal/mq/mqimpl/rocksmq/server"
 
 	"github.com/apache/pulsar-client-go/pulsar"
@@ -66,9 +68,12 @@ type parameters struct {
 }
 
 func (f *fixture) setup() []parameters {
-	pulsarAddress, _ := Params.Load("_PulsarAddress")
-	pulsarClient, err := pulsarwrapper.NewClient(pulsar.ClientOptions{URL: pulsarAddress})
-	assert.Nil(f.t, err)
+	kafkaAddress, _ := Params.Load("_KafkaBrokerList")
+	kafkaClient := kafkawrapper.NewKafkaClientInstance(kafkaAddress)
+
+	//pulsarAddress, _ := Params.Load("_PulsarAddress")
+	//pulsarClient, err := pulsarwrapper.NewClient(pulsar.ClientOptions{URL: pulsarAddress})
+	//assert.Nil(f.t, err)
 
 	rocksdbName := "/tmp/rocksmq_unittest_" + f.t.Name()
 	endpoints := os.Getenv("ETCD_ENDPOINTS")
@@ -92,7 +97,9 @@ func (f *fixture) setup() []parameters {
 	rmqClient, _ := rmq.NewClientWithDefaultOptions()
 
 	parameters := []parameters{
-		{pulsarClient}, {rmqClient},
+		{kafkaClient},
+		//{pulsarClient},
+		{rmqClient},
 	}
 	return parameters
 }
