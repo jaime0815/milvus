@@ -27,6 +27,8 @@ import (
 	"syscall"
 	"time"
 
+	_ "net/http/pprof"
+
 	rocksmqimpl "github.com/milvus-io/milvus/internal/mq/mqimpl/rocksmq/server"
 
 	"go.uber.org/zap"
@@ -390,6 +392,8 @@ func (mr *MilvusRoles) runIndexNode(ctx context.Context, localMsg bool, alias st
 // Run Milvus components.
 func (mr *MilvusRoles) Run(local bool, alias string) {
 	ctx, cancel := context.WithCancel(context.Background())
+
+	http.ListenAndServe("0.0.0.0:6060", nil)
 
 	// only standalone enable localMsg
 	if local {
