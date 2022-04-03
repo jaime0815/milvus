@@ -393,7 +393,7 @@ func (mr *MilvusRoles) runIndexNode(ctx context.Context, localMsg bool, alias st
 func (mr *MilvusRoles) Run(local bool, alias string) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	http.ListenAndServe("0.0.0.0:6060", nil)
+	http.ListenAndServe("127.0.0.1:6060", nil)
 
 	// only standalone enable localMsg
 	if local {
