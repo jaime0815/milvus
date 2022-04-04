@@ -11,16 +11,17 @@ import (
 
 type kafkaClient struct {
 	// more configs you can see https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+	// how to decrease message latency https://docs.confluent.io/5.5.1/clients/librdkafka/md_INTRODUCTION.html
 	basicConfig kafka.ConfigMap
 }
 
 func NewKafkaClientInstance(address string) *kafkaClient {
 	config := kafka.ConfigMap{
-		"bootstrap.servers": address,
-		"socket.timeout.ms": 300000,
-		"socket.max.fails":  3,
-		//"receive.message.max.bytes": 10485760,
+		"bootstrap.servers":   address,
+		"socket.timeout.ms":   300000,
+		"socket.max.fails":    3,
 		"api.version.request": true,
+		"debug":               "broker,topic,msg,consumer,queue,fetch,cgrp",
 	}
 
 	return &kafkaClient{basicConfig: config}
@@ -39,6 +40,7 @@ func (kc *kafkaClient) newProducerConfig() *kafka.ConfigMap {
 	// default max message size 5M
 	newConf.SetKey("message.max.bytes", 10485760)
 	newConf.SetKey("compression.codec", "zstd")
+	newConf.SetKey("queue.buffering.max.ms", 5)
 	return newConf
 }
 
@@ -61,12 +63,10 @@ func (kc *kafkaClient) newConsumerConfig(group string, offset mqwrapper.Subscrip
 	//meanwhile, some implementation also try to consume a non-exist topic, such as dataCoordTimeTick.
 	newConf.SetKey("allow.auto.create.topics", true)
 
-	//newConf.SetKey("enable.partition.eof", true)
 	newConf.SetKey("go.events.channel.enable", true)
 
-	//newConf.SetKey("request.timeout.ms", 800000)
 	newConf.SetKey("heartbeat.interval.ms", 30000)
-	//newConf.SetKey("max.poll.interval.ms", 1200000)
+	newConf.SetKey("fetch.wait.max.ms", 10)
 	return newConf
 }
 

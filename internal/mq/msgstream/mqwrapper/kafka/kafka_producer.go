@@ -38,7 +38,7 @@ func (kp *kafkaProducer) Send(ctx context.Context, message *mqwrapper.ProducerMe
 		return nil, m.TopicPartition.Error
 	}
 
-	//kp.p.Flush(5000)
+	kp.p.Flush(1000)
 	return &kafkaID{messageID: int64(m.TopicPartition.Offset)}, nil
 }
 

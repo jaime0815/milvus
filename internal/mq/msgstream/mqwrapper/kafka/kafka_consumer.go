@@ -195,12 +195,12 @@ func (kc *Consumer) GetLatestMsgID() (mqwrapper.MessageID, error) {
 }
 
 func (kc *Consumer) Close() {
-	log.Debug("starting close kafka consumer", zap.Any("topic", kc.topic), zap.String("groupID", kc.groupID))
 	kc.closeOnce.Do(func() {
+		log.Debug("starting close kafka consumer", zap.Any("topic", kc.topic), zap.String("groupID", kc.groupID))
 		start := time.Now()
 		close(kc.closeCh)
-		kc.c.Unsubscribe()
-		go kc.c.Close()
+		//kc.c.Unsubscribe()
+		kc.c.Close()
 		log.Debug("close kafka consumer finished ", zap.Any("topic", kc.topic), zap.String("groupID", kc.groupID), zap.Any("token time", zap.Any("time cost", time.Since(start).Milliseconds())))
 	})
 }
