@@ -17,6 +17,8 @@
 package flowgraph
 
 import (
+	"fmt"
+
 	"github.com/milvus-io/milvus/internal/log"
 	"github.com/milvus-io/milvus/internal/mq/msgstream"
 	"github.com/milvus-io/milvus/internal/util/trace"
@@ -91,6 +93,8 @@ func (inNode *InputNode) Operate(in []Msg) []Msg {
 	for _, span := range spans {
 		span.Finish()
 	}
+
+	fmt.Println("============== input_node", msgStreamMsg)
 
 	return []Msg{msgStreamMsg}
 }

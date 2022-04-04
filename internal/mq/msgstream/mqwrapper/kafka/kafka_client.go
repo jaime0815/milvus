@@ -64,9 +64,9 @@ func (kc *kafkaClient) newConsumerConfig(group string, offset mqwrapper.Subscrip
 	//newConf.SetKey("enable.partition.eof", true)
 	newConf.SetKey("go.events.channel.enable", true)
 
-	newConf.SetKey("request.timeout.ms", 800000)
+	//newConf.SetKey("request.timeout.ms", 800000)
 	newConf.SetKey("heartbeat.interval.ms", 30000)
-	newConf.SetKey("max.poll.interval.ms", 1200000)
+	//newConf.SetKey("max.poll.interval.ms", 1200000)
 	return newConf
 }
 
