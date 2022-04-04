@@ -198,7 +198,7 @@ func (kc *Consumer) Close() {
 	kc.closeOnce.Do(func() {
 		start := time.Now()
 		close(kc.closeCh)
-		kc.c.Unsubscribe()
+		//kc.c.Unsubscribe()
 		go kc.c.Close()
 		log.Debug("close kafka consumer finished ", zap.Any("topic", kc.topic), zap.String("groupID", kc.groupID), zap.Any("token time", zap.Any("time cost", time.Since(start).Milliseconds())))
 	})
