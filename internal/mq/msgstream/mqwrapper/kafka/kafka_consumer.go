@@ -171,10 +171,11 @@ func (kc *Consumer) Seek(id mqwrapper.MessageID, inclusive bool) error {
 }
 
 func (kc *Consumer) Ack(message mqwrapper.Message) {
-	offset := kafka.Offset(message.ID().(*kafkaID).messageID)
-	partitions := make([]kafka.TopicPartition, 1)
-	partitions[0] = kafka.TopicPartition{Topic: &kc.topic, Partition: mqwrapper.DefaultPartitionIdx, Offset: offset}
-	kc.c.CommitOffsets(partitions)
+	//offset := kafka.Offset(message.ID().(*kafkaID).messageID)
+	//partitions := make([]kafka.TopicPartition, 1)
+	//partitions[0] = kafka.TopicPartition{Topic: &kc.topic, Partition: mqwrapper.DefaultPartitionIdx, Offset: offset}
+	//kc.c.CommitOffsets(partitions)
+	kc.c.Commit()
 }
 
 func (kc *Consumer) GetLatestMsgID() (mqwrapper.MessageID, error) {
@@ -198,7 +199,7 @@ func (kc *Consumer) Close() {
 	kc.closeOnce.Do(func() {
 		start := time.Now()
 		close(kc.closeCh)
-		//kc.c.Unsubscribe()
+		kc.c.Unsubscribe()
 		go kc.c.Close()
 		log.Debug("close kafka consumer finished ", zap.Any("topic", kc.topic), zap.String("groupID", kc.groupID), zap.Any("token time", zap.Any("time cost", time.Since(start).Milliseconds())))
 	})
