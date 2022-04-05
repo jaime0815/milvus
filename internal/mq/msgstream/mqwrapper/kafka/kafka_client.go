@@ -21,7 +21,7 @@ func NewKafkaClientInstance(address string) *kafkaClient {
 		"socket.timeout.ms":   300000,
 		"socket.max.fails":    3,
 		"api.version.request": true,
-		"debug":               "broker,topic,msg,consumer,queue,fetch,cgrp",
+		//"debug":               "broker,topic,msg,consumer,queue,fetch,cgrp",
 	}
 
 	return &kafkaClient{basicConfig: config}

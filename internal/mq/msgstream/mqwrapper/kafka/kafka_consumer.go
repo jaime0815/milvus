@@ -26,7 +26,7 @@ type Consumer struct {
 
 func newKafkaConsumer(config *kafka.ConfigMap, topic string, groupID string) *Consumer {
 	closeCh := make(chan struct{})
-	msgChannel := make(chan mqwrapper.Message, 256)
+	msgChannel := make(chan mqwrapper.Message, 1)
 
 	kafkaConsumer := &Consumer{
 		config:     config,
@@ -57,6 +57,23 @@ func (kc *Consumer) createKafkaConsumer() error {
 	return nil
 }
 
+func (kc *Consumer) readMessage() *kafka.Message {
+	msg, err := kc.c.ReadMessage(100 * time.Millisecond)
+
+	if err != nil {
+		// Kafka will not support read message before creating topic.
+		// In order to compatible with other mq, we need hold the following error.
+		errCode := err.(kafka.Error).Code()
+		if errCode == kafka.ErrUnknownTopicOrPart || errCode == kafka.ErrTimedOut {
+			return nil
+		}
+
+		log.Error("read msg failed", zap.Any("topic", kc.topic), zap.String("groupID", kc.groupID), zap.Error(err))
+		return nil
+	}
+	return msg
+}
+
 func (kc *Consumer) startReceiveMsgTask() {
 	// clean data within channel
 	for len(kc.msgChannel) > 0 {
@@ -68,25 +85,22 @@ func (kc *Consumer) startReceiveMsgTask() {
 	}
 
 	go func() {
-		for ev := range kc.c.Events() {
-			switch e := ev.(type) {
-			case *kafka.Message:
-				if kc.skipMsg {
-					kc.skipMsg = false
-					continue
-				}
+		if kc.skipMsg {
+			msg := kc.readMessage()
+			if msg != nil {
+				kc.skipMsg = false
+			}
+		}
 
-				select {
-				case <-kc.closeCh:
-					if kc.msgChannel != nil {
-						close(kc.msgChannel)
-						kc.msgChannel = nil
-					}
-				default:
-					kc.msgChannel <- &kafkaMessage{msg: e}
-				}
-			case kafka.Error:
-				log.Error("read msg failed", zap.Any("topic", kc.topic), zap.String("groupID", kc.groupID), zap.Error(e))
+		msg := kc.readMessage()
+
+		select {
+		case <-kc.closeCh:
+			close(kc.msgChannel)
+			return
+		default:
+			if msg != nil {
+				kc.msgChannel <- &kafkaMessage{msg: msg}
 			}
 		}
 	}()
@@ -201,6 +215,6 @@ func (kc *Consumer) Close() {
 		close(kc.closeCh)
 		//kc.c.Unsubscribe()
 		kc.c.Close()
-		log.Debug("close kafka consumer finished ", zap.Any("topic", kc.topic), zap.String("groupID", kc.groupID), zap.Any("token time", zap.Any("time cost", time.Since(start).Milliseconds())))
+		log.Debug("close kafka consumer finished ", zap.Any("topic", kc.topic), zap.String("groupID", kc.groupID), zap.Any("token time", zap.Int64("time cost(ms)", time.Since(start).Milliseconds())))
 	})
 }
