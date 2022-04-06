@@ -53,6 +53,7 @@ func Consume1(ctx context.Context, t *testing.T, kc *kafkaClient, topic string, 
 	// get random number between 1 ~ 5
 	rand.Seed(time.Now().UnixNano())
 	cnt := 1 + rand.Int()%5
+	fmt.Println("------------------ cnt", cnt)
 
 	log.Info("Consume1 start")
 	var msg mqwrapper.Message
@@ -92,6 +93,7 @@ func Consume2(ctx context.Context, t *testing.T, kc *kafkaClient, topic string, 
 	log.Info("skip the last received message")
 	mm := <-consumer.Chan()
 	consumer.Ack(mm)
+	fmt.Println("skip msg", mm.ID())
 
 	err = consumer.Seek(msgID, false)
 	assert.Nil(t, err)
@@ -103,6 +105,8 @@ func Consume2(ctx context.Context, t *testing.T, kc *kafkaClient, topic string, 
 			log.Info("Consume2 channel closed")
 			return
 		case msg, ok := <-consumer.Chan():
+			fmt.Println("==Consume2 Chan", mm.ID())
+
 			if msg == nil || !ok {
 				return
 			}
@@ -165,18 +169,18 @@ func TestKafkaClient_ConsumeWithAck(t *testing.T) {
 	produceData(ctx, t, producer, arr)
 	time.Sleep(100 * time.Millisecond)
 
-	ctx1, cancel1 := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel1()
-	Consume1(ctx1, t, kc, topic, subName, c, &total1)
+	//ctx1, cancel1 := context.WithTimeout(ctx, 5*time.Second)
+	//defer cancel1()
+	Consume1(context.Background(), t, kc, topic, subName, c, &total1)
 
 	lastMsgID := <-c
 	log.Info("lastMsgID", zap.Any("lastMsgID", lastMsgID.(*kafkaID).messageID))
 
-	ctx2, cancel2 := context.WithTimeout(ctx, 5*time.Second)
+	ctx2, cancel2 := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel2()
 	Consume2(ctx2, t, kc, topic, subName, lastMsgID, &total2)
 
-	ctx3, cancel3 := context.WithTimeout(ctx, 5*time.Second)
+	ctx3, cancel3 := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel3()
 	Consume3(ctx3, t, kc, topic, subName, &total3)
 

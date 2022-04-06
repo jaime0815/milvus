@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/milvus-io/milvus/internal/log"
@@ -38,6 +39,7 @@ func (kp *kafkaProducer) Send(ctx context.Context, message *mqwrapper.ProducerMe
 		return nil, m.TopicPartition.Error
 	}
 
+	fmt.Println("==========send", m)
 	kp.p.Flush(1000)
 	return &kafkaID{messageID: int64(m.TopicPartition.Offset)}, nil
 }

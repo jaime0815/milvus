@@ -479,7 +479,10 @@ func (ms *mqMsgStream) receiveMsg(consumer mqwrapper.Consumer) {
 		case <-ms.ctx.Done():
 			return
 		case msg, ok := <-consumer.Chan():
+			fmt.Println("======== mqMsgStream receive msg start ", msg.ID())
+
 			if !ok {
+				fmt.Println("======== mqMsgStream receive msg return")
 				return
 			}
 			consumer.Ack(msg)
@@ -512,6 +515,7 @@ func (ms *mqMsgStream) receiveMsg(consumer mqwrapper.Consumer) {
 			}
 			ms.receiveBuf <- &msgPack
 
+			fmt.Println("======== mqMsgStream receive msg end ", msg.ID())
 			sp.Finish()
 		}
 	}

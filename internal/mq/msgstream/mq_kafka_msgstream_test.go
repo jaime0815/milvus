@@ -140,7 +140,6 @@ func TestStream_KafkaMsgStream_SeekToLast(t *testing.T) {
 
 	err = outputStream2.Seek([]*internalpb.MsgPosition{seekPosition})
 	assert.Nil(t, err)
-	outputStream2.Start()
 
 	cnt := 0
 	var value int64 = 6

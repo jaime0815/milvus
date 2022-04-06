@@ -1,6 +1,7 @@
 package kafka
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -18,6 +19,7 @@ type Consumer struct {
 	skipMsg    bool
 	topic      string
 	groupID    string
+	isClosed   bool
 	closeCh    chan struct{}
 	chanOnce   sync.Once
 	closeOnce  sync.Once
@@ -26,7 +28,7 @@ type Consumer struct {
 
 func newKafkaConsumer(config *kafka.ConfigMap, topic string, groupID string) *Consumer {
 	closeCh := make(chan struct{})
-	msgChannel := make(chan mqwrapper.Message, 1)
+	msgChannel := make(chan mqwrapper.Message, 256)
 
 	kafkaConsumer := &Consumer{
 		config:     config,
@@ -58,8 +60,7 @@ func (kc *Consumer) createKafkaConsumer() error {
 }
 
 func (kc *Consumer) readMessage() *kafka.Message {
-	msg, err := kc.c.ReadMessage(100 * time.Millisecond)
-
+	msg, err := kc.c.ReadMessage(3 * time.Second)
 	if err != nil {
 		// Kafka will not support read message before creating topic.
 		// In order to compatible with other mq, we need hold the following error.
@@ -77,7 +78,8 @@ func (kc *Consumer) readMessage() *kafka.Message {
 func (kc *Consumer) startReceiveMsgTask() {
 	// clean data within channel
 	for len(kc.msgChannel) > 0 {
-		<-kc.msgChannel
+		msg := <-kc.msgChannel
+		fmt.Println("======clean ====== msg", msg)
 	}
 
 	if kc.isStarted {
@@ -85,22 +87,36 @@ func (kc *Consumer) startReceiveMsgTask() {
 	}
 
 	go func() {
-		if kc.skipMsg {
+		for {
+			//select {
+			//case <-kc.closeCh:
+			//	fmt.Println("============ close", kc.c)
+			//	close(kc.msgChannel)
+			//	kc.msgChannel = nil
+			//	return
+			//default:
+			//}
+
+			//
+			//if kc.msgChannel == nil {
+			//	return
+			//}
+			//
+			if kc.isClosed {
+				close(kc.msgChannel)
+				kc.wg.Done()
+				return
+			}
+
 			msg := kc.readMessage()
 			if msg != nil {
-				kc.skipMsg = false
-			}
-		}
-
-		msg := kc.readMessage()
-
-		select {
-		case <-kc.closeCh:
-			close(kc.msgChannel)
-			return
-		default:
-			if msg != nil {
-				kc.msgChannel <- &kafkaMessage{msg: msg}
+				if kc.skipMsg {
+					fmt.Println("====sikp======== msg", msg, kc.c)
+					kc.skipMsg = false
+				} else {
+					fmt.Println("======sed ====== msg", msg, kc.c)
+					kc.msgChannel <- &kafkaMessage{msg: msg}
+				}
 			}
 		}
 	}()
@@ -144,6 +160,7 @@ func (kc *Consumer) Chan() <-chan mqwrapper.Message {
 	kc.chanOnce.Do(func() {
 		kc.startReceiveMsgTask()
 	})
+
 	return kc.msgChannel
 }
 
@@ -189,7 +206,7 @@ func (kc *Consumer) Ack(message mqwrapper.Message) {
 	//partitions := make([]kafka.TopicPartition, 1)
 	//partitions[0] = kafka.TopicPartition{Topic: &kc.topic, Partition: mqwrapper.DefaultPartitionIdx, Offset: offset}
 	//kc.c.CommitOffsets(partitions)
-	kc.c.Commit()
+	//kc.c.Commit()
 }
 
 func (kc *Consumer) GetLatestMsgID() (mqwrapper.MessageID, error) {
@@ -212,9 +229,12 @@ func (kc *Consumer) Close() {
 	kc.closeOnce.Do(func() {
 		log.Debug("starting close kafka consumer", zap.Any("topic", kc.topic), zap.String("groupID", kc.groupID))
 		start := time.Now()
-		close(kc.closeCh)
 		//kc.c.Unsubscribe()
-		kc.c.Close()
-		log.Debug("close kafka consumer finished ", zap.Any("topic", kc.topic), zap.String("groupID", kc.groupID), zap.Any("token time", zap.Int64("time cost(ms)", time.Since(start).Milliseconds())))
+		kc.isClosed = true
+		kc.wg.Add(1)
+		kc.wg.Wait()
+		go kc.c.Close()
+		//close(kc.closeCh)
+		log.Debug("close kafka consumer finished ", zap.Any("topic", kc.topic), zap.String("groupID", kc.groupID), zap.Int64("time cost(ms)", time.Since(start).Milliseconds()))
 	})
 }
