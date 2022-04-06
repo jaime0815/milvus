@@ -1,7 +1,6 @@
 package kafka
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -78,8 +77,7 @@ func (kc *Consumer) readMessage() *kafka.Message {
 func (kc *Consumer) startReceiveMsgTask() {
 	// clean data within channel
 	for len(kc.msgChannel) > 0 {
-		msg := <-kc.msgChannel
-		fmt.Println("======clean ====== msg", msg)
+		<-kc.msgChannel
 	}
 
 	if kc.isStarted {
@@ -111,10 +109,8 @@ func (kc *Consumer) startReceiveMsgTask() {
 			msg := kc.readMessage()
 			if msg != nil {
 				if kc.skipMsg {
-					fmt.Println("====sikp======== msg", msg, kc.c)
 					kc.skipMsg = false
 				} else {
-					fmt.Println("======sed ====== msg", msg, kc.c)
 					kc.msgChannel <- &kafkaMessage{msg: msg}
 				}
 			}
