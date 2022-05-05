@@ -54,6 +54,7 @@ mkdir -p planpb
 ${protoc} --go_out=plugins=grpc,paths=source_relative:./commonpb common.proto
 ${protoc} --go_out=plugins=grpc,paths=source_relative:./schemapb schema.proto
 ${protoc} --go_out=plugins=grpc,paths=source_relative:./etcdpb etcd_meta.proto
+${protoc} --go_out=plugins=grpc,paths=source_relative:./modelpb db_model.proto
 ${protoc} --go_out=plugins=grpc,paths=source_relative:./indexcgopb index_cgo_msg.proto
 
 ${protoc} --go_out=plugins=grpc,paths=source_relative:./rootcoordpb root_coord.proto
