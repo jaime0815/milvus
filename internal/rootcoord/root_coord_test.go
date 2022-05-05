@@ -442,8 +442,6 @@ func createCollectionInMeta(dbName, collName string, core *Core, shardsNum int32
 		modifyFunc(&collInfo)
 	}
 
-	idxInfo := make([]*etcdpb.IndexInfo, 0, 16)
-
 	// schema is modified (add RowIDField and TimestampField),
 	// so need Marshal again
 	schemaBytes, err := proto.Marshal(&schema)
@@ -488,7 +486,7 @@ func createCollectionInMeta(dbName, collName string, core *Core, shardsNum int32
 		// clear ddl timetick in all conditions
 		defer core.chanTimeTick.removeDdlTimeTick(ts, reason)
 
-		err = core.MetaTable.AddCollection(&collInfo, ts, idxInfo, ddOpStr)
+		err = core.MetaTable.AddCollection(&collInfo, ts, ddOpStr)
 		if err != nil {
 			return fmt.Errorf("meta table add collection failed,error = %w", err)
 		}

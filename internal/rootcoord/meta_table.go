@@ -294,7 +294,7 @@ func (mt *MetaTable) AddProxy(po *pb.ProxyMeta) error {
 }
 
 // AddCollection add collection
-func (mt *MetaTable) AddCollection(coll *pb.CollectionInfo, ts typeutil.Timestamp, idx []*pb.IndexInfo, ddOpStr string) error {
+func (mt *MetaTable) AddCollection(coll *pb.CollectionInfo, ts typeutil.Timestamp, ddOpStr string) error {
 	mt.ddLock.Lock()
 	defer mt.ddLock.Unlock()
 
@@ -306,9 +306,6 @@ func (mt *MetaTable) AddCollection(coll *pb.CollectionInfo, ts typeutil.Timestam
 	if _, ok := mt.collName2ID[coll.Schema.Name]; ok {
 		return fmt.Errorf("collection %s exist", coll.Schema.Name)
 	}
-	if len(coll.FieldIndexes) != len(idx) {
-		return fmt.Errorf("incorrect index id when creating collection")
-	}
 
 	coll.CreateTime = ts
 	if len(coll.PartitionCreatedTimestamps) == 1 {
@@ -316,9 +313,6 @@ func (mt *MetaTable) AddCollection(coll *pb.CollectionInfo, ts typeutil.Timestam
 	}
 	mt.collID2Meta[coll.ID] = *coll
 	mt.collName2ID[coll.Schema.Name] = coll.ID
-	for _, i := range idx {
-		mt.indexID2Meta[i.IndexID] = *i
-	}
 
 	k1 := fmt.Sprintf("%s/%d", CollectionMetaPrefix, coll.ID)
 	v1, err := proto.Marshal(coll)
@@ -328,17 +322,6 @@ func (mt *MetaTable) AddCollection(coll *pb.CollectionInfo, ts typeutil.Timestam
 		return fmt.Errorf("metaTable AddCollection Marshal fail key:%s, err:%w", k1, err)
 	}
 	meta := map[string]string{k1: string(v1)}
-
-	for _, i := range idx {
-		k := fmt.Sprintf("%s/%d/%d", IndexMetaPrefix, coll.ID, i.IndexID)
-		v, err := proto.Marshal(i)
-		if err != nil {
-			log.Error("MetaTable AddCollection Marshal fail", zap.String("key", k),
-				zap.String("IndexName", i.IndexName), zap.Error(err))
-			return fmt.Errorf("metaTable AddCollection Marshal fail key:%s, err:%w", k, err)
-		}
-		meta[k] = string(v)
-	}
 
 	// save ddOpStr into etcd
 	meta[DDMsgSendPrefix] = "false"

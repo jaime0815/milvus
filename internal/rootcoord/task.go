@@ -168,8 +168,6 @@ func (t *CreateCollectionReqTask) Execute(ctx context.Context) error {
 		ConsistencyLevel:           t.Req.ConsistencyLevel,
 	}
 
-	idxInfo := make([]*etcdpb.IndexInfo, 0, 16)
-
 	// schema is modified (add RowIDField and TimestampField),
 	// so need Marshal again
 	schemaBytes, err := proto.Marshal(&schema)
@@ -232,7 +230,7 @@ func (t *CreateCollectionReqTask) Execute(ctx context.Context) error {
 		}
 
 		// update meta table after send dd operation
-		if err = t.core.MetaTable.AddCollection(&collInfo, ts, idxInfo, ddOpStr); err != nil {
+		if err = t.core.MetaTable.AddCollection(&collInfo, ts, ddOpStr); err != nil {
 			t.core.chanTimeTick.removeDmlChannels(chanNames...)
 			t.core.chanTimeTick.removeDeltaChannels(deltaChanNames...)
 			// it's ok just to leave create collection message sent, datanode and querynode does't process CreateCollection logic
