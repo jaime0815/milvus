@@ -76,7 +76,7 @@ const (
 	MetricRequestsSuccess = "success"
 
 	// ConnectEtcdMaxRetryTime is used to limit the max retry time for connection etcd
-	ConnectEtcdMaxRetryTime = 1000
+	ConnectEtcdMaxRetryTime = 100
 )
 
 const illegalRequestErrStr = "Illegal request"
@@ -543,7 +543,7 @@ func (node *DataNode) ReadyToFlush() error {
 //
 //   One precondition: The segmentID in req is in ascending order.
 func (node *DataNode) FlushSegments(ctx context.Context, req *datapb.FlushSegmentsRequest) (*commonpb.Status, error) {
-	metrics.DataNodeFlushSegmentsReqCounter.WithLabelValues(
+	metrics.DataNodeFlushReqCounter.WithLabelValues(
 		fmt.Sprint(Params.DataNodeCfg.GetNodeID()),
 		MetricRequestsTotal).Inc()
 
@@ -610,7 +610,7 @@ func (node *DataNode) FlushSegments(ctx context.Context, req *datapb.FlushSegmen
 	}
 
 	status.ErrorCode = commonpb.ErrorCode_Success
-	metrics.DataNodeFlushSegmentsReqCounter.WithLabelValues(
+	metrics.DataNodeFlushReqCounter.WithLabelValues(
 		fmt.Sprint(Params.DataNodeCfg.GetNodeID()),
 		MetricRequestsSuccess).Inc()
 

@@ -45,7 +45,7 @@ type Client struct {
 	sess       *sessionutil.Session
 }
 
-// NewClient create root coordinator client with specified ectd info and timeout
+// NewClient create root coordinator client with specified etcd info and timeout
 // ctx execution control context
 // metaRoot is the path in etcd for root coordinator registration
 // etcdEndpoints are the address list for etcd end points
@@ -62,6 +62,9 @@ func NewClient(ctx context.Context, metaRoot string, etcdCli *clientv3.Client) (
 		grpcClient: &grpcclient.ClientBase{
 			ClientMaxRecvSize: ClientParams.ClientMaxRecvSize,
 			ClientMaxSendSize: ClientParams.ClientMaxSendSize,
+			DialTimeout:       ClientParams.DialTimeout,
+			KeepAliveTime:     ClientParams.KeepAliveTime,
+			KeepAliveTimeout:  ClientParams.KeepAliveTimeout,
 		},
 		sess: sess,
 	}

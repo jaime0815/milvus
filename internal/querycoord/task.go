@@ -35,6 +35,7 @@ import (
 	"github.com/milvus-io/milvus/internal/proto/querypb"
 	"github.com/milvus-io/milvus/internal/util/funcutil"
 	"github.com/milvus-io/milvus/internal/util/timerecord"
+	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 
 const timeoutForRPC = 10 * time.Second
@@ -340,11 +341,23 @@ func (lct *loadCollectionTask) updateTaskProcess() {
 
 	}
 	if allDone {
-		err := lct.meta.setLoadPercentage(collectionID, 0, 100, querypb.LoadType_LoadCollection)
+		err := syncReplicaSegments(lct.ctx, lct.cluster, childTasks)
+		if err != nil {
+			log.Error("loadCollectionTask: failed to sync replica segments to shard leader",
+				zap.Int64("taskID", lct.getTaskID()),
+				zap.Int64("collectionID", collectionID),
+				zap.Error(err))
+			lct.setResultInfo(err)
+			return
+		}
+
+		err = lct.meta.setLoadPercentage(collectionID, 0, 100, querypb.LoadType_LoadCollection)
 		if err != nil {
 			log.Error("loadCollectionTask: set load percentage to meta's collectionInfo", zap.Int64("collectionID", collectionID))
 			lct.setResultInfo(err)
+			return
 		}
+
 		lct.once.Do(func() {
 			metrics.QueryCoordLoadCount.WithLabelValues(metrics.SuccessLabel).Inc()
 			metrics.QueryCoordLoadLatency.WithLabelValues().Observe(float64(lct.elapseSpan().Milliseconds()))
@@ -781,11 +794,22 @@ func (lpt *loadPartitionTask) updateTaskProcess() {
 		}
 	}
 	if allDone {
+		err := syncReplicaSegments(lpt.ctx, lpt.cluster, childTasks)
+		if err != nil {
+			log.Error("loadPartitionTask: failed to sync replica segments to shard leader",
+				zap.Int64("taskID", lpt.getTaskID()),
+				zap.Int64("collectionID", collectionID),
+				zap.Error(err))
+			lpt.setResultInfo(err)
+			return
+		}
+
 		for _, id := range partitionIDs {
 			err := lpt.meta.setLoadPercentage(collectionID, id, 100, querypb.LoadType_LoadPartition)
 			if err != nil {
 				log.Error("loadPartitionTask: set load percentage to meta's collectionInfo", zap.Int64("collectionID", collectionID), zap.Int64("partitionID", id))
 				lpt.setResultInfo(err)
+				return
 			}
 		}
 		lpt.once.Do(func() {
@@ -1901,16 +1925,16 @@ func (lbt *loadBalanceTask) execute(ctx context.Context) error {
 		for _, nodeID := range lbt.SourceNodeIDs {
 			segmentID2Info := make(map[UniqueID]*querypb.SegmentInfo)
 			dmChannel2WatchInfo := make(map[string]*querypb.DmChannelWatchInfo)
-			recoveredCollectionIDs := make(map[UniqueID]struct{})
+			recoveredCollectionIDs := make(typeutil.UniqueSet)
 			segmentInfos := lbt.meta.getSegmentInfosByNode(nodeID)
 			for _, segmentInfo := range segmentInfos {
 				segmentID2Info[segmentInfo.SegmentID] = segmentInfo
-				recoveredCollectionIDs[segmentInfo.CollectionID] = struct{}{}
+				recoveredCollectionIDs.Insert(segmentInfo.CollectionID)
 			}
 			dmChannelWatchInfos := lbt.meta.getDmChannelInfosByNodeID(nodeID)
 			for _, watchInfo := range dmChannelWatchInfos {
 				dmChannel2WatchInfo[watchInfo.DmChannel] = watchInfo
-				recoveredCollectionIDs[watchInfo.CollectionID] = struct{}{}
+				recoveredCollectionIDs.Insert(watchInfo.CollectionID)
 			}
 
 			for collectionID := range recoveredCollectionIDs {
@@ -1954,27 +1978,27 @@ func (lbt *loadBalanceTask) execute(ctx context.Context) error {
 
 					for _, segmentBingLog := range binlogs {
 						segmentID := segmentBingLog.SegmentID
-						if info, ok := segmentID2Info[segmentID]; ok {
+						if _, ok := segmentID2Info[segmentID]; ok {
 							segmentLoadInfo := lbt.broker.generateSegmentLoadInfo(ctx, collectionID, partitionID, segmentBingLog, true, schema)
+
 							msgBase := proto.Clone(lbt.Base).(*commonpb.MsgBase)
 							msgBase.MsgType = commonpb.MsgType_LoadSegments
-							for _, replica := range info.ReplicaIds {
-								loadSegmentReq := &querypb.LoadSegmentsRequest{
-									Base:         msgBase,
-									Infos:        []*querypb.SegmentLoadInfo{segmentLoadInfo},
-									Schema:       schema,
+
+							loadSegmentReq := &querypb.LoadSegmentsRequest{
+								Base:         msgBase,
+								Infos:        []*querypb.SegmentLoadInfo{segmentLoadInfo},
+								Schema:       schema,
+								CollectionID: collectionID,
+
+								LoadMeta: &querypb.LoadMetaInfo{
+									LoadType:     collectionInfo.LoadType,
 									CollectionID: collectionID,
-
-									LoadMeta: &querypb.LoadMetaInfo{
-										LoadType:     collectionInfo.LoadType,
-										CollectionID: collectionID,
-										PartitionIDs: toRecoverPartitionIDs,
-									},
-									ReplicaID: replica,
-								}
-
-								loadSegmentReqs = append(loadSegmentReqs, loadSegmentReq)
+									PartitionIDs: toRecoverPartitionIDs,
+								},
+								ReplicaID: replica.ReplicaID,
 							}
+
+							loadSegmentReqs = append(loadSegmentReqs, loadSegmentReq)
 						}
 					}
 
@@ -2198,6 +2222,13 @@ func (lbt *loadBalanceTask) getReplica(nodeID, collectionID int64) (*milvuspb.Re
 }
 
 func (lbt *loadBalanceTask) postExecute(context.Context) error {
+	err := syncReplicaSegments(lbt.ctx, lbt.cluster, lbt.getChildTask())
+	if err != nil {
+		log.Error("loadBalanceTask: failed to sync replica segments to shard leaders",
+			zap.Int64("taskID", lbt.getTaskID()),
+			zap.Error(err))
+	}
+
 	if lbt.getResultInfo().ErrorCode != commonpb.ErrorCode_Success {
 		lbt.clearChildTasks()
 	}

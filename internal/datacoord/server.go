@@ -55,7 +55,7 @@ import (
 )
 
 const (
-	connEtcdMaxRetryTime = 100000
+	connEtcdMaxRetryTime = 100
 	allPartitionID       = 0 // paritionID means no filtering
 )
 
@@ -518,7 +518,7 @@ func (s *Server) handleTimetickMessage(ctx context.Context, ttMsg *msgstream.Dat
 	}
 
 	utcT, _ := tsoutil.ParseHybridTs(ts)
-	metrics.DataCoordSyncUTC.WithLabelValues().Set(float64(utcT))
+	metrics.DataCoordSyncEpoch.WithLabelValues(ch).Set(float64(utcT))
 
 	s.updateSegmentStatistics(ttMsg.GetSegmentsStats())
 

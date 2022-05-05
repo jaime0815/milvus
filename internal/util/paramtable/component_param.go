@@ -122,6 +122,7 @@ type commonConfig struct {
 	DefaultPartitionName string
 	DefaultIndexName     string
 	RetentionDuration    int64
+	EntityExpirationTTL  time.Duration
 
 	SimdType       string
 	IndexSliceSize int64
@@ -135,7 +136,6 @@ func (p *commonConfig) init(base *BaseTable) {
 
 	// must init cluster prefix first
 	p.initClusterPrefix()
-
 	p.initProxySubName()
 
 	p.initRootCoordTimeTick()
@@ -159,6 +159,7 @@ func (p *commonConfig) init(base *BaseTable) {
 	p.initDefaultPartitionName()
 	p.initDefaultIndexName()
 	p.initRetentionDuration()
+	p.initEntityExpiration()
 
 	p.initSimdType()
 	p.initIndexSliceSize()
@@ -337,6 +338,21 @@ func (p *commonConfig) initRetentionDuration() {
 	p.RetentionDuration = p.Base.ParseInt64WithDefault("common.retentionDuration", DefaultRetentionDuration)
 }
 
+func (p *commonConfig) initEntityExpiration() {
+	ttl := p.Base.ParseInt64WithDefault("common.entityExpiration", -1)
+	if ttl < 0 {
+		p.EntityExpirationTTL = -1
+		return
+	}
+
+	// make sure ttl is larger than retention duration to ensure time travel works
+	if ttl > p.RetentionDuration {
+		p.EntityExpirationTTL = time.Duration(ttl) * time.Second
+	} else {
+		p.EntityExpirationTTL = time.Duration(p.RetentionDuration) * time.Second
+	}
+}
+
 func (p *commonConfig) initSimdType() {
 	keys := []string{
 		"common.simdType",
@@ -414,8 +430,6 @@ type proxyConfig struct {
 	MaxFieldNum              int64
 	MaxShardNum              int32
 	MaxDimension             int64
-	BufFlagExpireTime        time.Duration
-	BufFlagCleanupInterval   time.Duration
 	GinLogging               bool
 
 	// required from QueryCoord
@@ -443,8 +457,6 @@ func (p *proxyConfig) init(base *BaseTable) {
 	p.initMaxDimension()
 
 	p.initMaxTaskNum()
-	p.initBufFlagExpireTime()
-	p.initBufFlagCleanupInterval()
 	p.initGinLogging()
 }
 
@@ -527,16 +539,6 @@ func (p *proxyConfig) initMaxDimension() {
 
 func (p *proxyConfig) initMaxTaskNum() {
 	p.MaxTaskNum = p.Base.ParseInt64WithDefault("proxy.maxTaskNum", 1024)
-}
-
-func (p *proxyConfig) initBufFlagExpireTime() {
-	expireTime := p.Base.ParseInt64WithDefault("proxy.bufFlagExpireTime", 3600)
-	p.BufFlagExpireTime = time.Duration(expireTime) * time.Second
-}
-
-func (p *proxyConfig) initBufFlagCleanupInterval() {
-	interval := p.Base.ParseInt64WithDefault("proxy.bufFlagCleanupInterval", 600)
-	p.BufFlagCleanupInterval = time.Duration(interval) * time.Second
 }
 
 func (p *proxyConfig) initGinLogging() {
@@ -686,7 +688,9 @@ type queryNodeConfig struct {
 	SliceIndex   int
 
 	// segcore
-	ChunkRows int64
+	ChunkRows        int64
+	SmallIndexNlist  int64
+	SmallIndexNProbe int64
 
 	CreatedTime time.Time
 	UpdatedTime time.Time
@@ -714,7 +718,7 @@ func (p *queryNodeConfig) init(base *BaseTable) {
 
 	p.initStatsPublishInterval()
 
-	p.initSegcoreChunkRows()
+	p.initSmallIndexParams()
 
 	p.initOverloadedMemoryThresholdPercentage()
 
@@ -781,8 +785,34 @@ func (p *queryNodeConfig) initGracefulTime() {
 	log.Debug("query node init gracefulTime", zap.Any("gracefulTime", p.GracefulTime))
 }
 
-func (p *queryNodeConfig) initSegcoreChunkRows() {
+func (p *queryNodeConfig) initSmallIndexParams() {
 	p.ChunkRows = p.Base.ParseInt64WithDefault("queryNode.segcore.chunkRows", 32768)
+	if p.ChunkRows < 1024 {
+		log.Warn("chunk rows can not be less than 1024, force set to 1024", zap.Any("current", p.ChunkRows))
+		p.ChunkRows = 1024
+	}
+
+	// default NList is the first nlist
+	var defaultNList int64
+	for i := int64(0); i < p.ChunkRows; i++ {
+		if math.Pow(2.0, float64(i)) > math.Sqrt(float64(p.ChunkRows)) {
+			defaultNList = int64(math.Pow(2, float64(i)))
+			break
+		}
+	}
+
+	p.SmallIndexNlist = p.Base.ParseInt64WithDefault("queryNode.segcore.smallIndex.nlist", defaultNList)
+	if p.SmallIndexNlist > p.ChunkRows/8 {
+		log.Warn("small index nlist must smaller than chunkRows/8, force set to", zap.Any("nliit", p.ChunkRows/8))
+		p.SmallIndexNlist = p.ChunkRows / 8
+	}
+
+	defaultNprobe := p.SmallIndexNlist / 16
+	p.SmallIndexNProbe = p.Base.ParseInt64WithDefault("queryNode.segcore.smallIndex.nprobe", defaultNprobe)
+	if p.SmallIndexNProbe > p.SmallIndexNlist {
+		log.Warn("small index nprobe must smaller than nlist, force set to", zap.Any("nprobe", p.SmallIndexNlist))
+		p.SmallIndexNProbe = p.SmallIndexNlist
+	}
 }
 
 func (p *queryNodeConfig) initOverloadedMemoryThresholdPercentage() {
@@ -850,9 +880,6 @@ type dataCoordConfig struct {
 	EnableAutoCompaction    bool
 	EnableGarbageCollection bool
 
-	RetentionDuration          int64
-	CompactionEntityExpiration int64
-
 	// Garbage Collection
 	GCInterval         time.Duration
 	GCMissingTolerance time.Duration
@@ -869,7 +896,6 @@ func (p *dataCoordConfig) init(base *BaseTable) {
 
 	p.initEnableCompaction()
 	p.initEnableAutoCompaction()
-	p.initCompactionEntityExpiration()
 
 	p.initEnableGarbageCollection()
 	p.initGCInterval()
@@ -918,16 +944,6 @@ func (p *dataCoordConfig) initGCDropTolerance() {
 
 func (p *dataCoordConfig) initEnableAutoCompaction() {
 	p.EnableAutoCompaction = p.Base.ParseBool("dataCoord.compaction.enableAutoCompaction", false)
-}
-
-func (p *dataCoordConfig) initCompactionEntityExpiration() {
-	p.CompactionEntityExpiration = p.Base.ParseInt64WithDefault("dataCoord.compaction.entityExpiration", math.MaxInt64)
-	p.CompactionEntityExpiration = func(x, y int64) int64 {
-		if x > y {
-			return x
-		}
-		return y
-	}(p.CompactionEntityExpiration, p.RetentionDuration)
 }
 
 func (p *dataCoordConfig) SetNodeID(id UniqueID) {

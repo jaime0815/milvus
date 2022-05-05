@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/milvus-io/milvus/internal/proto/commonpb"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
 	"github.com/milvus-io/milvus/internal/proto/querypb"
 	"github.com/stretchr/testify/assert"
@@ -47,10 +48,12 @@ func (m *mockSegmentDetector) watchSegments(collectionID int64, replicaID int64,
 }
 
 type mockShardQueryNode struct {
-	searchResult *internalpb.SearchResults
-	searchErr    error
-	queryResult  *internalpb.RetrieveResults
-	queryErr     error
+	searchResult          *internalpb.SearchResults
+	searchErr             error
+	queryResult           *internalpb.RetrieveResults
+	queryErr              error
+	releaseSegmentsResult *commonpb.Status
+	releaseSegmentsErr    error
 }
 
 func (m *mockShardQueryNode) Search(_ context.Context, _ *querypb.SearchRequest) (*internalpb.SearchResults, error) {
@@ -59,6 +62,10 @@ func (m *mockShardQueryNode) Search(_ context.Context, _ *querypb.SearchRequest)
 
 func (m *mockShardQueryNode) Query(_ context.Context, _ *querypb.QueryRequest) (*internalpb.RetrieveResults, error) {
 	return m.queryResult, m.queryErr
+}
+
+func (m *mockShardQueryNode) ReleaseSegments(ctx context.Context, in *querypb.ReleaseSegmentsRequest) (*commonpb.Status, error) {
+	return m.releaseSegmentsResult, m.releaseSegmentsErr
 }
 
 func (m *mockShardQueryNode) Stop() error {
@@ -1336,14 +1343,18 @@ func TestShardCluster_HandoffSegments(t *testing.T) {
 			}, buildMockQueryNode)
 		defer sc.Close()
 
-		sc.HandoffSegments(&querypb.SegmentChangeInfo{
+		err := sc.HandoffSegments(&querypb.SegmentChangeInfo{
 			OnlineSegments: []*querypb.SegmentInfo{
-				{SegmentID: 2, NodeID: 2, CollectionID: collectionID, DmChannel: vchannelName},
+				{SegmentID: 2, NodeID: 2, CollectionID: collectionID, DmChannel: vchannelName, NodeIds: []UniqueID{2}},
 			},
 			OfflineSegments: []*querypb.SegmentInfo{
-				{SegmentID: 1, NodeID: 1, CollectionID: collectionID, DmChannel: vchannelName},
+				{SegmentID: 1, NodeID: 1, CollectionID: collectionID, DmChannel: vchannelName, NodeIds: []UniqueID{1}},
 			},
 		})
+		if err != nil {
+			t.Log(err.Error())
+		}
+		assert.NoError(t, err)
 
 		sc.mut.RLock()
 		_, has := sc.segments[1]
@@ -1383,16 +1394,17 @@ func TestShardCluster_HandoffSegments(t *testing.T) {
 			}, buildMockQueryNode)
 		defer sc.Close()
 
-		sc.HandoffSegments(&querypb.SegmentChangeInfo{
+		err := sc.HandoffSegments(&querypb.SegmentChangeInfo{
 			OnlineSegments: []*querypb.SegmentInfo{
-				{SegmentID: 2, NodeID: 2, CollectionID: collectionID, DmChannel: vchannelName},
-				{SegmentID: 4, NodeID: 2, CollectionID: otherCollectionID, DmChannel: otherVchannelName},
+				{SegmentID: 2, NodeID: 2, CollectionID: collectionID, DmChannel: vchannelName, NodeIds: []UniqueID{2}},
+				{SegmentID: 4, NodeID: 2, CollectionID: otherCollectionID, DmChannel: otherVchannelName, NodeIds: []UniqueID{2}},
 			},
 			OfflineSegments: []*querypb.SegmentInfo{
-				{SegmentID: 3, NodeID: 1, CollectionID: collectionID, DmChannel: vchannelName},
-				{SegmentID: 5, NodeID: 2, CollectionID: otherCollectionID, DmChannel: otherVchannelName},
+				{SegmentID: 3, NodeID: 1, CollectionID: collectionID, DmChannel: vchannelName, NodeIds: []UniqueID{1}},
+				{SegmentID: 5, NodeID: 2, CollectionID: otherCollectionID, DmChannel: otherVchannelName, NodeIds: []UniqueID{2}},
 			},
 		})
+		assert.NoError(t, err)
 
 		sc.mut.RLock()
 		_, has := sc.segments[3]
@@ -1439,15 +1451,16 @@ func TestShardCluster_HandoffSegments(t *testing.T) {
 
 		sig := make(chan struct{})
 		go func() {
-			sc.HandoffSegments(&querypb.SegmentChangeInfo{
+			err := sc.HandoffSegments(&querypb.SegmentChangeInfo{
 				OnlineSegments: []*querypb.SegmentInfo{
-					{SegmentID: 3, NodeID: 1, CollectionID: collectionID, DmChannel: vchannelName},
+					{SegmentID: 3, NodeID: 1, CollectionID: collectionID, DmChannel: vchannelName, NodeIds: []UniqueID{1}},
 				},
 				OfflineSegments: []*querypb.SegmentInfo{
-					{SegmentID: 1, NodeID: 1, CollectionID: collectionID, DmChannel: vchannelName},
+					{SegmentID: 1, NodeID: 1, CollectionID: collectionID, DmChannel: vchannelName, NodeIds: []UniqueID{1}},
 				},
 			})
 
+			assert.NoError(t, err)
 			close(sig)
 		}()
 
@@ -1492,5 +1505,114 @@ func TestShardCluster_HandoffSegments(t *testing.T) {
 		sc.mut.RUnlock()
 
 		assert.False(t, has)
+	})
+
+	t.Run("handoff from non-exist node", func(t *testing.T) {
+		nodeEvents := []nodeEvent{
+			{
+				nodeID:   1,
+				nodeAddr: "addr_1",
+			},
+			{
+				nodeID:   2,
+				nodeAddr: "addr_2",
+			},
+		}
+
+		segmentEvents := []segmentEvent{
+			{
+				segmentID: 1,
+				nodeID:    1,
+				state:     segmentStateLoaded,
+			},
+			{
+				segmentID: 2,
+				nodeID:    2,
+				state:     segmentStateLoaded,
+			},
+		}
+		evtCh := make(chan segmentEvent, 10)
+		sc := NewShardCluster(collectionID, replicaID, vchannelName,
+			&mockNodeDetector{
+				initNodes: nodeEvents,
+			}, &mockSegmentDetector{
+				initSegments: segmentEvents,
+				evtCh:        evtCh,
+			}, buildMockQueryNode)
+		defer sc.Close()
+
+		err := sc.HandoffSegments(&querypb.SegmentChangeInfo{
+			OnlineSegments: []*querypb.SegmentInfo{
+				{SegmentID: 2, NodeID: 2, CollectionID: collectionID, DmChannel: vchannelName, NodeIds: []UniqueID{2}},
+			},
+			OfflineSegments: []*querypb.SegmentInfo{
+				{SegmentID: 1, NodeID: 3, CollectionID: collectionID, DmChannel: vchannelName, NodeIds: []UniqueID{3}},
+			},
+		})
+
+		assert.Error(t, err)
+	})
+
+	t.Run("release failed", func(t *testing.T) {
+		nodeEvents := []nodeEvent{
+			{
+				nodeID:   1,
+				nodeAddr: "addr_1",
+			},
+			{
+				nodeID:   2,
+				nodeAddr: "addr_2",
+			},
+		}
+
+		segmentEvents := []segmentEvent{
+			{
+				segmentID: 1,
+				nodeID:    1,
+				state:     segmentStateLoaded,
+			},
+			{
+				segmentID: 2,
+				nodeID:    2,
+				state:     segmentStateLoaded,
+			},
+		}
+		evtCh := make(chan segmentEvent, 10)
+		mqn := &mockShardQueryNode{}
+		sc := NewShardCluster(collectionID, replicaID, vchannelName,
+			&mockNodeDetector{
+				initNodes: nodeEvents,
+			}, &mockSegmentDetector{
+				initSegments: segmentEvents,
+				evtCh:        evtCh,
+			}, func(nodeID int64, addr string) shardQueryNode {
+				return mqn
+			})
+		defer sc.Close()
+
+		mqn.releaseSegmentsErr = errors.New("mocked error")
+
+		err := sc.HandoffSegments(&querypb.SegmentChangeInfo{
+			OfflineSegments: []*querypb.SegmentInfo{
+				{SegmentID: 1, NodeID: 1, CollectionID: collectionID, DmChannel: vchannelName, NodeIds: []UniqueID{1}},
+			},
+		})
+
+		assert.Error(t, err)
+
+		mqn.releaseSegmentsErr = nil
+		mqn.releaseSegmentsResult = &commonpb.Status{
+			ErrorCode: commonpb.ErrorCode_UnexpectedError,
+			Reason:    "mocked error",
+		}
+
+		err = sc.HandoffSegments(&querypb.SegmentChangeInfo{
+			OfflineSegments: []*querypb.SegmentInfo{
+				{SegmentID: 2, NodeID: 2, CollectionID: collectionID, DmChannel: vchannelName, NodeIds: []UniqueID{2}},
+			},
+		})
+
+		assert.Error(t, err)
+
 	})
 }

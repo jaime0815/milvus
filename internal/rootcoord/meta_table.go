@@ -41,9 +41,6 @@ const (
 	// ComponentPrefix prefix for rootcoord component
 	ComponentPrefix = "root-coord"
 
-	// TenantMetaPrefix prefix for tenant meta
-	TenantMetaPrefix = ComponentPrefix + "/tenant"
-
 	// ProxyMetaPrefix prefix for proxy meta
 	ProxyMetaPrefix = ComponentPrefix + "/proxy"
 
@@ -85,13 +82,18 @@ const (
 
 	// CredentialPrefix prefix for credential user
 	CredentialPrefix = ComponentPrefix + UserSubPrefix
+
+	// DefaultIndexType name of default index type for scalar field
+	DefaultIndexType = "STL_SORT"
+
+	// DefaultStringIndexType name of default index type for varChar/string field
+	DefaultStringIndexType = "Trie"
 )
 
 // MetaTable store all rootcoord meta info
 type MetaTable struct {
 	txn             kv.TxnKV                                                        // client of a reliable txnkv service, i.e. etcd client
 	snapshot        kv.SnapShotKV                                                   // client of a reliable snapshotkv service, i.e. etcd client
-	tenantID2Meta   map[typeutil.UniqueID]pb.TenantMeta                             // tenant id to tenant meta
 	proxyID2Meta    map[typeutil.UniqueID]pb.ProxyMeta                              // proxy id to proxy meta
 	collID2Meta     map[typeutil.UniqueID]pb.CollectionInfo                         // collection_id -> meta
 	collName2ID     map[string]typeutil.UniqueID                                    // collection name to collection id
@@ -100,22 +102,20 @@ type MetaTable struct {
 	segID2IndexMeta map[typeutil.UniqueID]map[typeutil.UniqueID]pb.SegmentIndexInfo // collection_id/index_id/partition_id/segment_id -> meta
 	indexID2Meta    map[typeutil.UniqueID]pb.IndexInfo                              // collection_id/index_id -> meta
 
-	tenantLock sync.RWMutex
-	proxyLock  sync.RWMutex
-	ddLock     sync.RWMutex
-	credLock   sync.RWMutex
+	proxyLock sync.RWMutex
+	ddLock    sync.RWMutex
+	credLock  sync.RWMutex
 }
 
 // NewMetaTable creates meta table for rootcoord, which stores all in-memory information
 // for collection, partition, segment, index etc.
 func NewMetaTable(txn kv.TxnKV, snap kv.SnapShotKV) (*MetaTable, error) {
 	mt := &MetaTable{
-		txn:        txn,
-		snapshot:   snap,
-		tenantLock: sync.RWMutex{},
-		proxyLock:  sync.RWMutex{},
-		ddLock:     sync.RWMutex{},
-		credLock:   sync.RWMutex{},
+		txn:       txn,
+		snapshot:  snap,
+		proxyLock: sync.RWMutex{},
+		ddLock:    sync.RWMutex{},
+		credLock:  sync.RWMutex{},
 	}
 	err := mt.reloadFromKV()
 	if err != nil {
@@ -125,7 +125,6 @@ func NewMetaTable(txn kv.TxnKV, snap kv.SnapShotKV) (*MetaTable, error) {
 }
 
 func (mt *MetaTable) reloadFromKV() error {
-	mt.tenantID2Meta = make(map[typeutil.UniqueID]pb.TenantMeta)
 	mt.proxyID2Meta = make(map[typeutil.UniqueID]pb.ProxyMeta)
 	mt.collID2Meta = make(map[typeutil.UniqueID]pb.CollectionInfo)
 	mt.collName2ID = make(map[string]typeutil.UniqueID)
@@ -134,21 +133,7 @@ func (mt *MetaTable) reloadFromKV() error {
 	mt.segID2IndexMeta = make(map[typeutil.UniqueID]map[typeutil.UniqueID]pb.SegmentIndexInfo)
 	mt.indexID2Meta = make(map[typeutil.UniqueID]pb.IndexInfo)
 
-	_, values, err := mt.snapshot.LoadWithPrefix(TenantMetaPrefix, 0)
-	if err != nil {
-		return err
-	}
-
-	for _, value := range values {
-		tenantMeta := pb.TenantMeta{}
-		err := proto.Unmarshal([]byte(value), &tenantMeta)
-		if err != nil {
-			return fmt.Errorf("rootcoord Unmarshal pb.TenantMeta err:%w", err)
-		}
-		mt.tenantID2Meta[tenantMeta.ID] = tenantMeta
-	}
-
-	_, values, err = mt.txn.LoadWithPrefix(ProxyMetaPrefix)
+	_, values, err := mt.txn.LoadWithPrefix(ProxyMetaPrefix)
 	if err != nil {
 		return err
 	}
@@ -248,27 +233,6 @@ func (mt *MetaTable) reloadFromKV() error {
 	}
 
 	log.Debug("reload meta table from KV successfully")
-	return nil
-}
-
-// AddTenant add tenant
-func (mt *MetaTable) AddTenant(te *pb.TenantMeta, ts typeutil.Timestamp) error {
-	mt.tenantLock.Lock()
-	defer mt.tenantLock.Unlock()
-
-	k := fmt.Sprintf("%s/%d", TenantMetaPrefix, te.ID)
-	v, err := proto.Marshal(te)
-	if err != nil {
-		log.Error("Failed to marshal TenantMeta in AddTenant", zap.Error(err))
-		return err
-	}
-
-	err = mt.snapshot.Save(k, string(v), ts)
-	if err != nil {
-		log.Error("Failed to save TenantMeta in AddTenant", zap.Error(err))
-		return err
-	}
-	mt.tenantID2Meta[te.ID] = *te
 	return nil
 }
 
@@ -1045,6 +1009,21 @@ func (mt *MetaTable) GetNotIndexedSegments(collName string, fieldName string, id
 	mt.ddLock.Lock()
 	defer mt.ddLock.Unlock()
 
+	fieldSchema, err := mt.unlockGetFieldSchema(collName, fieldName)
+	if err != nil {
+		return nil, fieldSchema, err
+	}
+
+	//TODO:: check index params for sclar field
+	// set default index type for scalar index
+	if !typeutil.IsVectorType(fieldSchema.GetDataType()) {
+		if fieldSchema.DataType == schemapb.DataType_VarChar {
+			idxInfo.IndexParams = []*commonpb.KeyValuePair{{Key: "index_type", Value: DefaultStringIndexType}}
+		} else {
+			idxInfo.IndexParams = []*commonpb.KeyValuePair{{Key: "index_type", Value: DefaultIndexType}}
+		}
+	}
+
 	if idxInfo.IndexParams == nil {
 		return nil, schemapb.FieldSchema{}, fmt.Errorf("index param is nil")
 	}
@@ -1058,10 +1037,6 @@ func (mt *MetaTable) GetNotIndexedSegments(collName string, fieldName string, id
 	collMeta, ok := mt.collID2Meta[collID]
 	if !ok {
 		return nil, schemapb.FieldSchema{}, fmt.Errorf("collection %s not found", collName)
-	}
-	fieldSchema, err := mt.unlockGetFieldSchema(collName, fieldName)
-	if err != nil {
-		return nil, fieldSchema, err
 	}
 
 	var dupIdx typeutil.UniqueID
