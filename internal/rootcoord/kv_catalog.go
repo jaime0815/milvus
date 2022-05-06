@@ -14,7 +14,7 @@ import (
 )
 
 type KVCatalog struct {
-	kv       kv.BaseKV
+	txn      kv.TxnKV
 	snapshot kv.SnapShotKV
 }
 
@@ -39,9 +39,8 @@ func (kc *KVCatalog) CreateCollection(ctx context.Context, coll *model.Collectio
 	collInfo := toPB(coll)
 	v1, err := proto.Marshal(collInfo)
 	if err != nil {
-		log.Error("MetaTable AddCollection saveColl Marshal fail",
-			zap.String("key", k1), zap.Error(err))
-		return fmt.Errorf("metaTable AddCollection Marshal fail key:%s, err:%w", k1, err)
+		log.Error("marshal fail", zap.String("key", k1), zap.Error(err))
+		return fmt.Errorf("marshal fail key:%s, err:%w", k1, err)
 	}
 
 	// save ddOpStr into etcd
@@ -59,6 +58,18 @@ func (kc *KVCatalog) CreateCollection(ctx context.Context, coll *model.Collectio
 	if err != nil {
 		log.Error("SnapShotKV MultiSave fail", zap.Error(err))
 		panic("SnapShotKV MultiSave fail")
+	}
+
+	return nil
+}
+
+func (kc *KVCatalog) CreatePartition(ctx context.Context, coll *model.Collection, partition *model.Partition, ts typeutil.Timestamp) error {
+	kc.CreateCollection(ctx, coll, ts)
+
+	err := kc.txn.MultiSave(partition.Extra)
+	if err != nil {
+		// will not panic, missing create msg
+		log.Warn("TxnKV MultiSave fail", zap.Error(err))
 	}
 
 	return nil

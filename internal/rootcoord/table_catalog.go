@@ -16,3 +16,7 @@ func (tc *TableCatalog) CreateCollection(ctx context.Context, collectionInfo *mo
 
 	return nil
 }
+
+func (kc *TableCatalog) CreatePartition(ctx context.Context, coll *model.Collection, partitionInfo *model.Partition, ts typeutil.Timestamp) error {
+	return nil
+}

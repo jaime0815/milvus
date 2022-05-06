@@ -117,7 +117,7 @@ func NewMetaTable(txn kv.TxnKV, snap kv.SnapShotKV) (*MetaTable, error) {
 	mt := &MetaTable{
 		txn:       txn,
 		snapshot:  snap,
-		catalog:   &KVCatalog{kv: txn, snapshot: snap},
+		catalog:   &KVCatalog{txn: txn, snapshot: snap},
 		proxyLock: sync.RWMutex{},
 		ddLock:    sync.RWMutex{},
 		credLock:  sync.RWMutex{},
@@ -565,30 +565,27 @@ func (mt *MetaTable) AddPartition(collID typeutil.UniqueID, partitionName string
 	coll.PartitionCreatedTimestamps = append(coll.PartitionCreatedTimestamps, ts)
 	mt.collID2Meta[collID] = coll
 
-	k1 := fmt.Sprintf("%s/%d", CollectionMetaPrefix, collID)
-	v1, err := proto.Marshal(&coll)
-	if err != nil {
-		log.Error("MetaTable AddPartition saveColl Marshal fail",
-			zap.String("key", k1), zap.Error(err))
-		return fmt.Errorf("metaTable AddPartition Marshal fail, k1:%s, err:%w", k1, err)
-	}
-	meta := map[string]string{k1: string(v1)}
 	metaTxn := map[string]string{}
 	// save ddOpStr into etcd
 	metaTxn[DDMsgSendPrefix] = "false"
 	metaTxn[DDOperationPrefix] = ddOpStr
-
-	err = mt.snapshot.MultiSave(meta, ts)
-	if err != nil {
-		log.Error("SnapShotKV MultiSave fail", zap.Error(err))
-		panic("SnapShotKV MultiSave fail")
+	collection := &model.Collection{
+		CollectionID:               coll.ID,
+		Schema:                     coll.Schema,
+		PartitionIDs:               coll.PartitionIDs,
+		PartitionNames:             coll.PartitionNames,
+		FieldIndexes:               make([]*etcdpb.FieldIndexInfo, 0, 16),
+		VirtualChannelNames:        coll.VirtualChannelNames,
+		PhysicalChannelNames:       coll.PhysicalChannelNames,
+		ShardsNum:                  coll.ShardsNum,
+		PartitionCreatedTimestamps: coll.PartitionCreatedTimestamps,
+		ConsistencyLevel:           coll.ConsistencyLevel,
+		// no need Extra here
 	}
-	err = mt.txn.MultiSave(metaTxn)
-	if err != nil {
-		// will not panic, missing create msg
-		log.Warn("TxnKV MultiSave fail", zap.Error(err))
+	partition := &model.Partition{
+		Extra: metaTxn,
 	}
-	return nil
+	return mt.catalog.CreatePartition(context.TODO(), collection, partition, ts)
 }
 
 // GetPartitionNameByID return partition name by partition id
