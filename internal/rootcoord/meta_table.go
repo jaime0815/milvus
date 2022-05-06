@@ -25,16 +25,17 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
-	"go.uber.org/zap"
-
 	"github.com/milvus-io/milvus/internal/kv"
 	"github.com/milvus-io/milvus/internal/log"
+	"github.com/milvus-io/milvus/internal/model"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
+	"github.com/milvus-io/milvus/internal/proto/etcdpb"
 	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
 	"github.com/milvus-io/milvus/internal/proto/milvuspb"
 	"github.com/milvus-io/milvus/internal/proto/schemapb"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
+	"go.uber.org/zap"
 )
 
 const (
@@ -92,8 +93,10 @@ const (
 
 // MetaTable store all rootCoord meta info
 type MetaTable struct {
-	txn             kv.TxnKV                                                        // client of a reliable txnkv service, i.e. etcd client
-	snapshot        kv.SnapShotKV                                                   // client of a reliable snapshotkv service, i.e. etcd client
+	txn      kv.TxnKV      // client of a reliable txnkv service, i.e. etcd client
+	snapshot kv.SnapShotKV // client of a reliable snapshotkv service, i.e. etcd client
+	catalog  Catalog
+
 	proxyID2Meta    map[typeutil.UniqueID]pb.ProxyMeta                              // proxy id to proxy meta
 	collID2Meta     map[typeutil.UniqueID]pb.CollectionInfo                         // collection id -> collection meta
 	collName2ID     map[string]typeutil.UniqueID                                    // collection name to collection id
@@ -113,6 +116,7 @@ func NewMetaTable(txn kv.TxnKV, snap kv.SnapShotKV) (*MetaTable, error) {
 	mt := &MetaTable{
 		txn:       txn,
 		snapshot:  snap,
+		catalog:   &KVCatalog{kv: txn, snapshot: snap},
 		proxyLock: sync.RWMutex{},
 		ddLock:    sync.RWMutex{},
 		credLock:  sync.RWMutex{},
@@ -278,26 +282,22 @@ func (mt *MetaTable) AddCollection(coll *pb.CollectionInfo, ts typeutil.Timestam
 	mt.collID2Meta[coll.ID] = *coll
 	mt.collName2ID[coll.Schema.Name] = coll.ID
 
-	k1 := fmt.Sprintf("%s/%d", CollectionMetaPrefix, coll.ID)
-	v1, err := proto.Marshal(coll)
-	if err != nil {
-		log.Error("MetaTable AddCollection saveColl Marshal fail",
-			zap.String("key", k1), zap.Error(err))
-		return fmt.Errorf("metaTable AddCollection Marshal fail key:%s, err:%w", k1, err)
+	collection := &model.Collection{
+		CollectionID:               coll.ID,
+		Schema:                     coll.Schema,
+		PartitionIDs:               coll.PartitionIDs,
+		PartitionNames:             coll.PartitionNames,
+		FieldIndexes:               make([]*etcdpb.FieldIndexInfo, 0, 16),
+		VirtualChannelNames:        coll.VirtualChannelNames,
+		PhysicalChannelNames:       coll.PhysicalChannelNames,
+		ShardsNum:                  coll.ShardsNum,
+		PartitionCreatedTimestamps: coll.PartitionCreatedTimestamps,
+		ConsistencyLevel:           coll.ConsistencyLevel,
 	}
-	meta := map[string]string{k1: string(v1)}
-
-	// save ddOpStr into etcd
+	meta := map[string]string{}
 	meta[DDMsgSendPrefix] = "false"
 	meta[DDOperationPrefix] = ddOpStr
-
-	err = mt.snapshot.MultiSave(meta, ts)
-	if err != nil {
-		log.Error("SnapShotKV MultiSave fail", zap.Error(err))
-		panic("SnapShotKV MultiSave fail")
-	}
-
-	return nil
+	return mt.catalog.CreateCollection(collection, ts, meta)
 }
 
 // DeleteCollection delete collection
