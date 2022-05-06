@@ -23,3 +23,7 @@ func (tc *TableCatalog) CreatePartition(ctx context.Context, coll *model.Collect
 func (tc *TableCatalog) CreateIndex(ctx context.Context, index *model.SegmentIndex) error {
 	return nil
 }
+
+func (tc *TableCatalog) CreateAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error {
+	return nil
+}

@@ -9,6 +9,7 @@ import (
 	"github.com/milvus-io/milvus/internal/log"
 	"github.com/milvus-io/milvus/internal/model"
 	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
+	"github.com/milvus-io/milvus/internal/proto/schemapb"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
 	"go.uber.org/zap"
 )
@@ -100,6 +101,23 @@ func (kc *KVCatalog) CreateIndex(ctx context.Context, segIndex *model.SegmentInd
 	if err != nil {
 		log.Error("TxnKV Save fail", zap.Error(err))
 		panic("TxnKV Save fail")
+	}
+
+	return nil
+}
+
+func (kc *KVCatalog) CreateAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error {
+	k := fmt.Sprintf("%s/%s", CollectionAliasMetaPrefix, collAlias.Alias)
+	v, err := proto.Marshal(&pb.CollectionInfo{ID: collAlias.CollectionID, Schema: &schemapb.CollectionSchema{Name: collAlias.Alias}})
+	if err != nil {
+		log.Error("marshal CollectionInfo fail", zap.String("key", k), zap.Error(err))
+		return fmt.Errorf("marshal CollectionInfo fail key:%s, err:%w", k, err)
+	}
+
+	err = kc.snapshot.Save(k, string(v), ts)
+	if err != nil {
+		log.Error("SnapShotKV Save fail", zap.Error(err))
+		panic("SnapShotKV Save fail")
 	}
 
 	return nil

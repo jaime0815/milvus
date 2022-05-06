@@ -1176,20 +1176,11 @@ func (mt *MetaTable) AddAlias(collectionAlias string, collectionName string, ts 
 	}
 	mt.collAlias2ID[collectionAlias] = id
 
-	k := fmt.Sprintf("%s/%s", CollectionAliasMetaPrefix, collectionAlias)
-	v, err := proto.Marshal(&pb.CollectionInfo{ID: id, Schema: &schemapb.CollectionSchema{Name: collectionAlias}})
-	if err != nil {
-		log.Error("MetaTable AddAlias Marshal CollectionInfo fail",
-			zap.String("key", k), zap.Error(err))
-		return fmt.Errorf("metaTable AddAlias Marshal CollectionInfo fail key:%s, err:%w", k, err)
+	collAlias := &model.CollectionAlias{
+		CollectionID: id,
+		Alias:        collectionAlias,
 	}
-
-	err = mt.snapshot.Save(k, string(v), ts)
-	if err != nil {
-		log.Error("SnapShotKV Save fail", zap.Error(err))
-		panic("SnapShotKV Save fail")
-	}
-	return nil
+	return mt.catalog.CreateAlias(context.TODO(), collAlias, ts)
 }
 
 // DropAlias drop collection alias
