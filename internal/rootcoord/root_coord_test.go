@@ -667,7 +667,7 @@ func TestRootCoordInitData(t *testing.T) {
 	assert.NotNil(t, snapshotKV)
 	assert.NoError(t, err)
 	txnKV := etcdkv.NewEtcdKV(etcdCli, Params.EtcdCfg.MetaRootPath)
-	mt, err := NewMetaTable(txnKV, snapshotKV)
+	mt, err := NewMetaTable(context.TODO(), txnKV, snapshotKV)
 	assert.NoError(t, err)
 	mockTxnKV := &mockTestTxnKV{
 		TxnKV:  mt.txn,
