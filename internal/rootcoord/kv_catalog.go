@@ -1,6 +1,7 @@
 package rootcoord
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
@@ -33,7 +34,7 @@ func toPB(coll *model.Collection) *pb.CollectionInfo {
 	}
 }
 
-func (kc *KVCatalog) CreateCollection(coll *model.Collection, ts typeutil.Timestamp) error {
+func (kc *KVCatalog) CreateCollection(ctx context.Context, coll *model.Collection, ts typeutil.Timestamp) error {
 	k1 := fmt.Sprintf("%s/%d", CollectionMetaPrefix, coll.CollectionID)
 	collInfo := toPB(coll)
 	v1, err := proto.Marshal(collInfo)

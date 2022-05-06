@@ -18,6 +18,7 @@ package rootcoord
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -298,7 +299,7 @@ func (mt *MetaTable) AddCollection(coll *pb.CollectionInfo, ts typeutil.Timestam
 		ConsistencyLevel:           coll.ConsistencyLevel,
 		Extra:                      meta,
 	}
-	return mt.catalog.CreateCollection(collection, ts)
+	return mt.catalog.CreateCollection(context.TODO(), collection, ts)
 }
 
 // DeleteCollection delete collection
