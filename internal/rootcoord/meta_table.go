@@ -282,6 +282,9 @@ func (mt *MetaTable) AddCollection(coll *pb.CollectionInfo, ts typeutil.Timestam
 	mt.collID2Meta[coll.ID] = *coll
 	mt.collName2ID[coll.Schema.Name] = coll.ID
 
+	meta := map[string]string{}
+	meta[DDMsgSendPrefix] = "false"
+	meta[DDOperationPrefix] = ddOpStr
 	collection := &model.Collection{
 		CollectionID:               coll.ID,
 		Schema:                     coll.Schema,
@@ -293,11 +296,9 @@ func (mt *MetaTable) AddCollection(coll *pb.CollectionInfo, ts typeutil.Timestam
 		ShardsNum:                  coll.ShardsNum,
 		PartitionCreatedTimestamps: coll.PartitionCreatedTimestamps,
 		ConsistencyLevel:           coll.ConsistencyLevel,
+		Extra:                      meta,
 	}
-	meta := map[string]string{}
-	meta[DDMsgSendPrefix] = "false"
-	meta[DDOperationPrefix] = ddOpStr
-	return mt.catalog.CreateCollection(collection, ts, meta)
+	return mt.catalog.CreateCollection(collection, ts)
 }
 
 // DeleteCollection delete collection

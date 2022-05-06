@@ -33,7 +33,7 @@ func toPB(coll *model.Collection) *pb.CollectionInfo {
 	}
 }
 
-func (kc *KVCatalog) CreateCollection(coll *model.Collection, ts typeutil.Timestamp, kvs map[string]string) error {
+func (kc *KVCatalog) CreateCollection(coll *model.Collection, ts typeutil.Timestamp) error {
 	k1 := fmt.Sprintf("%s/%d", CollectionMetaPrefix, coll.CollectionID)
 	collInfo := toPB(coll)
 	v1, err := proto.Marshal(collInfo)
@@ -44,7 +44,11 @@ func (kc *KVCatalog) CreateCollection(coll *model.Collection, ts typeutil.Timest
 	}
 
 	// save ddOpStr into etcd
-	if len(kvs) > 0 {
+	kvs := map[string]string{}
+	if len(coll.Extra) > 0 {
+		for k, v := range coll.Extra {
+			kvs[k] = v
+		}
 		kvs[k1] = string(v1)
 	} else {
 		kvs = map[string]string{k1: string(v1)}

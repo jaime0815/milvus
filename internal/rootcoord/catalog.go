@@ -6,5 +6,5 @@ import (
 )
 
 type Catalog interface {
-	CreateCollection(collectionInfo *model.Collection, ts typeutil.Timestamp, meta map[string]string) error
+	CreateCollection(collectionInfo *model.Collection, ts typeutil.Timestamp) error
 }

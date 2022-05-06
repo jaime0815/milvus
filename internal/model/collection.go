@@ -19,4 +19,5 @@ type Collection struct {
 	ShardsNum                  int32
 	StartPositions             []*commonpb.KeyDataPair
 	ConsistencyLevel           commonpb.ConsistencyLevel
+	Extra                      map[string]string // extra kvs
 }

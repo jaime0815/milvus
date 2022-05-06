@@ -10,7 +10,7 @@ type TableCatalog struct {
 	db *db.DB
 }
 
-func (tc *TableCatalog) CreateCollection(collectionInfo *model.Collection, ts typeutil.Timestamp, meta map[string]string) error {
+func (tc *TableCatalog) CreateCollection(collectionInfo *model.Collection, ts typeutil.Timestamp) error {
 
 	return nil
 }
