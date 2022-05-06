@@ -30,7 +30,6 @@ import (
 	"github.com/milvus-io/milvus/internal/log"
 	"github.com/milvus-io/milvus/internal/model"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
-	"github.com/milvus-io/milvus/internal/proto/etcdpb"
 	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
 	"github.com/milvus-io/milvus/internal/proto/milvuspb"
@@ -291,7 +290,7 @@ func (mt *MetaTable) AddCollection(coll *pb.CollectionInfo, ts typeutil.Timestam
 		Schema:                     coll.Schema,
 		PartitionIDs:               coll.PartitionIDs,
 		PartitionNames:             coll.PartitionNames,
-		FieldIndexes:               make([]*etcdpb.FieldIndexInfo, 0, 16),
+		FieldIndexes:               coll.FieldIndexes,
 		VirtualChannelNames:        coll.VirtualChannelNames,
 		PhysicalChannelNames:       coll.PhysicalChannelNames,
 		ShardsNum:                  coll.ShardsNum,
@@ -574,7 +573,7 @@ func (mt *MetaTable) AddPartition(collID typeutil.UniqueID, partitionName string
 		Schema:                     coll.Schema,
 		PartitionIDs:               coll.PartitionIDs,
 		PartitionNames:             coll.PartitionNames,
-		FieldIndexes:               make([]*etcdpb.FieldIndexInfo, 0, 16),
+		FieldIndexes:               coll.FieldIndexes,
 		VirtualChannelNames:        coll.VirtualChannelNames,
 		PhysicalChannelNames:       coll.PhysicalChannelNames,
 		ShardsNum:                  coll.ShardsNum,
@@ -790,21 +789,16 @@ func (mt *MetaTable) AddIndex(segIdxInfo *pb.SegmentIndexInfo) error {
 	mt.segID2IndexMeta[segIdxInfo.SegmentID][segIdxInfo.IndexID] = *segIdxInfo
 	mt.partID2SegID[segIdxInfo.PartitionID][segIdxInfo.SegmentID] = true
 
-	k := fmt.Sprintf("%s/%d/%d/%d/%d", SegmentIndexMetaPrefix, segIdxInfo.CollectionID, segIdxInfo.IndexID, segIdxInfo.PartitionID, segIdxInfo.SegmentID)
-	v, err := proto.Marshal(segIdxInfo)
-	if err != nil {
-		log.Error("MetaTable AddIndex Marshal segIdxInfo fail",
-			zap.String("key", k), zap.Error(err))
-		return fmt.Errorf("metaTable AddIndex Marshal segIdxInfo fail key:%s, err:%w", k, err)
+	index := &model.SegmentIndex{
+		CollectionID: segIdxInfo.CollectionID,
+		PartitionID:  segIdxInfo.PartitionID,
+		SegmentID:    segIdxInfo.SegmentID,
+		FieldID:      segIdxInfo.FieldID,
+		IndexID:      segIdxInfo.IndexID,
+		BuildID:      segIdxInfo.BuildID,
+		EnableIndex:  segIdxInfo.EnableIndex,
 	}
-
-	err = mt.txn.Save(k, string(v))
-	if err != nil {
-		log.Error("SnapShotKV Save fail", zap.Error(err))
-		panic("SnapShotKV Save fail")
-	}
-
-	return nil
+	return mt.catalog.CreateIndex(context.TODO(), index)
 }
 
 // DropIndex drop index

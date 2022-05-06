@@ -18,7 +18,7 @@ type KVCatalog struct {
 	snapshot kv.SnapShotKV
 }
 
-func toPB(coll *model.Collection) *pb.CollectionInfo {
+func toCollectionPB(coll *model.Collection) *pb.CollectionInfo {
 	return &pb.CollectionInfo{
 		ID:                         coll.CollectionID,
 		Schema:                     coll.Schema,
@@ -34,9 +34,21 @@ func toPB(coll *model.Collection) *pb.CollectionInfo {
 	}
 }
 
+func toSegmentIndexPB(segIndex *model.SegmentIndex) *pb.SegmentIndexInfo {
+	return &pb.SegmentIndexInfo{
+		CollectionID: segIndex.CollectionID,
+		PartitionID:  segIndex.PartitionID,
+		SegmentID:    segIndex.SegmentID,
+		FieldID:      segIndex.FieldID,
+		IndexID:      segIndex.IndexID,
+		BuildID:      segIndex.BuildID,
+		EnableIndex:  segIndex.EnableIndex,
+	}
+}
+
 func (kc *KVCatalog) CreateCollection(ctx context.Context, coll *model.Collection, ts typeutil.Timestamp) error {
 	k1 := fmt.Sprintf("%s/%d", CollectionMetaPrefix, coll.CollectionID)
-	collInfo := toPB(coll)
+	collInfo := toCollectionPB(coll)
 	v1, err := proto.Marshal(collInfo)
 	if err != nil {
 		log.Error("marshal fail", zap.String("key", k1), zap.Error(err))
@@ -70,6 +82,24 @@ func (kc *KVCatalog) CreatePartition(ctx context.Context, coll *model.Collection
 	if err != nil {
 		// will not panic, missing create msg
 		log.Warn("TxnKV MultiSave fail", zap.Error(err))
+	}
+
+	return nil
+}
+
+func (kc *KVCatalog) CreateIndex(ctx context.Context, segIndex *model.SegmentIndex) error {
+	k := fmt.Sprintf("%s/%d/%d/%d/%d", SegmentIndexMetaPrefix, segIndex.CollectionID, segIndex.IndexID, segIndex.PartitionID, segIndex.SegmentID)
+	segIdxInfo := toSegmentIndexPB(segIndex)
+	v, err := proto.Marshal(segIdxInfo)
+	if err != nil {
+		log.Error("marshal segIdxInfo fail", zap.String("key", k), zap.Error(err))
+		return fmt.Errorf("marshal segIdxInfo fail key:%s, err:%w", k, err)
+	}
+
+	err = kc.txn.Save(k, string(v))
+	if err != nil {
+		log.Error("TxnKV Save fail", zap.Error(err))
+		panic("TxnKV Save fail")
 	}
 
 	return nil
