@@ -576,7 +576,11 @@ func TestMetaTable(t *testing.T) {
 
 	/////////////////////////// these tests should run at last, it only used to hit the error lines ////////////////////////
 	txnkv := etcdkv.NewEtcdKV(etcdCli, rootPath)
-	mockKV := &mockTestKV{}
+	mockKV := &mockTestKV{
+		loadWithPrefix: func(key string, ts typeutil.Timestamp) ([]string, []string, error) {
+			return nil, nil, nil
+		},
+	}
 	mockTxnKV := &mockTestTxnKV{
 		TxnKV:          mt.txn,
 		loadWithPrefix: func(key string) ([]string, []string, error) { return txnkv.LoadWithPrefix(key) },
@@ -588,9 +592,6 @@ func TestMetaTable(t *testing.T) {
 		remove: func(key string) error { return txnkv.Remove(key) },
 	}
 
-	mockKV.loadWithPrefix = func(key string, ts typeutil.Timestamp) ([]string, []string, error) {
-		return nil, nil, nil
-	}
 	mt, err = NewMetaTable(mockTxnKV, mockKV)
 	assert.Nil(t, err)
 
@@ -1183,12 +1184,11 @@ func TestMetaWithTimestamp(t *testing.T) {
 	assert.Nil(t, err)
 
 	collInfo := &pb.CollectionInfo{
-		ID: 1,
+		ID: collID1,
 		Schema: &schemapb.CollectionSchema{
 			Name: collName1,
 		},
 	}
-
 	collInfo.PartitionIDs = []int64{partID1}
 	collInfo.PartitionNames = []string{partName1}
 	collInfo.PartitionCreatedTimestamps = []uint64{ftso()}
@@ -1196,12 +1196,11 @@ func TestMetaWithTimestamp(t *testing.T) {
 	err = mt.AddCollection(collInfo, t1, "")
 	assert.Nil(t, err)
 
-	collInfo.ID = 2
+	collInfo.ID = collID2
 	collInfo.PartitionIDs = []int64{partID2}
 	collInfo.PartitionNames = []string{partName2}
 	collInfo.PartitionCreatedTimestamps = []uint64{ftso()}
 	collInfo.Schema.Name = collName2
-
 	t2 := ftso()
 	err = mt.AddCollection(collInfo, t2, "")
 	assert.Nil(t, err)
@@ -1295,17 +1294,16 @@ func TestMetaWithTimestamp(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(s1))
 
-	p1, err := mt.GetPartitionByName(1, partName1, 0)
+	p1, err := mt.GetPartitionByName(collID1, partName1, 0)
 	assert.Nil(t, err)
-	p2, err := mt.GetPartitionByName(2, partName2, 0)
+	p2, err := mt.GetPartitionByName(collID2, partName2, 0)
 	assert.Nil(t, err)
-	assert.Equal(t, int64(11), p1)
-	assert.Equal(t, int64(12), p2)
-	assert.Nil(t, err)
+	assert.Equal(t, int64(partID1), p1)
+	assert.Equal(t, int64(partID2), p2)
 
-	p1, err = mt.GetPartitionByName(1, partName1, t2)
+	p1, err = mt.GetPartitionByName(collID1, partName1, t2)
 	assert.Nil(t, err)
-	p2, err = mt.GetPartitionByName(2, partName2, t2)
+	p2, err = mt.GetPartitionByName(collID2, partName2, t2)
 	assert.Nil(t, err)
 	assert.Equal(t, int64(11), p1)
 	assert.Equal(t, int64(12), p2)
