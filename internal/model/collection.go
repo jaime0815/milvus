@@ -9,8 +9,8 @@ import (
 type Collection struct {
 	TenantID                   string
 	CollectionID               int64
-	PartitionName              string
-	PartitionID                int64
+	PartitionNames             []string
+	PartitionIDs               []int64
 	Schema                     *schemapb.CollectionSchema
 	FieldIndexes               []*etcdpb.FieldIndexInfo
 	VirtualChannelNames        []string

@@ -21,7 +21,7 @@ func toPB(coll *model.Collection) *pb.CollectionInfo {
 	return &pb.CollectionInfo{
 		ID:                         coll.CollectionID,
 		Schema:                     coll.Schema,
-		PartitionIDs:               []typeutil.UniqueID{coll.PartitionID},
+		PartitionIDs:               coll.PartitionIDs,
 		PartitionNames:             []string{Params.CommonCfg.DefaultPartitionName},
 		FieldIndexes:               make([]*pb.FieldIndexInfo, 0, 16),
 		VirtualChannelNames:        coll.VirtualChannelNames,

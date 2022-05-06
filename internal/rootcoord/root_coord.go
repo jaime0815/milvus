@@ -1057,8 +1057,7 @@ func (c *Core) Init() error {
 				log.Error("RootCoord failed to new suffixSnapshot", zap.Error(initError))
 				return initError
 			}
-			catalog := &KVCatalog{kv: metaKV, snapshot: ss}
-			if c.MetaTable, initError = NewMetaTable(metaKV, ss, catalog); initError != nil {
+			if c.MetaTable, initError = NewMetaTable(metaKV, ss); initError != nil {
 				log.Error("RootCoord failed to new MetaTable", zap.Any("reason", initError))
 				return initError
 			}

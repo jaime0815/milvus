@@ -112,11 +112,11 @@ type MetaTable struct {
 
 // NewMetaTable creates meta table for rootcoord, which stores all in-memory information
 // for collection, partition, segment, index etc.
-func NewMetaTable(txn kv.TxnKV, snap kv.SnapShotKV, catalog Catalog) (*MetaTable, error) {
+func NewMetaTable(txn kv.TxnKV, snap kv.SnapShotKV) (*MetaTable, error) {
 	mt := &MetaTable{
 		txn:       txn,
 		snapshot:  snap,
-		catalog:   catalog,
+		catalog:   &KVCatalog{kv: txn, snapshot: snap},
 		proxyLock: sync.RWMutex{},
 		ddLock:    sync.RWMutex{},
 		credLock:  sync.RWMutex{},
@@ -283,16 +283,16 @@ func (mt *MetaTable) AddCollection(coll *pb.CollectionInfo, ts typeutil.Timestam
 	mt.collName2ID[coll.Schema.Name] = coll.ID
 
 	collection := &model.Collection{
-		CollectionID:               coll.GetID(),
-		Schema:                     coll.GetSchema(),
-		PartitionID:                coll.GetPartitionIDs()[0],
-		PartitionName:              coll.GetPartitionNames()[0],
+		CollectionID:               coll.ID,
+		Schema:                     coll.Schema,
+		PartitionIDs:               coll.PartitionIDs,
+		PartitionNames:             coll.PartitionNames,
 		FieldIndexes:               make([]*etcdpb.FieldIndexInfo, 0, 16),
-		VirtualChannelNames:        coll.GetVirtualChannelNames(),
-		PhysicalChannelNames:       coll.GetPhysicalChannelNames(),
-		ShardsNum:                  coll.GetShardsNum(),
-		PartitionCreatedTimestamps: coll.GetPartitionCreatedTimestamps(),
-		ConsistencyLevel:           coll.GetConsistencyLevel(),
+		VirtualChannelNames:        coll.VirtualChannelNames,
+		PhysicalChannelNames:       coll.PhysicalChannelNames,
+		ShardsNum:                  coll.ShardsNum,
+		PartitionCreatedTimestamps: coll.PartitionCreatedTimestamps,
+		ConsistencyLevel:           coll.ConsistencyLevel,
 	}
 	meta := map[string]string{}
 	meta[DDMsgSendPrefix] = "false"
