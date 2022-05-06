@@ -194,7 +194,6 @@ func TestMetaTable(t *testing.T) {
 		indexID         = typeutil.UniqueID(10000)
 		indexID2        = typeutil.UniqueID(10001)
 		buildID         = typeutil.UniqueID(201)
-		indexName       = "testColl_index_110"
 	)
 
 	rand.Seed(time.Now().UnixNano())
@@ -255,25 +254,40 @@ func TestMetaTable(t *testing.T) {
 			},
 		},
 		FieldIndexes: []*pb.FieldIndexInfo{
-			//	{
-			//		FiledID: fieldID,
-			//		IndexID: indexID,
-			//	},
+			{
+				FiledID: fieldID,
+				IndexID: indexID,
+			},
 		},
 		CreateTime:                 0,
 		PartitionIDs:               []typeutil.UniqueID{partIDDefault},
 		PartitionNames:             []string{Params.CommonCfg.DefaultPartitionName},
 		PartitionCreatedTimestamps: []uint64{0},
 	}
-	idxInfo := make([]*pb.IndexInfo, 0, 16)
+	idxInfo := []*pb.IndexInfo{
+		{
+			IndexName: "testColl_index_110",
+			IndexID:   indexID,
+			IndexParams: []*commonpb.KeyValuePair{
+				{
+					Key:   "field110-i1",
+					Value: "field110-v1",
+				},
+				{
+					Key:   "field110-i2",
+					Value: "field110-v2",
+				},
+			},
+		},
+	}
+
+	mt.indexID2Meta[indexID] = *idxInfo[0]
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	t.Run("add collection", func(t *testing.T) {
 		defer wg.Done()
 		ts := ftso()
-		//err = mt.AddCollection(collInfo, ts, "")
-		//assert.NotNil(t, err)
 
 		err = mt.AddCollection(collInfo, ts, "")
 		assert.Nil(t, err)
@@ -352,28 +366,6 @@ func TestMetaTable(t *testing.T) {
 	wg.Add(1)
 	t.Run("add segment index", func(t *testing.T) {
 		defer wg.Done()
-
-		idx := &pb.FieldIndexInfo{
-			FiledID: fieldID,
-			IndexID: indexID,
-		}
-		collInfo.FieldIndexes = append(collInfo.FieldIndexes, idx)
-		idxInfo := &pb.IndexInfo{
-			IndexName: indexName,
-			IndexID:   indexID,
-			IndexParams: []*commonpb.KeyValuePair{
-				{
-					Key:   "field110-i1",
-					Value: "field110-v1",
-				},
-				{
-					Key:   "field110-i2",
-					Value: "field110-v2",
-				},
-			},
-		}
-		mt.GetNotIndexedSegments(collName, "field110", idxInfo, []typeutil.UniqueID{segID})
-
 		segIdxInfo := pb.SegmentIndexInfo{
 			CollectionID: collID,
 			PartitionID:  partID,
@@ -450,8 +442,8 @@ func TestMetaTable(t *testing.T) {
 
 		_, _, err := mt.GetNotIndexedSegments("collTest", "field110", idxInfo, nil)
 		assert.NotNil(t, err)
-		seg, field, err1 := mt.GetNotIndexedSegments(collName, "field110", idxInfo, []typeutil.UniqueID{segID, segID2})
-		assert.Nil(t, err1)
+		seg, field, err := mt.GetNotIndexedSegments(collName, "field110", idxInfo, []typeutil.UniqueID{segID, segID2})
+		assert.Nil(t, err)
 		assert.Equal(t, 1, len(seg))
 		assert.Equal(t, segID2, seg[0])
 		assert.True(t, EqualKeyPairArray(field.TypeParams, tparams))
@@ -585,7 +577,6 @@ func TestMetaTable(t *testing.T) {
 	/////////////////////////// these tests should run at last, it only used to hit the error lines ////////////////////////
 	txnkv := etcdkv.NewEtcdKV(etcdCli, rootPath)
 	mockKV := &mockTestKV{}
-	mt.snapshot = mockKV
 	mockTxnKV := &mockTestTxnKV{
 		TxnKV:          mt.txn,
 		loadWithPrefix: func(key string) ([]string, []string, error) { return txnkv.LoadWithPrefix(key) },
@@ -596,7 +587,12 @@ func TestMetaTable(t *testing.T) {
 		},
 		remove: func(key string) error { return txnkv.Remove(key) },
 	}
-	mt.txn = mockTxnKV
+
+	mockKV.loadWithPrefix = func(key string, ts typeutil.Timestamp) ([]string, []string, error) {
+		return nil, nil, nil
+	}
+	mt, err = NewMetaTable(mockTxnKV, mockKV)
+	assert.Nil(t, err)
 
 	wg.Add(1)
 	t.Run("add collection failed", func(t *testing.T) {
@@ -852,6 +848,7 @@ func TestMetaTable(t *testing.T) {
 		ts := ftso()
 		err = mt.AddCollection(collInfo, ts, "")
 		assert.Nil(t, err)
+		mt.indexID2Meta[indexID] = *idxInfo[0]
 
 		_, _, err = mt.DropIndex("abc", "abc", "abc")
 		assert.NotNil(t, err)
@@ -879,7 +876,7 @@ func TestMetaTable(t *testing.T) {
 		}
 		mt.collID2Meta[coll.ID] = coll
 		mt.indexID2Meta = make(map[int64]pb.IndexInfo)
-		idxID, isDroped, err := mt.DropIndex(collInfo.Schema.Name, collInfo.Schema.Fields[0].Name, indexName)
+		idxID, isDroped, err := mt.DropIndex(collInfo.Schema.Name, collInfo.Schema.Fields[0].Name, idxInfo[0].IndexName)
 		assert.Zero(t, idxID)
 		assert.False(t, isDroped)
 		assert.Nil(t, err)
@@ -891,11 +888,13 @@ func TestMetaTable(t *testing.T) {
 		coll.PartitionCreatedTimestamps = nil
 		ts = ftso()
 		err = mt.AddCollection(collInfo, ts, "")
+		mt.indexID2Meta[indexID] = *idxInfo[0]
+
 		assert.Nil(t, err)
 		mockTxnKV.multiSaveAndRemoveWithPrefix = func(saves map[string]string, removals []string) error {
 			return fmt.Errorf("multi save and remove with prefix error")
 		}
-		assert.Panics(t, func() { mt.DropIndex(collInfo.Schema.Name, collInfo.Schema.Fields[0].Name, indexName) })
+		assert.Panics(t, func() { mt.DropIndex(collInfo.Schema.Name, collInfo.Schema.Fields[0].Name, idxInfo[0].IndexName) })
 	})
 
 	wg.Add(1)
@@ -919,6 +918,7 @@ func TestMetaTable(t *testing.T) {
 		ts := ftso()
 		err = mt.AddCollection(collInfo, ts, "")
 		assert.Nil(t, err)
+		mt.indexID2Meta[indexID] = *idxInfo[0]
 
 		seg, err := mt.GetSegmentIndexInfoByID(segID2, fieldID, "abc")
 		assert.Nil(t, err)
@@ -936,7 +936,7 @@ func TestMetaTable(t *testing.T) {
 		}
 		err = mt.AddIndex(&segIdxInfo)
 		assert.Nil(t, err)
-		idx, err := mt.GetSegmentIndexInfoByID(segIdxInfo.SegmentID, segIdxInfo.FieldID, indexName)
+		idx, err := mt.GetSegmentIndexInfoByID(segIdxInfo.SegmentID, segIdxInfo.FieldID, idxInfo[0].IndexName)
 		assert.Nil(t, err)
 		assert.Equal(t, segIdxInfo.IndexID, idx.IndexID)
 
@@ -944,9 +944,9 @@ func TestMetaTable(t *testing.T) {
 		assert.NotNil(t, err)
 		assert.EqualError(t, err, fmt.Sprintf("can't find index name = abc on segment = %d, with filed id = %d", segIdxInfo.SegmentID, segIdxInfo.FieldID))
 
-		_, err = mt.GetSegmentIndexInfoByID(segIdxInfo.SegmentID, 11, indexName)
+		_, err = mt.GetSegmentIndexInfoByID(segIdxInfo.SegmentID, 11, idxInfo[0].IndexName)
 		assert.NotNil(t, err)
-		assert.EqualError(t, err, fmt.Sprintf("can't find index name = %s on segment = %d, with filed id = 11", indexName, segIdxInfo.SegmentID))
+		assert.EqualError(t, err, fmt.Sprintf("can't find index name = %s on segment = %d, with filed id = 11", idxInfo[0].IndexName, segIdxInfo.SegmentID))
 	})
 
 	wg.Add(1)
@@ -1118,7 +1118,7 @@ func TestMetaTable(t *testing.T) {
 		err = mt.AddCollection(collInfo, ts, "")
 		assert.Nil(t, err)
 		mt.indexID2Meta = make(map[int64]pb.IndexInfo)
-		_, _, err = mt.GetIndexByName(collInfo.Schema.Name, indexName)
+		_, _, err = mt.GetIndexByName(collInfo.Schema.Name, idxInfo[0].IndexName)
 		assert.NotNil(t, err)
 		assert.EqualError(t, err, fmt.Sprintf("index id = %d not found", idxInfo[0].IndexID))
 
