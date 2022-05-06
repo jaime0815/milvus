@@ -25,10 +25,11 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/milvus-io/milvus/internal/metastore/model"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/milvus-io/milvus/internal/kv"
 	"github.com/milvus-io/milvus/internal/log"
-	"github.com/milvus-io/milvus/internal/model"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
 	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
@@ -93,6 +94,7 @@ const (
 
 // MetaTable store all rootCoord meta info
 type MetaTable struct {
+	ctx      context.Context
 	txn      kv.TxnKV      // client of a reliable txnkv service, i.e. etcd client
 	snapshot kv.SnapShotKV // client of a reliable snapshotkv service, i.e. etcd client
 	catalog  Catalog
@@ -112,8 +114,9 @@ type MetaTable struct {
 
 // NewMetaTable creates meta table for rootcoord, which stores all in-memory information
 // for collection, partition, segment, index etc.
-func NewMetaTable(txn kv.TxnKV, snap kv.SnapShotKV) (*MetaTable, error) {
+func NewMetaTable(ctx context.Context, txn kv.TxnKV, snap kv.SnapShotKV) (*MetaTable, error) {
 	mt := &MetaTable{
+		ctx:       ctx,
 		txn:       txn,
 		snapshot:  snap,
 		catalog:   &KVCatalog{txn: txn, snapshot: snap},
@@ -285,20 +288,8 @@ func (mt *MetaTable) AddCollection(coll *pb.CollectionInfo, ts typeutil.Timestam
 	meta := map[string]string{}
 	meta[DDMsgSendPrefix] = "false"
 	meta[DDOperationPrefix] = ddOpStr
-	collection := &model.Collection{
-		CollectionID:               coll.ID,
-		Schema:                     coll.Schema,
-		PartitionIDs:               coll.PartitionIDs,
-		PartitionNames:             coll.PartitionNames,
-		FieldIndexes:               coll.FieldIndexes,
-		VirtualChannelNames:        coll.VirtualChannelNames,
-		PhysicalChannelNames:       coll.PhysicalChannelNames,
-		ShardsNum:                  coll.ShardsNum,
-		PartitionCreatedTimestamps: coll.PartitionCreatedTimestamps,
-		ConsistencyLevel:           coll.ConsistencyLevel,
-		Extra:                      meta,
-	}
-	return mt.catalog.CreateCollection(context.TODO(), collection, ts)
+	collection := model.ConvertCollectionPBToModel(coll, meta)
+	return mt.catalog.CreateCollection(mt.ctx, collection, ts)
 }
 
 // DeleteCollection delete collection
@@ -341,42 +332,23 @@ func (mt *MetaTable) DeleteCollection(collID typeutil.UniqueID, ts typeutil.Time
 	for alias, cid := range mt.collAlias2ID {
 		if cid == collID {
 			aliases = append(aliases, alias)
+			delete(mt.collAlias2ID, alias)
 		}
 	}
 
-	delMetakeysSnap := []string{
-		fmt.Sprintf("%s/%d", CollectionMetaPrefix, collID),
-	}
-	delMetaKeysTxn := []string{
-		fmt.Sprintf("%s/%d", SegmentIndexMetaPrefix, collID),
-		fmt.Sprintf("%s/%d", IndexMetaPrefix, collID),
-	}
-
-	for _, alias := range aliases {
-		delete(mt.collAlias2ID, alias)
-		delMetakeysSnap = append(delMetakeysSnap,
-			fmt.Sprintf("%s/%s", CollectionAliasMetaPrefix, alias),
-		)
-	}
-
 	// save ddOpStr into etcd
-	var saveMeta = map[string]string{
+	var meta = map[string]string{
 		DDMsgSendPrefix:   "false",
 		DDOperationPrefix: ddOpStr,
 	}
 
-	err := mt.snapshot.MultiSaveAndRemoveWithPrefix(map[string]string{}, delMetakeysSnap, ts)
-	if err != nil {
-		log.Error("SnapShotKV MultiSaveAndRemoveWithPrefix fail", zap.Error(err))
-		panic("SnapShotKV MultiSaveAndRemoveWithPrefix fail")
-	}
-	err = mt.txn.MultiSaveAndRemoveWithPrefix(saveMeta, delMetaKeysTxn)
-	if err != nil {
-		log.Warn("TxnKV MultiSaveAndRemoveWithPrefix fail", zap.Error(err))
-		//Txn kv fail will no panic here, treated as garbage
+	collection := &model.Collection{
+		CollectionID: collID,
+		Aliases:      aliases,
+		Extra:        meta,
 	}
 
-	return nil
+	return mt.catalog.DropCollection(mt.ctx, collection, ts)
 }
 
 // HasCollection return collection existence
@@ -714,33 +686,15 @@ func (mt *MetaTable) DeletePartition(collID typeutil.UniqueID, partitionName str
 	}
 	delete(mt.partID2SegID, partID)
 
-	k := path.Join(CollectionMetaPrefix, strconv.FormatInt(collID, 10))
-	v, err := proto.Marshal(&collMeta)
-	if err != nil {
-		log.Error("MetaTable DeletePartition Marshal collectionMeta fail",
-			zap.String("key", k), zap.Error(err))
-		return 0, fmt.Errorf("metaTable DeletePartition Marshal collectionMeta fail key:%s, err:%w", k, err)
-	}
-	var delMetaKeys []string
-	for _, idxInfo := range collMeta.FieldIndexes {
-		k := fmt.Sprintf("%s/%d/%d/%d", SegmentIndexMetaPrefix, collMeta.ID, idxInfo.IndexID, partID)
-		delMetaKeys = append(delMetaKeys, k)
-	}
-
 	metaTxn := make(map[string]string)
 	// save ddOpStr into etcd
 	metaTxn[DDMsgSendPrefix] = "false"
 	metaTxn[DDOperationPrefix] = ddOpStr
 
-	err = mt.snapshot.Save(k, string(v), ts)
+	collection := model.ConvertCollectionPBToModel(&collMeta, metaTxn)
+	err := mt.catalog.DropPartition(mt.ctx, collection, partID, ts)
 	if err != nil {
-		log.Error("SnapShotKV MultiSaveAndRemoveWithPrefix fail", zap.Error(err))
-		panic("SnapShotKV MultiSaveAndRemoveWithPrefix fail")
-	}
-	err = mt.txn.MultiSaveAndRemoveWithPrefix(metaTxn, delMetaKeys)
-	if err != nil {
-		log.Warn("TxnKV MultiSaveAndRemoveWithPrefix fail", zap.Error(err))
-		// will not panic, failed txn shall be treated by garbage related logic
+		return 0, err
 	}
 
 	return partID, nil
@@ -756,6 +710,7 @@ func (mt *MetaTable) AddIndex(segIdxInfo *pb.SegmentIndexInfo) error {
 		return fmt.Errorf("collection id = %d not found", segIdxInfo.CollectionID)
 	}
 	exist := false
+
 	for _, fidx := range collMeta.FieldIndexes {
 		if fidx.IndexID == segIdxInfo.IndexID {
 			exist = true
@@ -842,24 +797,17 @@ func (mt *MetaTable) DropIndex(collName, fieldName, indexName string) (typeutil.
 		fieldIdxInfo = append(fieldIdxInfo, collMeta.FieldIndexes[i+1:]...)
 		break
 	}
+
 	if len(fieldIdxInfo) == len(collMeta.FieldIndexes) {
 		log.Warn("drop index,index not found", zap.String("collection name", collName), zap.String("filed name", fieldName), zap.String("index name", indexName))
 		return 0, false, nil
 	}
+
+	// update cache
 	collMeta.FieldIndexes = fieldIdxInfo
 	mt.collID2Meta[collID] = collMeta
-	k := path.Join(CollectionMetaPrefix, strconv.FormatInt(collID, 10))
-	v, err := proto.Marshal(&collMeta)
-	if err != nil {
-		log.Error("MetaTable DropIndex Marshal collMeta fail",
-			zap.String("key", k), zap.Error(err))
-		return 0, false, fmt.Errorf("metaTable DropIndex Marshal collMeta fail key:%s, err:%w", k, err)
-	}
-	saveMeta := map[string]string{k: string(v)}
 
 	delete(mt.indexID2Meta, dropIdxID)
-
-	// update segID2IndexMeta
 	for partID := range collMeta.PartitionIDs {
 		if segIDMap, ok := mt.partID2SegID[typeutil.UniqueID(partID)]; ok {
 			for segID := range segIDMap {
@@ -870,15 +818,11 @@ func (mt *MetaTable) DropIndex(collName, fieldName, indexName string) (typeutil.
 		}
 	}
 
-	delMeta := []string{
-		fmt.Sprintf("%s/%d/%d", SegmentIndexMetaPrefix, collMeta.ID, dropIdxID),
-		fmt.Sprintf("%s/%d/%d", IndexMetaPrefix, collMeta.ID, dropIdxID),
-	}
-
-	err = mt.txn.MultiSaveAndRemoveWithPrefix(saveMeta, delMeta)
+	// update metastore
+	collection := model.ConvertCollectionPBToModel(&collMeta, map[string]string{})
+	err = mt.catalog.DropIndex(mt.ctx, collection, dropIdxID, 0)
 	if err != nil {
-		log.Error("TxnKV MultiSaveAndRemoveWithPrefix fail", zap.Error(err))
-		panic("TxnKV MultiSaveAndRemoveWithPrefix fail")
+		return 0, false, err
 	}
 
 	return dropIdxID, true, nil
@@ -1187,21 +1131,13 @@ func (mt *MetaTable) AddAlias(collectionAlias string, collectionName string, ts 
 func (mt *MetaTable) DropAlias(collectionAlias string, ts typeutil.Timestamp) error {
 	mt.ddLock.Lock()
 	defer mt.ddLock.Unlock()
-	if _, ok := mt.collAlias2ID[collectionAlias]; !ok {
+	collectionID, ok := mt.collAlias2ID[collectionAlias]
+	if !ok {
 		return fmt.Errorf("alias does not exist, alias = %s", collectionAlias)
 	}
 	delete(mt.collAlias2ID, collectionAlias)
 
-	delMetakeys := []string{
-		fmt.Sprintf("%s/%s", CollectionAliasMetaPrefix, collectionAlias),
-	}
-	meta := make(map[string]string)
-	err := mt.snapshot.MultiSaveAndRemoveWithPrefix(meta, delMetakeys, ts)
-	if err != nil {
-		log.Error("SnapShotKV MultiSaveAndRemoveWithPrefix fail", zap.Error(err))
-		panic("SnapShotKV MultiSaveAndRemoveWithPrefix fail")
-	}
-	return nil
+	return mt.catalog.DropAlias(mt.ctx, collectionID, collectionAlias, ts)
 }
 
 // AlterAlias alter collection alias
@@ -1286,17 +1222,7 @@ func (mt *MetaTable) getCredential(username string) (*internalpb.CredentialInfo,
 
 // DeleteCredential delete credential
 func (mt *MetaTable) DeleteCredential(username string) error {
-	mt.credLock.Lock()
-	defer mt.credLock.Unlock()
-
-	k := fmt.Sprintf("%s/%s", CredentialPrefix, username)
-
-	err := mt.txn.Remove(k)
-	if err != nil {
-		log.Error("MetaTable remove fail", zap.Error(err))
-		return fmt.Errorf("remove credential fail key:%s, err:%w", username, err)
-	}
-	return nil
+	return mt.catalog.DropCredential(mt.ctx, username)
 }
 
 // ListCredentialUsernames list credential usernames

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/milvus-io/milvus/internal/db"
-	"github.com/milvus-io/milvus/internal/model"
+	"github.com/milvus-io/milvus/internal/metastore/model"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 

@@ -17,6 +17,7 @@
 package rootcoord
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -114,57 +115,57 @@ func Test_MockKV(t *testing.T) {
 		return nil, nil, fmt.Errorf("load prefix error")
 	}
 
-	_, err := NewMetaTable(kt, k1)
+	_, err := NewMetaTable(context.TODO(), kt, k1)
 	assert.NotNil(t, err)
 	assert.EqualError(t, err, "load prefix error")
 
 	// proxy
 	prefix[ProxyMetaPrefix] = []string{"porxy-meta"}
-	_, err = NewMetaTable(kt, k1)
+	_, err = NewMetaTable(context.TODO(), kt, k1)
 	assert.NotNil(t, err)
 
 	value, err := proto.Marshal(&pb.ProxyMeta{})
 	assert.Nil(t, err)
 	prefix[ProxyMetaPrefix] = []string{string(value)}
-	_, err = NewMetaTable(kt, k1)
+	_, err = NewMetaTable(context.TODO(), kt, k1)
 	assert.NotNil(t, err)
 
 	// collection
 	prefix[CollectionMetaPrefix] = []string{"collection-meta"}
-	_, err = NewMetaTable(kt, k1)
+	_, err = NewMetaTable(context.TODO(), kt, k1)
 	assert.NotNil(t, err)
 
 	value, err = proto.Marshal(&pb.CollectionInfo{Schema: &schemapb.CollectionSchema{}})
 	assert.Nil(t, err)
 	prefix[CollectionMetaPrefix] = []string{string(value)}
-	_, err = NewMetaTable(kt, k1)
+	_, err = NewMetaTable(context.TODO(), kt, k1)
 	assert.NotNil(t, err)
 
 	// segment index
 	prefix[SegmentIndexMetaPrefix] = []string{"segment-index-meta"}
-	_, err = NewMetaTable(kt, k1)
+	_, err = NewMetaTable(context.TODO(), kt, k1)
 	assert.NotNil(t, err)
 
 	value, err = proto.Marshal(&pb.SegmentIndexInfo{})
 	assert.Nil(t, err)
 	prefix[SegmentIndexMetaPrefix] = []string{string(value)}
-	_, err = NewMetaTable(kt, k1)
+	_, err = NewMetaTable(context.TODO(), kt, k1)
 	assert.NotNil(t, err)
 
 	prefix[SegmentIndexMetaPrefix] = []string{string(value), string(value)}
-	_, err = NewMetaTable(kt, k1)
+	_, err = NewMetaTable(context.TODO(), kt, k1)
 	assert.NotNil(t, err)
 	assert.EqualError(t, err, "load prefix error")
 
 	// index
 	prefix[IndexMetaPrefix] = []string{"index-meta"}
-	_, err = NewMetaTable(kt, k1)
+	_, err = NewMetaTable(context.TODO(), kt, k1)
 	assert.NotNil(t, err)
 
 	value, err = proto.Marshal(&pb.IndexInfo{})
 	assert.Nil(t, err)
 	prefix[IndexMetaPrefix] = []string{string(value)}
-	m1, err := NewMetaTable(kt, k1)
+	m1, err := NewMetaTable(context.TODO(), kt, k1)
 	assert.NotNil(t, err)
 	assert.EqualError(t, err, "load prefix error")
 	prefix[CollectionAliasMetaPrefix] = []string{"alias-meta"}
@@ -215,7 +216,7 @@ func TestMetaTable(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, skv)
 	txnKV := etcdkv.NewEtcdKV(etcdCli, rootPath)
-	mt, err := NewMetaTable(txnKV, skv)
+	mt, err := NewMetaTable(context.TODO(), txnKV, skv)
 	assert.Nil(t, err)
 
 	collInfo := &pb.CollectionInfo{
@@ -499,7 +500,7 @@ func TestMetaTable(t *testing.T) {
 		err = mt.AddProxy(&po)
 		assert.Nil(t, err)
 
-		_, err = NewMetaTable(txnKV, skv)
+		_, err = NewMetaTable(context.TODO(), txnKV, skv)
 		assert.Nil(t, err)
 	})
 
@@ -592,7 +593,7 @@ func TestMetaTable(t *testing.T) {
 		remove: func(key string) error { return txnkv.Remove(key) },
 	}
 
-	mt, err = NewMetaTable(mockTxnKV, mockKV)
+	mt, err = NewMetaTable(context.TODO(), mockTxnKV, mockKV)
 	assert.Nil(t, err)
 
 	wg.Add(1)
@@ -1180,7 +1181,7 @@ func TestMetaWithTimestamp(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, skv)
 	txnKV := etcdkv.NewEtcdKV(etcdCli, rootPath)
-	mt, err := NewMetaTable(txnKV, skv)
+	mt, err := NewMetaTable(context.TODO(), txnKV, skv)
 	assert.Nil(t, err)
 
 	collInfo := &pb.CollectionInfo{
@@ -1340,7 +1341,7 @@ func TestFixIssue10540(t *testing.T) {
 	txnKV.Save(path.Join(SegmentIndexMetaPrefix, "2"), string(suffixSnapshotTombstone))
 	txnKV.Save(path.Join(IndexMetaPrefix, "3"), string(suffixSnapshotTombstone))
 
-	_, err = NewMetaTable(txnKV, skv)
+	_, err = NewMetaTable(context.TODO(), txnKV, skv)
 	assert.Nil(t, err)
 }
 
