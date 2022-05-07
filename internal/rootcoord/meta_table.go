@@ -368,7 +368,7 @@ func (mt *MetaTable) GetCollectionByID(collectionID typeutil.UniqueID, ts typeut
 		return model.CloneCollectionModel(col), nil
 	}
 
-	return mt.catalog.GetCollectionWithVersion(mt.ctx, collectionID, ts)
+	return mt.catalog.GetCollectionByID(mt.ctx, collectionID, ts)
 }
 
 // GetCollectionByName return collection meta by collection name
@@ -511,9 +511,9 @@ func (mt *MetaTable) GetPartitionNameByID(collID, partitionID typeutil.UniqueID,
 	if err != nil {
 		return "", err
 	}
-	for idx := range col.PartitionIDs {
-		if col.PartitionIDs[idx] == partitionID {
-			return col.PartitionNames[idx], nil
+	for _, partition := range col.Partitions {
+		if partition.PartitionID == partitionID {
+			return partition.PartitionName, nil
 		}
 	}
 	return "", fmt.Errorf("partition %d does not exist", partitionID)
@@ -537,9 +537,9 @@ func (mt *MetaTable) getPartitionByName(collID typeutil.UniqueID, partitionName 
 	if err != nil {
 		return 0, err
 	}
-	for idx := range col.PartitionIDs {
-		if col.PartitionNames[idx] == partitionName {
-			return col.PartitionIDs[idx], nil
+	for _, partition := range col.Partitions {
+		if partition.PartitionName == partitionName {
+			return partition.PartitionID, nil
 		}
 	}
 	return 0, fmt.Errorf("partition %s does not exist", partitionName)
