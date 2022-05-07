@@ -314,7 +314,7 @@ func (kc *KVCatalog) ListCollections(ctx context.Context, ts typeutil.Timestamp)
 	_, vals, err := kc.snapshot.LoadWithPrefix(CollectionMetaPrefix, ts)
 	if err != nil {
 		log.Error("load with prefix error", zap.Uint64("timestamp", ts), zap.Error(err))
-		return nil, err
+		return nil, nil
 	}
 	colls := make(map[string]*model.Collection)
 	for _, val := range vals {

@@ -157,19 +157,13 @@ func (mt *MetaTable) reloadFromKV() error {
 		mt.proxyID2Meta[proxyMeta.ID] = proxyMeta
 	}
 
-	_, values, err = mt.snapshot.LoadWithPrefix(CollectionMetaPrefix, 0)
+	collMap, err := mt.catalog.ListCollections(mt.ctx, 0)
 	if err != nil {
 		return err
 	}
-
-	for _, value := range values {
-		collInfo := pb.CollectionInfo{}
-		err = proto.Unmarshal([]byte(value), &collInfo)
-		if err != nil {
-			return fmt.Errorf("rootcoord Unmarshal pb.CollectionInfo err:%w", err)
-		}
-		mt.collID2Meta[collInfo.ID] = *model.ConvertCollectionPBToModel(&collInfo, map[string]string{})
-		mt.collName2ID[collInfo.Schema.Name] = collInfo.ID
+	for _, coll := range collMap {
+		mt.collID2Meta[coll.CollectionID] = *coll
+		mt.collName2ID[coll.Name] = coll.CollectionID
 	}
 
 	_, values, err = mt.txn.LoadWithPrefix(SegmentIndexMetaPrefix)
