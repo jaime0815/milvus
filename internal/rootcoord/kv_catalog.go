@@ -77,9 +77,9 @@ func (kc *KVCatalog) CreateIndex(ctx context.Context, segIndex *model.SegmentInd
 	return nil
 }
 
-func (kc *KVCatalog) CreateAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error {
-	k := fmt.Sprintf("%s/%s", CollectionAliasMetaPrefix, collAlias.Alias)
-	v, err := proto.Marshal(&pb.CollectionInfo{ID: collAlias.CollectionID, Schema: &schemapb.CollectionSchema{Name: collAlias.Alias}})
+func (kc *KVCatalog) CreateAlias(ctx context.Context, collection *model.Collection, ts typeutil.Timestamp) error {
+	k := fmt.Sprintf("%s/%s", CollectionAliasMetaPrefix, collection.Aliases[0])
+	v, err := proto.Marshal(&pb.CollectionInfo{ID: collection.CollectionID, Schema: &schemapb.CollectionSchema{Name: collection.Aliases[0]}})
 	if err != nil {
 		log.Error("marshal CollectionInfo fail", zap.String("key", k), zap.Error(err))
 		return fmt.Errorf("marshal CollectionInfo fail key:%s, err:%w", k, err)
@@ -147,8 +147,8 @@ func (kc *KVCatalog) GetCredential(ctx context.Context, username string) (*model
 	return &model.Credential{Username: username, EncryptedPassword: credentialInfo.EncryptedPassword}, nil
 }
 
-func (kc *KVCatalog) AlterAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error {
-	return kc.CreateAlias(ctx, collAlias, ts)
+func (kc *KVCatalog) AlterAlias(ctx context.Context, collection *model.Collection, ts typeutil.Timestamp) error {
+	return kc.CreateAlias(ctx, collection, ts)
 }
 
 func (kc *KVCatalog) DropCollection(ctx context.Context, collectionInfo *model.Collection, ts typeutil.Timestamp) error {

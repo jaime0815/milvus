@@ -26,7 +26,7 @@ func (tc *TableCatalog) CreateIndex(ctx context.Context, index *model.SegmentInd
 	return nil
 }
 
-func (tc *TableCatalog) CreateAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error {
+func (tc *TableCatalog) CreateAlias(ctx context.Context, collection *model.Collection, ts typeutil.Timestamp) error {
 	return nil
 }
 
@@ -42,7 +42,7 @@ func (tc *TableCatalog) CollectionExists(ctx context.Context, collectionID typeu
 	return false
 }
 
-func (tc *TableCatalog) AlterAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error {
+func (tc *TableCatalog) AlterAlias(ctx context.Context, collection *model.Collection, ts typeutil.Timestamp) error {
 	return nil
 }
 

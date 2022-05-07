@@ -481,7 +481,7 @@ func (mt *MetaTable) AddPartition(collID typeutil.UniqueID, partitionName string
 	partition := &model.Partition{
 		Extra: metaTxn,
 	}
-	return mt.catalog.CreatePartition(context.TODO(), &coll, partition, ts)
+	return mt.catalog.CreatePartition(mt.ctx, &coll, partition, ts)
 }
 
 // GetPartitionNameByID return partition name by partition id
@@ -663,7 +663,7 @@ func (mt *MetaTable) AddIndex(segIdxInfo *pb.SegmentIndexInfo) error {
 		BuildID:      segIdxInfo.BuildID,
 		EnableIndex:  segIdxInfo.EnableIndex,
 	}
-	return mt.catalog.CreateIndex(context.TODO(), index)
+	return mt.catalog.CreateIndex(mt.ctx, index)
 }
 
 // DropIndex drop index
@@ -1029,11 +1029,11 @@ func (mt *MetaTable) AddAlias(collectionAlias string, collectionName string, ts 
 	}
 	mt.collAlias2ID[collectionAlias] = id
 
-	collAlias := &model.CollectionAlias{
+	coll := &model.Collection{
 		CollectionID: id,
-		Alias:        collectionAlias,
+		Aliases:      []string{collectionAlias},
 	}
-	return mt.catalog.CreateAlias(context.TODO(), collAlias, ts)
+	return mt.catalog.CreateAlias(mt.ctx, coll, ts)
 }
 
 // DropAlias drop collection alias
@@ -1063,11 +1063,11 @@ func (mt *MetaTable) AlterAlias(collectionAlias string, collectionName string, t
 	}
 	mt.collAlias2ID[collectionAlias] = id
 
-	collAlias := &model.CollectionAlias{
+	coll := &model.Collection{
 		CollectionID: id,
-		Alias:        collectionAlias,
+		Aliases:      []string{collectionAlias},
 	}
-	return mt.catalog.AlterAlias(mt.ctx, collAlias, ts)
+	return mt.catalog.AlterAlias(mt.ctx, coll, ts)
 }
 
 // IsAlias returns true if specific `collectionAlias` is an alias of collection.
@@ -1088,7 +1088,7 @@ func (mt *MetaTable) AddCredential(credInfo *internalpb.CredentialInfo) error {
 		Username:          credInfo.Username,
 		EncryptedPassword: credInfo.EncryptedPassword,
 	}
-	return mt.catalog.CreateCredential(context.TODO(), credential)
+	return mt.catalog.CreateCredential(mt.ctx, credential)
 }
 
 // GetCredential get credential by username
