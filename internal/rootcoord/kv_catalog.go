@@ -11,7 +11,6 @@ import (
 	"github.com/milvus-io/milvus/internal/kv"
 	"github.com/milvus-io/milvus/internal/log"
 	"github.com/milvus-io/milvus/internal/metastore/model"
-	"github.com/milvus-io/milvus/internal/proto/etcdpb"
 	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
 	"github.com/milvus-io/milvus/internal/proto/schemapb"
@@ -111,7 +110,7 @@ func (kc *KVCatalog) CreateCredential(ctx context.Context, credential *model.Cre
 	return nil
 }
 
-func (kc *KVCatalog) GetCollection(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*pb.CollectionInfo, error) {
+func (kc *KVCatalog) GetCollectionByID(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*pb.CollectionInfo, error) {
 	collKey := fmt.Sprintf("%s/%d", CollectionMetaPrefix, collectionID)
 	collVal, err := kc.snapshot.Load(collKey, ts)
 	if err != nil {
@@ -128,7 +127,7 @@ func (kc *KVCatalog) GetCollection(ctx context.Context, collectionID typeutil.Un
 }
 
 func (kc *KVCatalog) CollectionExists(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) bool {
-	_, err := kc.GetCollection(ctx, collectionID, ts)
+	_, err := kc.GetCollectionByID(ctx, collectionID, ts)
 	return err == nil
 }
 
@@ -276,13 +275,48 @@ func (kc *KVCatalog) DropAlias(ctx context.Context, collectionID typeutil.Unique
 	return nil
 }
 
-func (kc *KVCatalog) ListCollections(ctx context.Context, ts typeutil.Timestamp) (map[string]*etcdpb.CollectionInfo, error) {
+func (kc *KVCatalog) GetCollectionByName(ctx context.Context, collectionName string, ts typeutil.Timestamp) (*model.Collection, error) {
+	_, vals, err := kc.snapshot.LoadWithPrefix(CollectionMetaPrefix, ts)
+	if err != nil {
+		log.Warn("failed to load table from meta snapshot", zap.Error(err))
+		return nil, err
+	}
+	for _, val := range vals {
+		colMeta := pb.CollectionInfo{}
+		err = proto.Unmarshal([]byte(val), &colMeta)
+		if err != nil {
+			log.Warn("unmarshal collection info failed", zap.Error(err))
+			continue
+		}
+		if colMeta.Schema.Name == collectionName {
+			return model.ConvertCollectionPBToModel(&colMeta, map[string]string{}), nil
+		}
+	}
+	return nil, fmt.Errorf("can't find collection: %s, at timestamp = %d", collectionName, ts)
+}
+
+func (kc *KVCatalog) GetCollectionWithVersion(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*model.Collection, error) {
+	key := fmt.Sprintf("%s/%d", CollectionMetaPrefix, collectionID)
+	val, err := kc.snapshot.Load(key, ts)
+	if err != nil {
+		return nil, err
+	}
+	colMeta := pb.CollectionInfo{}
+	err = proto.Unmarshal([]byte(val), &colMeta)
+	if err != nil {
+		return nil, err
+	}
+
+	return model.ConvertCollectionPBToModel(&colMeta, map[string]string{}), nil
+}
+
+func (kc *KVCatalog) ListCollections(ctx context.Context, ts typeutil.Timestamp) (map[string]*model.Collection, error) {
 	_, vals, err := kc.snapshot.LoadWithPrefix(CollectionMetaPrefix, ts)
 	if err != nil {
 		log.Error("load with prefix error", zap.Uint64("timestamp", ts), zap.Error(err))
 		return nil, err
 	}
-	colls := make(map[string]*pb.CollectionInfo)
+	colls := make(map[string]*model.Collection)
 	for _, val := range vals {
 		collMeta := pb.CollectionInfo{}
 		err := proto.Unmarshal([]byte(val), &collMeta)
@@ -290,7 +324,7 @@ func (kc *KVCatalog) ListCollections(ctx context.Context, ts typeutil.Timestamp)
 			log.Warn("unmarshal collection info failed", zap.Error(err))
 			continue
 		}
-		colls[collMeta.Schema.Name] = &collMeta
+		colls[collMeta.Schema.Name] = model.ConvertCollectionPBToModel(&collMeta, map[string]string{})
 	}
 	return colls, nil
 }
@@ -312,4 +346,16 @@ func (kc *KVCatalog) ListCredentials(ctx context.Context) ([]string, error) {
 		usernames = append(usernames, username)
 	}
 	return usernames, nil
+}
+
+func (kc *KVCatalog) GetPartition(ctx context.Context, collectionName string, partitionName string) (*model.Partition, error) {
+	panic("implement me")
+}
+
+func (kc *KVCatalog) GetPartitionWithVersion(ctx context.Context, collectionName string, partitionName string, version int) (model.Partition, error) {
+	panic("implement me")
+}
+
+func (kc *KVCatalog) Close() {
+	panic("implement me")
 }

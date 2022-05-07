@@ -10,24 +10,43 @@ func ConvertCollectionPBToModel(coll *pb.CollectionInfo, extra map[string]string
 	partitions := make([]Partition, len(coll.PartitionIDs))
 	for idx := range coll.PartitionIDs {
 		partitions[idx] = Partition{
-			PartitionID:   coll.PartitionIDs[idx],
-			PartitionName: coll.PartitionNames[idx],
+			PartitionID:               coll.PartitionIDs[idx],
+			PartitionName:             coll.PartitionNames[idx],
+			PartitionCreatedTimestamp: coll.PartitionCreatedTimestamps[idx],
 		}
 	}
 	return &Collection{
-		CollectionID:               coll.ID,
-		Name:                       coll.Schema.Name,
-		Description:                coll.Schema.Description,
-		AutoID:                     coll.Schema.AutoID,
-		Fields:                     coll.Schema.Fields,
-		Partitions:                 partitions,
-		FieldIndexes:               coll.FieldIndexes,
-		VirtualChannelNames:        coll.VirtualChannelNames,
-		PhysicalChannelNames:       coll.PhysicalChannelNames,
-		ShardsNum:                  coll.ShardsNum,
-		PartitionCreatedTimestamps: coll.PartitionCreatedTimestamps,
-		ConsistencyLevel:           coll.ConsistencyLevel,
-		Extra:                      extra,
+		CollectionID:         coll.ID,
+		Name:                 coll.Schema.Name,
+		Description:          coll.Schema.Description,
+		AutoID:               coll.Schema.AutoID,
+		Fields:               coll.Schema.Fields,
+		Partitions:           partitions,
+		FieldIndexes:         coll.FieldIndexes,
+		VirtualChannelNames:  coll.VirtualChannelNames,
+		PhysicalChannelNames: coll.PhysicalChannelNames,
+		ShardsNum:            coll.ShardsNum,
+		ConsistencyLevel:     coll.ConsistencyLevel,
+		CreateTime:           coll.CreateTime,
+		Extra:                extra,
+	}
+}
+
+func CloneCollectionModel(coll Collection) *Collection {
+	return &Collection{
+		CollectionID:         coll.CollectionID,
+		Name:                 coll.Name,
+		Description:          coll.Description,
+		AutoID:               coll.AutoID,
+		Fields:               coll.Fields,
+		Partitions:           coll.Partitions,
+		FieldIndexes:         coll.FieldIndexes,
+		VirtualChannelNames:  coll.VirtualChannelNames,
+		PhysicalChannelNames: coll.PhysicalChannelNames,
+		ShardsNum:            coll.ShardsNum,
+		ConsistencyLevel:     coll.ConsistencyLevel,
+		CreateTime:           coll.CreateTime,
+		Extra:                coll.Extra,
 	}
 }
 
@@ -40,9 +59,12 @@ func ConvertToCollectionPB(coll *Collection) *pb.CollectionInfo {
 	}
 	partitionIDs := make([]int64, len(coll.Partitions))
 	partitionNames := make([]string, len(coll.Partitions))
+	partitionCreatedTimestamps := make([]uint64, len(coll.Partitions))
+
 	for idx, partition := range coll.Partitions {
 		partitionIDs[idx] = partition.PartitionID
 		partitionNames[idx] = partition.PartitionName
+		partitionCreatedTimestamps[idx] = partition.PartitionCreatedTimestamp
 	}
 	return &pb.CollectionInfo{
 		ID:                         coll.CollectionID,
@@ -53,7 +75,7 @@ func ConvertToCollectionPB(coll *Collection) *pb.CollectionInfo {
 		VirtualChannelNames:        coll.VirtualChannelNames,
 		PhysicalChannelNames:       coll.PhysicalChannelNames,
 		ShardsNum:                  coll.ShardsNum,
-		PartitionCreatedTimestamps: coll.PartitionCreatedTimestamps,
+		PartitionCreatedTimestamps: partitionCreatedTimestamps,
 		ConsistencyLevel:           coll.ConsistencyLevel,
 		StartPositions:             coll.StartPositions,
 	}
