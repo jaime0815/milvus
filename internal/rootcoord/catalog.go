@@ -14,6 +14,7 @@ type Catalog interface {
 	CreateAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error
 	CreateCredential(ctx context.Context, credential *model.Credential) error
 
+	GetCollection(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*model.Collection, error)
 	CollectionExists(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) bool
 
 	DropCollection(ctx context.Context, collectionInfo *model.Collection, ts typeutil.Timestamp) error

@@ -32,6 +32,10 @@ func (tc *TableCatalog) CreateCredential(ctx context.Context, credential *model.
 	return nil
 }
 
+func (tc *TableCatalog) GetCollection(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*model.Collection, error) {
+	return nil, nil
+}
+
 func (tc *TableCatalog) CollectionExists(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) bool {
 	return false
 }

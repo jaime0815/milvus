@@ -605,13 +605,8 @@ func (mt *MetaTable) getPartitionByName(collID typeutil.UniqueID, partitionName 
 		}
 		return 0, fmt.Errorf("partition %s does not exist", partitionName)
 	}
-	collKey := fmt.Sprintf("%s/%d", CollectionMetaPrefix, collID)
-	collVal, err := mt.snapshot.Load(collKey, ts)
-	if err != nil {
-		return 0, err
-	}
-	collMeta := pb.CollectionInfo{}
-	err = proto.Unmarshal([]byte(collVal), &collMeta)
+
+	collMeta, err := mt.catalog.GetCollection(mt.ctx, collID, ts)
 	if err != nil {
 		return 0, err
 	}

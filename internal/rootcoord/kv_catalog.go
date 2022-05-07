@@ -110,9 +110,24 @@ func (kc *KVCatalog) CreateCredential(ctx context.Context, credential *model.Cre
 	return nil
 }
 
+func (kc *KVCatalog) GetCollection(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*model.Collection, error) {
+	collKey := fmt.Sprintf("%s/%d", CollectionMetaPrefix, collectionID)
+	collVal, err := kc.snapshot.Load(collKey, ts)
+	if err != nil {
+		log.Error("SnapShotKV Load fail", zap.Error(err))
+		return nil, err
+	}
+	collMeta := pb.CollectionInfo{}
+	err = proto.Unmarshal([]byte(collVal), &collMeta)
+	if err != nil {
+		log.Error("unmarshal collection info fail", zap.String("key", collKey), zap.Error(err))
+		return nil, err
+	}
+	return model.ConvertCollectionPBToModel(&collMeta, nil), nil
+}
+
 func (kc *KVCatalog) CollectionExists(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) bool {
-	key := fmt.Sprintf("%s/%d", CollectionMetaPrefix, collectionID)
-	_, err := kc.snapshot.Load(key, ts)
+	_, err := kc.GetCollection(ctx, collectionID, ts)
 	return err == nil
 }
 
