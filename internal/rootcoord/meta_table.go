@@ -359,9 +359,8 @@ func (mt *MetaTable) HasCollection(collID typeutil.UniqueID, ts typeutil.Timesta
 		_, ok := mt.collID2Meta[collID]
 		return ok
 	}
-	key := fmt.Sprintf("%s/%d", CollectionMetaPrefix, collID)
-	_, err := mt.snapshot.Load(key, ts)
-	return err == nil
+
+	return mt.catalog.CollectionExists(mt.ctx, collID, ts)
 }
 
 // GetCollectionByID return collection meta by collection id

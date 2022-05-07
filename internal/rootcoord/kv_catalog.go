@@ -110,6 +110,12 @@ func (kc *KVCatalog) CreateCredential(ctx context.Context, credential *model.Cre
 	return nil
 }
 
+func (kc *KVCatalog) CollectionExists(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) bool {
+	key := fmt.Sprintf("%s/%d", CollectionMetaPrefix, collectionID)
+	_, err := kc.snapshot.Load(key, ts)
+	return err == nil
+}
+
 func (kc *KVCatalog) DropCollection(ctx context.Context, collectionInfo *model.Collection, ts typeutil.Timestamp) error {
 	delMetakeysSnap := []string{
 		fmt.Sprintf("%s/%d", CollectionMetaPrefix, collectionInfo.CollectionID),

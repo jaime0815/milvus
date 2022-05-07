@@ -31,3 +31,7 @@ func (tc *TableCatalog) CreateAlias(ctx context.Context, collAlias *model.Collec
 func (tc *TableCatalog) CreateCredential(ctx context.Context, credential *model.Credential) error {
 	return nil
 }
+
+func (tc *TableCatalog) CollectionExists(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) bool {
+	return false
+}
