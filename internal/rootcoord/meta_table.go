@@ -376,17 +376,12 @@ func (mt *MetaTable) GetCollectionByID(collectionID typeutil.UniqueID, ts typeut
 		colCopy := proto.Clone(&col)
 		return colCopy.(*pb.CollectionInfo), nil
 	}
-	key := fmt.Sprintf("%s/%d", CollectionMetaPrefix, collectionID)
-	val, err := mt.snapshot.Load(key, ts)
+
+	colMeta, err := mt.catalog.GetCollection(mt.ctx, collectionID, ts)
 	if err != nil {
 		return nil, err
 	}
-	colMeta := pb.CollectionInfo{}
-	err = proto.Unmarshal([]byte(val), &colMeta)
-	if err != nil {
-		return nil, err
-	}
-	return &colMeta, nil
+	return colMeta, nil
 }
 
 // GetCollectionByName return collection meta by collection name
@@ -408,20 +403,15 @@ func (mt *MetaTable) GetCollectionByName(collectionName string, ts typeutil.Time
 		colCopy := proto.Clone(&col)
 		return colCopy.(*pb.CollectionInfo), nil
 	}
-	_, vals, err := mt.snapshot.LoadWithPrefix(CollectionMetaPrefix, ts)
+
+	collMap, err := mt.catalog.ListCollections(mt.ctx, ts)
 	if err != nil {
 		log.Warn("failed to load table from meta snapshot", zap.Error(err))
 		return nil, err
 	}
-	for _, val := range vals {
-		collMeta := pb.CollectionInfo{}
-		err = proto.Unmarshal([]byte(val), &collMeta)
-		if err != nil {
-			log.Warn("unmarshal collection info failed", zap.Error(err))
-			continue
-		}
-		if collMeta.Schema.Name == collectionName {
-			return &collMeta, nil
+	for collName, collMeta := range collMap {
+		if collName == collectionName {
+			return collMeta, nil
 		}
 	}
 	return nil, fmt.Errorf("can't find collection: %s, at timestamp = %d", collectionName, ts)
@@ -550,13 +540,8 @@ func (mt *MetaTable) GetPartitionNameByID(collID, partitionID typeutil.UniqueID,
 		}
 		return "", fmt.Errorf("partition %d does not exist", partitionID)
 	}
-	collKey := fmt.Sprintf("%s/%d", CollectionMetaPrefix, collID)
-	collVal, err := mt.snapshot.Load(collKey, ts)
-	if err != nil {
-		return "", err
-	}
-	collMeta := pb.CollectionInfo{}
-	err = proto.Unmarshal([]byte(collVal), &collMeta)
+
+	collMeta, err := mt.catalog.GetCollection(mt.ctx, collID, ts)
 	if err != nil {
 		return "", err
 	}

@@ -271,7 +271,8 @@ func (kc *KVCatalog) ListCollections(ctx context.Context, ts typeutil.Timestamp)
 		collMeta := pb.CollectionInfo{}
 		err := proto.Unmarshal([]byte(val), &collMeta)
 		if err != nil {
-			log.Debug("unmarshal collection info failed", zap.Error(err))
+			log.Warn("unmarshal collection info failed", zap.Error(err))
+			continue
 		}
 		colls[collMeta.Schema.Name] = &collMeta
 	}
