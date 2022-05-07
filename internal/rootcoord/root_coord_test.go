@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/milvus-io/milvus/internal/metastore/model"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -365,7 +367,7 @@ func getNotTtMsg(ctx context.Context, n int, ch <-chan *msgstream.MsgPack) []msg
 	}
 }
 
-func createCollectionInMeta(dbName, collName string, core *Core, shardsNum int32, modifyFunc func(*etcdpb.CollectionInfo)) error {
+func createCollectionInMeta(dbName, collName string, core *Core, shardsNum int32, modifyFunc func(collection *model.Collection)) error {
 	schema := schemapb.CollectionSchema{
 		Name: collName,
 	}
@@ -426,16 +428,23 @@ func createCollectionInMeta(dbName, collName string, core *Core, shardsNum int32
 		chanNames[i] = funcutil.ToPhysicalChannel(vchanNames[i])
 	}
 
-	collInfo := etcdpb.CollectionInfo{
-		ID:                         collID,
-		Schema:                     &schema,
-		PartitionIDs:               []typeutil.UniqueID{partID},
-		PartitionNames:             []string{Params.CommonCfg.DefaultPartitionName},
-		FieldIndexes:               make([]*etcdpb.FieldIndexInfo, 0, 16),
-		VirtualChannelNames:        vchanNames,
-		PhysicalChannelNames:       chanNames,
-		ShardsNum:                  0, // intend to set zero
-		PartitionCreatedTimestamps: []uint64{0},
+	collInfo := model.Collection{
+		CollectionID:         collID,
+		Name:                 schema.Name,
+		Description:          schema.Description,
+		AutoID:               schema.AutoID,
+		Fields:               schema.Fields,
+		FieldIndexes:         make([]*etcdpb.FieldIndexInfo, 0, 16),
+		VirtualChannelNames:  vchanNames,
+		PhysicalChannelNames: chanNames,
+		ShardsNum:            0, // intend to set zero
+		Partitions: []model.Partition{
+			{
+				PartitionID:               partID,
+				PartitionName:             Params.CommonCfg.DefaultPartitionName,
+				PartitionCreatedTimestamp: 0,
+			},
+		},
 	}
 
 	if modifyFunc != nil {
@@ -843,20 +852,19 @@ func TestRootCoord_Base(t *testing.T) {
 		dmlStream.Start()
 
 		pChanMap := core.MetaTable.ListCollectionPhysicalChannels()
-		assert.Greater(t, len(pChanMap[createMeta.ID]), 0)
+		assert.Greater(t, len(pChanMap[createMeta.CollectionID]), 0)
 		vChanMap := core.MetaTable.ListCollectionVirtualChannels()
-		assert.Greater(t, len(vChanMap[createMeta.ID]), 0)
+		assert.Greater(t, len(vChanMap[createMeta.CollectionID]), 0)
 
 		// get CreateCollectionMsg
 		msgs := getNotTtMsg(ctx, 1, dmlStream.Chan())
 		assert.Equal(t, 1, len(msgs))
 		createMsg, ok := (msgs[0]).(*msgstream.CreateCollectionMsg)
 		assert.True(t, ok)
-		assert.Equal(t, createMeta.ID, createMsg.CollectionID)
-		assert.Equal(t, 1, len(createMeta.PartitionIDs))
-		assert.Equal(t, createMeta.PartitionIDs[0], createMsg.PartitionID)
-		assert.Equal(t, 1, len(createMeta.PartitionNames))
-		assert.Equal(t, createMeta.PartitionNames[0], createMsg.PartitionName)
+		assert.Equal(t, createMeta.CollectionID, createMsg.CollectionID)
+		assert.Equal(t, 1, len(createMeta.Partitions))
+		assert.Equal(t, createMeta.Partitions[0].PartitionID, createMsg.PartitionID)
+		assert.Equal(t, createMeta.Partitions[0].PartitionName, createMsg.PartitionName)
 		assert.Equal(t, shardsNum, int32(len(createMeta.VirtualChannelNames)))
 		assert.Equal(t, shardsNum, int32(len(createMeta.PhysicalChannelNames)))
 		assert.Equal(t, shardsNum, createMeta.ShardsNum)
@@ -896,8 +904,8 @@ func TestRootCoord_Base(t *testing.T) {
 		var ddCollReq = internalpb.CreateCollectionRequest{}
 		err = proto.Unmarshal(ddOp.Body, &ddCollReq)
 		assert.NoError(t, err)
-		assert.Equal(t, createMeta.ID, ddCollReq.CollectionID)
-		assert.Equal(t, createMeta.PartitionIDs[0], ddCollReq.PartitionID)
+		assert.Equal(t, createMeta.CollectionID, ddCollReq.CollectionID)
+		assert.Equal(t, createMeta.Partitions[0].PartitionID, ddCollReq.PartitionID)
 
 		// check invalid operation
 		req.Base.MsgID = 101
@@ -999,7 +1007,7 @@ func TestRootCoord_Base(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, commonpb.ErrorCode_Success, rsp.Status.ErrorCode)
 		assert.Equal(t, collName, rsp.Schema.Name)
-		assert.Equal(t, collMeta.ID, rsp.CollectionID)
+		assert.Equal(t, collMeta.CollectionID, rsp.CollectionID)
 		assert.Equal(t, shardsNum, int32(len(rsp.VirtualChannelNames)))
 		assert.Equal(t, shardsNum, int32(len(rsp.PhysicalChannelNames)))
 		assert.Equal(t, shardsNum, rsp.ShardsNum)
@@ -1045,8 +1053,8 @@ func TestRootCoord_Base(t *testing.T) {
 		assert.Equal(t, commonpb.ErrorCode_Success, status.ErrorCode)
 		collMeta, err := core.MetaTable.GetCollectionByName(collName, 0)
 		assert.NoError(t, err)
-		assert.Equal(t, 2, len(collMeta.PartitionIDs))
-		partNameIdx1, err := core.MetaTable.GetPartitionNameByID(collMeta.ID, collMeta.PartitionIDs[1], 0)
+		assert.Equal(t, 2, len(collMeta.Partitions))
+		partNameIdx1, err := core.MetaTable.GetPartitionNameByID(collMeta.CollectionID, collMeta.Partitions[1].PartitionID, 0)
 		assert.NoError(t, err)
 		assert.Equal(t, partName, partNameIdx1)
 
@@ -1054,8 +1062,8 @@ func TestRootCoord_Base(t *testing.T) {
 		assert.Equal(t, 1, len(msgs))
 		partMsg, ok := (msgs[0]).(*msgstream.CreatePartitionMsg)
 		assert.True(t, ok)
-		assert.Equal(t, collMeta.ID, partMsg.CollectionID)
-		assert.Equal(t, collMeta.PartitionIDs[1], partMsg.PartitionID)
+		assert.Equal(t, collMeta.CollectionID, partMsg.CollectionID)
+		assert.Equal(t, collMeta.Partitions[1].PartitionID, partMsg.PartitionID)
 
 		assert.Equal(t, 1, len(pnm.GetCollArray()))
 		assert.Equal(t, collName, pnm.GetCollArray()[0])
@@ -1074,8 +1082,8 @@ func TestRootCoord_Base(t *testing.T) {
 		var ddReq = internalpb.CreatePartitionRequest{}
 		err = proto.Unmarshal(ddOp.Body, &ddReq)
 		assert.NoError(t, err)
-		assert.Equal(t, collMeta.ID, ddReq.CollectionID)
-		assert.Equal(t, collMeta.PartitionIDs[1], ddReq.PartitionID)
+		assert.Equal(t, collMeta.CollectionID, ddReq.CollectionID)
+		assert.Equal(t, collMeta.Partitions[1].PartitionID, ddReq.PartitionID)
 
 		err = core.reSendDdMsg(core.ctx, true)
 		assert.NoError(t, err)
@@ -1115,7 +1123,7 @@ func TestRootCoord_Base(t *testing.T) {
 			},
 			DbName:         dbName,
 			CollectionName: collName,
-			CollectionID:   coll.ID,
+			CollectionID:   coll.CollectionID,
 		}
 		rsp, err := core.ShowPartitions(ctx, req)
 		assert.NoError(t, err)
@@ -1129,7 +1137,7 @@ func TestRootCoord_Base(t *testing.T) {
 		defer wg.Done()
 		coll, err := core.MetaTable.GetCollectionByName(collName, 0)
 		assert.NoError(t, err)
-		partID := coll.PartitionIDs[1]
+		partID := coll.Partitions[1].PartitionID
 		dm.mu.Lock()
 		dm.segs = []typeutil.UniqueID{1000, 1001, 1002, 1003, 1004, 1005}
 		dm.mu.Unlock()
@@ -1141,7 +1149,7 @@ func TestRootCoord_Base(t *testing.T) {
 				Timestamp: 170,
 				SourceID:  170,
 			},
-			CollectionID: coll.GetID(),
+			CollectionID: coll.CollectionID,
 			PartitionID:  partID,
 		}
 		rsp, err := core.ShowSegments(ctx, req)
@@ -1219,7 +1227,7 @@ func TestRootCoord_Base(t *testing.T) {
 				Timestamp: 190,
 				SourceID:  190,
 			},
-			CollectionID: coll.ID,
+			CollectionID: coll.CollectionID,
 			SegmentID:    1000,
 		}
 		rsp, err := core.DescribeSegment(ctx, req)
@@ -1279,20 +1287,20 @@ func TestRootCoord_Base(t *testing.T) {
 		assert.NoError(t, err)
 		// Normal case.
 		count, err := core.CountCompleteIndex(context.WithValue(ctx, ctxKey{}, ""),
-			collName, coll.ID, []UniqueID{1000, 1001, 1002})
+			collName, coll.CollectionID, []UniqueID{1000, 1001, 1002})
 		assert.NoError(t, err)
 		assert.Equal(t, 3, count)
 		// Case with an empty result.
-		count, err = core.CountCompleteIndex(ctx, collName, coll.ID, []UniqueID{})
+		count, err = core.CountCompleteIndex(ctx, collName, coll.CollectionID, []UniqueID{})
 		assert.NoError(t, err)
 		assert.Equal(t, 0, count)
 		// Case where GetIndexStates failed with error.
 		_, err = core.CountCompleteIndex(context.WithValue(ctx, ctxKey{}, returnError),
-			collName, coll.ID, []UniqueID{1000, 1001, 1002})
+			collName, coll.CollectionID, []UniqueID{1000, 1001, 1002})
 		assert.Error(t, err)
 		// Case where GetIndexStates failed with bad status.
 		_, err = core.CountCompleteIndex(context.WithValue(ctx, ctxKey{}, returnUnsuccessfulStatus),
-			collName, coll.ID, []UniqueID{1000, 1001, 1002})
+			collName, coll.CollectionID, []UniqueID{1000, 1001, 1002})
 		assert.Error(t, err)
 	})
 
@@ -1301,7 +1309,7 @@ func TestRootCoord_Base(t *testing.T) {
 		defer wg.Done()
 		coll, err := core.MetaTable.GetCollectionByName(collName, 0)
 		assert.NoError(t, err)
-		partID := coll.PartitionIDs[1]
+		partID := coll.Partitions[1].PartitionID
 
 		flushMsg := datapb.SegmentFlushCompletedMsg{
 			Base: &commonpb.MsgBase{
@@ -1309,7 +1317,7 @@ func TestRootCoord_Base(t *testing.T) {
 			},
 			Segment: &datapb.SegmentInfo{
 				ID:           segID,
-				CollectionID: coll.ID,
+				CollectionID: coll.CollectionID,
 				PartitionID:  partID,
 			},
 		}
@@ -1352,7 +1360,7 @@ func TestRootCoord_Base(t *testing.T) {
 		}
 		coll, err := core.MetaTable.GetCollectionByName(collName, 0)
 		assert.NoError(t, err)
-		core.MetaTable.collName2ID[collName] = coll.GetID()
+		core.MetaTable.collName2ID[collName] = coll.CollectionID
 		rsp, err := core.Import(ctx, req)
 		assert.NoError(t, err)
 		assert.Equal(t, commonpb.ErrorCode_Success, rsp.Status.ErrorCode)
@@ -1408,7 +1416,7 @@ func TestRootCoord_Base(t *testing.T) {
 				Base: &commonpb.MsgBase{
 					MsgType: commonpb.MsgType_DescribeSegment,
 				},
-				CollectionID: coll.ID,
+				CollectionID: coll.CollectionID,
 				SegmentID:    segmentID,
 			}
 			segDesc, err := core.DescribeSegment(ctx, describeSegmentRequest)
@@ -1440,10 +1448,15 @@ func TestRootCoord_Base(t *testing.T) {
 			return tID, 0, nil
 		}
 		core.MetaTable.collName2ID["new"+collName] = 123
-		core.MetaTable.collID2Meta[123] = etcdpb.CollectionInfo{
-			ID:             123,
-			PartitionIDs:   []int64{456},
-			PartitionNames: []string{"testPartition"}}
+		core.MetaTable.collID2Meta[123] = model.Collection{
+			CollectionID: 123,
+			Partitions: []model.Partition{
+				{
+					PartitionID:   456,
+					PartitionName: "testPartition",
+				},
+			},
+		}
 		req := &milvuspb.ImportRequest{
 			CollectionName: "new" + collName,
 			PartitionName:  partName,
@@ -1613,14 +1626,14 @@ func TestRootCoord_Base(t *testing.T) {
 		}
 		collMeta, err := core.MetaTable.GetCollectionByName(collName, 0)
 		assert.NoError(t, err)
-		dropPartID := collMeta.PartitionIDs[1]
+		dropPartID := collMeta.Partitions[1].PartitionID
 		status, err := core.DropPartition(ctx, req)
 		assert.NoError(t, err)
 		assert.Equal(t, commonpb.ErrorCode_Success, status.ErrorCode)
 		collMeta, err = core.MetaTable.GetCollectionByName(collName, 0)
 		assert.NoError(t, err)
-		assert.Equal(t, 1, len(collMeta.PartitionIDs))
-		partName, err := core.MetaTable.GetPartitionNameByID(collMeta.ID, collMeta.PartitionIDs[0], 0)
+		assert.Equal(t, 1, len(collMeta.Partitions))
+		partName, err := core.MetaTable.GetPartitionNameByID(collMeta.CollectionID, collMeta.Partitions[0].PartitionID, 0)
 		assert.NoError(t, err)
 		assert.Equal(t, Params.CommonCfg.DefaultPartitionName, partName)
 
@@ -1628,7 +1641,7 @@ func TestRootCoord_Base(t *testing.T) {
 		assert.Equal(t, 1, len(msgs))
 		dmsg, ok := (msgs[0]).(*msgstream.DropPartitionMsg)
 		assert.True(t, ok)
-		assert.Equal(t, collMeta.ID, dmsg.CollectionID)
+		assert.Equal(t, collMeta.CollectionID, dmsg.CollectionID)
 		assert.Equal(t, dropPartID, dmsg.PartitionID)
 
 		assert.Equal(t, 2, len(pnm.GetCollArray()))
@@ -1648,7 +1661,7 @@ func TestRootCoord_Base(t *testing.T) {
 		var ddReq = internalpb.DropPartitionRequest{}
 		err = proto.Unmarshal(ddOp.Body, &ddReq)
 		assert.NoError(t, err)
-		assert.Equal(t, collMeta.ID, ddReq.CollectionID)
+		assert.Equal(t, collMeta.CollectionID, ddReq.CollectionID)
 		assert.Equal(t, dropPartID, ddReq.PartitionID)
 
 		err = core.reSendDdMsg(core.ctx, true)
@@ -1666,7 +1679,7 @@ func TestRootCoord_Base(t *testing.T) {
 				MsgType:  commonpb.MsgType_RemoveQueryChannels,
 				SourceID: core.session.ServerID,
 			},
-			CollectionID: collMeta.ID,
+			CollectionID: collMeta.CollectionID,
 		}
 		status, err := core.ReleaseDQLMessageStream(core.ctx, req)
 		assert.NoError(t, err)
@@ -1699,7 +1712,7 @@ func TestRootCoord_Base(t *testing.T) {
 		assert.Equal(t, 1, len(msgs))
 		dmsg, ok := (msgs[0]).(*msgstream.DropCollectionMsg)
 		assert.True(t, ok)
-		assert.Equal(t, collMeta.ID, dmsg.CollectionID)
+		assert.Equal(t, collMeta.CollectionID, dmsg.CollectionID)
 		collArray := pnm.GetCollArray()
 		assert.Equal(t, 3, len(collArray))
 		assert.Equal(t, collName, collArray[2])
@@ -1707,7 +1720,7 @@ func TestRootCoord_Base(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		qm.mutex.Lock()
 		assert.Equal(t, 1, len(qm.collID))
-		assert.Equal(t, collMeta.ID, qm.collID[0])
+		assert.Equal(t, collMeta.CollectionID, qm.collID[0])
 		qm.mutex.Unlock()
 
 		req = &milvuspb.DropCollectionRequest{
@@ -1742,7 +1755,7 @@ func TestRootCoord_Base(t *testing.T) {
 		var ddReq = internalpb.DropCollectionRequest{}
 		err = proto.Unmarshal(ddOp.Body, &ddReq)
 		assert.NoError(t, err)
-		assert.Equal(t, collMeta.ID, ddReq.CollectionID)
+		assert.Equal(t, collMeta.CollectionID, ddReq.CollectionID)
 
 		err = core.reSendDdMsg(core.ctx, true)
 		assert.NoError(t, err)
@@ -2795,7 +2808,7 @@ func TestRootCoord2(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, commonpb.ErrorCode_Success, rsp.Status.ErrorCode)
 		assert.Equal(t, collName, rsp.Schema.Name)
-		assert.Equal(t, collMeta.ID, rsp.CollectionID)
+		assert.Equal(t, collMeta.CollectionID, rsp.CollectionID)
 		assert.Equal(t, common.DefaultShardsNum, int32(len(rsp.VirtualChannelNames)))
 		assert.Equal(t, common.DefaultShardsNum, int32(len(rsp.PhysicalChannelNames)))
 		assert.Equal(t, common.DefaultShardsNum, rsp.ShardsNum)
@@ -3023,23 +3036,25 @@ func TestCheckFlushedSegments(t *testing.T) {
 		var indexID int64 = 6001
 		core.MetaTable.segID2IndexMeta[segID] = make(map[int64]etcdpb.SegmentIndexInfo)
 		core.MetaTable.partID2SegID[partID] = make(map[int64]bool)
-		core.MetaTable.collID2Meta[collID] = etcdpb.CollectionInfo{ID: collID}
+		core.MetaTable.collID2Meta[collID] = model.Collection{CollectionID: collID}
 		// do nothing, since collection has 0 index
 		core.checkFlushedSegments(ctx)
 
 		// get field schema by id fail
-		core.MetaTable.collID2Meta[collID] = etcdpb.CollectionInfo{
-			ID:           collID,
-			PartitionIDs: []int64{partID},
+		core.MetaTable.collID2Meta[collID] = model.Collection{
+			CollectionID: collID,
+			Partitions: []model.Partition{
+				{
+					PartitionID: partID,
+				},
+			},
 			FieldIndexes: []*etcdpb.FieldIndexInfo{
 				{
 					FiledID: fieldID,
 					IndexID: indexID,
 				},
 			},
-			Schema: &schemapb.CollectionSchema{
-				Fields: []*schemapb.FieldSchema{},
-			},
+			Fields: []*schemapb.FieldSchema{},
 		}
 		core.checkFlushedSegments(ctx)
 
@@ -3055,23 +3070,26 @@ func TestCheckFlushedSegments(t *testing.T) {
 		core.checkFlushedSegments(core.ctx)
 
 		// missing index info
-		core.MetaTable.collID2Meta[collID] = etcdpb.CollectionInfo{
-			ID:           collID,
-			PartitionIDs: []int64{partID},
+		core.MetaTable.collID2Meta[collID] = model.Collection{
+			CollectionID: collID,
+			Fields: []*schemapb.FieldSchema{
+				{
+					FieldID: fieldID,
+				},
+			},
 			FieldIndexes: []*etcdpb.FieldIndexInfo{
 				{
 					FiledID: fieldID,
 					IndexID: indexID,
 				},
 			},
-			Schema: &schemapb.CollectionSchema{
-				Fields: []*schemapb.FieldSchema{
-					{
-						FieldID: fieldID,
-					},
+			Partitions: []model.Partition{
+				{
+					PartitionID: partID,
 				},
 			},
 		}
+
 		core.checkFlushedSegments(ctx)
 		// existing segID, buildIndex failed
 		core.CallGetFlushedSegmentsService = func(_ context.Context, cid, pid int64) ([]int64, error) {
@@ -3167,7 +3185,7 @@ func TestRootCoord_CheckZeroShardsNum(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	modifyFunc := func(collInfo *etcdpb.CollectionInfo) {
+	modifyFunc := func(collInfo *model.Collection) {
 		collInfo.ShardsNum = 0
 	}
 
@@ -3190,7 +3208,7 @@ func TestRootCoord_CheckZeroShardsNum(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, commonpb.ErrorCode_Success, rsp.Status.ErrorCode)
 		assert.Equal(t, collName, rsp.Schema.Name)
-		assert.Equal(t, collMeta.ID, rsp.CollectionID)
+		assert.Equal(t, collMeta.CollectionID, rsp.CollectionID)
 		assert.Equal(t, shardsNum, int32(len(rsp.VirtualChannelNames)))
 		assert.Equal(t, shardsNum, int32(len(rsp.PhysicalChannelNames)))
 		assert.Equal(t, shardsNum, rsp.ShardsNum)

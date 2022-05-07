@@ -365,13 +365,13 @@ func (c *Core) checkFlushedSegments(ctx context.Context) {
 		if len(collMeta.FieldIndexes) == 0 {
 			continue
 		}
-		for _, partID := range collMeta.PartitionIDs {
+		for _, part := range collMeta.Partitions {
 			ctx2, cancel2 := context.WithTimeout(ctx, 3*time.Minute)
-			segIDs, err := c.CallGetFlushedSegmentsService(ctx2, collMeta.ID, partID)
+			segIDs, err := c.CallGetFlushedSegmentsService(ctx2, collMeta.CollectionID, part.PartitionID)
 			if err != nil {
 				log.Debug("failed to get flushed segments from dataCoord",
-					zap.Int64("collection ID", collMeta.GetID()),
-					zap.Int64("partition ID", partID),
+					zap.Int64("collection ID", collMeta.CollectionID),
+					zap.Int64("partition ID", part.PartitionID),
 					zap.Error(err))
 				cancel2()
 				continue
@@ -403,8 +403,8 @@ func (c *Core) checkFlushedSegments(ctx context.Context) {
 						continue
 					}
 					info := etcdpb.SegmentIndexInfo{
-						CollectionID: collMeta.ID,
-						PartitionID:  partID,
+						CollectionID: collMeta.CollectionID,
+						PartitionID:  part.PartitionID,
 						SegmentID:    segID,
 						FieldID:      idxInfo.FiledID,
 						IndexID:      idxInfo.IndexID,
@@ -413,7 +413,7 @@ func (c *Core) checkFlushedSegments(ctx context.Context) {
 					log.Debug("building index by background checker",
 						zap.Int64("segment_id", segID),
 						zap.Int64("index_id", indexMeta.IndexID),
-						zap.Int64("collection_id", collMeta.ID))
+						zap.Int64("collection_id", collMeta.CollectionID))
 					info.BuildID, err = c.BuildIndex(ctx2, segID, field, &indexMeta, false)
 					if err != nil {
 						log.Debug("build index failed",
@@ -427,7 +427,7 @@ func (c *Core) checkFlushedSegments(ctx context.Context) {
 					}
 					if err := c.MetaTable.AddIndex(&info); err != nil {
 						log.Debug("Add index into meta table failed",
-							zap.Int64("collection_id", collMeta.ID),
+							zap.Int64("collection_id", collMeta.CollectionID),
 							zap.Int64("index_id", info.IndexID),
 							zap.Int64("build_id", info.BuildID),
 							zap.Error(err))
@@ -445,15 +445,15 @@ func (c *Core) getSegments(ctx context.Context, collID typeutil.UniqueID) (map[t
 		return nil, err
 	}
 	segID2PartID := map[typeutil.UniqueID]typeutil.UniqueID{}
-	for _, partID := range collMeta.PartitionIDs {
-		if seg, err := c.CallGetFlushedSegmentsService(ctx, collID, partID); err == nil {
+	for _, part := range collMeta.Partitions {
+		if seg, err := c.CallGetFlushedSegmentsService(ctx, collID, part.PartitionID); err == nil {
 			for _, s := range seg {
-				segID2PartID[s] = partID
+				segID2PartID[s] = part.PartitionID
 			}
 		} else {
 			log.Error("failed to get flushed segments from dataCoord",
 				zap.Int64("collection ID", collID),
-				zap.Int64("partition ID", partID),
+				zap.Int64("partition ID", part.PartitionID),
 				zap.Error(err))
 			return nil, err
 		}
@@ -1236,7 +1236,7 @@ func (c *Core) reSendDdMsg(ctx context.Context, force bool) error {
 		if err != nil {
 			return err
 		}
-		if _, err = c.MetaTable.GetPartitionByName(collInfo.ID, ddReq.PartitionName, 0); err != nil {
+		if _, err = c.MetaTable.GetPartitionByName(collInfo.CollectionID, ddReq.PartitionName, 0); err != nil {
 			if err = c.SendDdCreatePartitionReq(ctx, &ddReq, collInfo.PhysicalChannelNames); err != nil {
 				return err
 			}
@@ -1256,7 +1256,7 @@ func (c *Core) reSendDdMsg(ctx context.Context, force bool) error {
 		if err != nil {
 			return err
 		}
-		if _, err = c.MetaTable.GetPartitionByName(collInfo.ID, ddReq.PartitionName, 0); err == nil {
+		if _, err = c.MetaTable.GetPartitionByName(collInfo.CollectionID, ddReq.PartitionName, 0); err == nil {
 			if err = c.SendDdDropPartitionReq(ctx, &ddReq, collInfo.PhysicalChannelNames); err != nil {
 				return err
 			}
@@ -2070,14 +2070,14 @@ func (c *Core) SegmentFlushCompleted(ctx context.Context, in *datapb.SegmentFlus
 
 	if len(coll.FieldIndexes) == 0 {
 		log.Debug("no index params on collection", zap.String("role", typeutil.RootCoordRole),
-			zap.String("collection_name", coll.Schema.Name), zap.Int64("msgID", in.Base.MsgID))
+			zap.String("collection_name", coll.Name), zap.Int64("msgID", in.Base.MsgID))
 	}
 
 	for _, f := range coll.FieldIndexes {
 		fieldSch, err := GetFieldSchemaByID(coll, f.FiledID)
 		if err != nil {
 			log.Warn("field schema not found", zap.String("role", typeutil.RootCoordRole),
-				zap.String("collection_name", coll.Schema.Name), zap.Int64("field id", f.FiledID),
+				zap.String("collection_name", coll.Name), zap.Int64("field id", f.FiledID),
 				zap.Int64("msgID", in.Base.MsgID), zap.Error(err))
 			continue
 		}
@@ -2085,7 +2085,7 @@ func (c *Core) SegmentFlushCompleted(ctx context.Context, in *datapb.SegmentFlus
 		idxInfo, err := c.MetaTable.GetIndexByID(f.IndexID)
 		if err != nil {
 			log.Warn("index not found", zap.String("role", typeutil.RootCoordRole),
-				zap.String("collection_name", coll.Schema.Name), zap.Int64("field id", f.FiledID),
+				zap.String("collection_name", coll.Name), zap.Int64("field id", f.FiledID),
 				zap.Int64("index id", f.IndexID), zap.Int64("msgID", in.Base.MsgID), zap.Error(err))
 			continue
 		}
@@ -2103,7 +2103,7 @@ func (c *Core) SegmentFlushCompleted(ctx context.Context, in *datapb.SegmentFlus
 			info.EnableIndex = true
 		} else {
 			log.Error("BuildIndex failed", zap.String("role", typeutil.RootCoordRole),
-				zap.String("collection_name", coll.Schema.Name), zap.Int64("field id", f.FiledID),
+				zap.String("collection_name", coll.Name), zap.Int64("field id", f.FiledID),
 				zap.Int64("index id", f.IndexID), zap.Int64("build id", info.BuildID),
 				zap.Int64("msgID", in.Base.MsgID), zap.Error(err))
 			continue
@@ -2111,7 +2111,7 @@ func (c *Core) SegmentFlushCompleted(ctx context.Context, in *datapb.SegmentFlus
 		err = c.MetaTable.AddIndex(&info)
 		if err != nil {
 			log.Error("AddIndex failed", zap.String("role", typeutil.RootCoordRole),
-				zap.String("collection_name", coll.Schema.Name), zap.Int64("field id", f.FiledID),
+				zap.String("collection_name", coll.Name), zap.Int64("field id", f.FiledID),
 				zap.Int64("index id", f.IndexID), zap.Int64("msgID", in.Base.MsgID), zap.Error(err))
 			continue
 		}
@@ -2498,7 +2498,7 @@ func (c *Core) postImportPersistLoop(ctx context.Context, taskID int64, colID in
 	c.MetaTable.ddLock.RLock()
 	defer c.MetaTable.ddLock.RUnlock()
 	colMeta := c.MetaTable.collID2Meta[colID]
-	if len(colMeta.GetFieldIndexes()) != 0 {
+	if len(colMeta.FieldIndexes) != 0 {
 		c.wg.Add(1)
 		c.checkCompleteIndexLoop(ctx, taskID, colID, colName, segIDs)
 	}

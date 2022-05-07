@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/milvus-io/milvus/internal/metastore/model"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/milvus-io/milvus/internal/mq/msgstream"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
@@ -50,8 +52,8 @@ func EqualKeyPairArray(p1 []*commonpb.KeyValuePair, p2 []*commonpb.KeyValuePair)
 }
 
 // GetFieldSchemaByID return field schema by id
-func GetFieldSchemaByID(coll *etcdpb.CollectionInfo, fieldID typeutil.UniqueID) (*schemapb.FieldSchema, error) {
-	for _, f := range coll.Schema.Fields {
+func GetFieldSchemaByID(coll *model.Collection, fieldID typeutil.UniqueID) (*schemapb.FieldSchema, error) {
+	for _, f := range coll.Fields {
 		if f.FieldID == fieldID {
 			return f, nil
 		}
@@ -60,7 +62,7 @@ func GetFieldSchemaByID(coll *etcdpb.CollectionInfo, fieldID typeutil.UniqueID) 
 }
 
 // GetFieldSchemaByIndexID return field schema by it's index id
-func GetFieldSchemaByIndexID(coll *etcdpb.CollectionInfo, idxID typeutil.UniqueID) (*schemapb.FieldSchema, error) {
+func GetFieldSchemaByIndexID(coll *model.Collection, idxID typeutil.UniqueID) (*schemapb.FieldSchema, error) {
 	var fieldID typeutil.UniqueID
 	exist := false
 	for _, f := range coll.FieldIndexes {

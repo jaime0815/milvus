@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/milvus-io/milvus/internal/metastore/model"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/milvus-io/milvus/internal/common"
 	"github.com/milvus-io/milvus/internal/log"
@@ -155,17 +157,24 @@ func (t *CreateCollectionReqTask) Execute(ctx context.Context) error {
 		}
 	}
 
-	collInfo := etcdpb.CollectionInfo{
-		ID:                         collID,
-		Schema:                     &schema,
-		PartitionIDs:               []typeutil.UniqueID{partID},
-		PartitionNames:             []string{Params.CommonCfg.DefaultPartitionName},
-		FieldIndexes:               make([]*etcdpb.FieldIndexInfo, 0, 16),
-		VirtualChannelNames:        vchanNames,
-		PhysicalChannelNames:       chanNames,
-		ShardsNum:                  t.Req.ShardsNum,
-		PartitionCreatedTimestamps: []uint64{0},
-		ConsistencyLevel:           t.Req.ConsistencyLevel,
+	collInfo := model.Collection{
+		CollectionID:         collID,
+		Name:                 schema.Name,
+		Description:          schema.Description,
+		AutoID:               schema.AutoID,
+		Fields:               schema.Fields,
+		VirtualChannelNames:  vchanNames,
+		PhysicalChannelNames: chanNames,
+		ShardsNum:            t.Req.ShardsNum,
+		ConsistencyLevel:     t.Req.ConsistencyLevel,
+		FieldIndexes:         make([]*etcdpb.FieldIndexInfo, 0, 16),
+		Partitions: []model.Partition{
+			{
+				PartitionID:               partID,
+				PartitionName:             Params.CommonCfg.DefaultPartitionName,
+				PartitionCreatedTimestamp: 0,
+			},
+		},
 	}
 
 	// schema is modified (add RowIDField and TimestampField),
@@ -288,17 +297,17 @@ func (t *DropCollectionReqTask) Execute(ctx context.Context) error {
 		DbName:         t.Req.DbName,
 		CollectionName: t.Req.CollectionName,
 		DbID:           0, //not used
-		CollectionID:   collMeta.ID,
+		CollectionID:   collMeta.CollectionID,
 	}
 
-	reason := fmt.Sprintf("drop collection %d", collMeta.ID)
+	reason := fmt.Sprintf("drop collection %d", collMeta.CollectionID)
 	ts, err := t.core.TSOAllocator(1)
 	if err != nil {
 		return fmt.Errorf("TSO alloc fail, error = %w", err)
 	}
 
 	//notify query service to release collection
-	if err = t.core.CallReleaseCollectionService(t.core.ctx, ts, 0, collMeta.ID); err != nil {
+	if err = t.core.CallReleaseCollectionService(t.core.ctx, ts, 0, collMeta.CollectionID); err != nil {
 		log.Error("Failed to CallReleaseCollectionService", zap.Error(err))
 		return err
 	}
@@ -323,7 +332,7 @@ func (t *DropCollectionReqTask) Execute(ctx context.Context) error {
 	}
 
 	// get all aliases before meta table updated
-	aliases := t.core.MetaTable.ListAliases(collMeta.ID)
+	aliases := t.core.MetaTable.ListAliases(collMeta.CollectionID)
 
 	// use lambda function here to guarantee all resources to be released
 	dropCollectionFn := func() error {
@@ -340,7 +349,7 @@ func (t *DropCollectionReqTask) Execute(ctx context.Context) error {
 		}
 
 		// update meta table after send dd operation
-		if err = t.core.MetaTable.DeleteCollection(collMeta.ID, ts, ddOpStr); err != nil {
+		if err = t.core.MetaTable.DeleteCollection(collMeta.CollectionID, ts, ddOpStr); err != nil {
 			return err
 		}
 
@@ -423,7 +432,7 @@ func (t *DescribeCollectionReqTask) Execute(ctx context.Context) error {
 	if t.Type() != commonpb.MsgType_DescribeCollection {
 		return fmt.Errorf("describe collection, msg type = %s", commonpb.MsgType_name[int32(t.Type())])
 	}
-	var collInfo *etcdpb.CollectionInfo
+	var collInfo *model.Collection
 	var err error
 
 	if t.Req.CollectionName != "" {
@@ -438,8 +447,13 @@ func (t *DescribeCollectionReqTask) Execute(ctx context.Context) error {
 		}
 	}
 
-	t.Rsp.Schema = proto.Clone(collInfo.Schema).(*schemapb.CollectionSchema)
-	t.Rsp.CollectionID = collInfo.ID
+	t.Rsp.Schema = &schemapb.CollectionSchema{
+		Name:        collInfo.Name,
+		Description: collInfo.Description,
+		AutoID:      collInfo.AutoID,
+		Fields:      collInfo.Fields,
+	}
+	t.Rsp.CollectionID = collInfo.CollectionID
 	t.Rsp.VirtualChannelNames = collInfo.VirtualChannelNames
 	t.Rsp.PhysicalChannelNames = collInfo.PhysicalChannelNames
 	if collInfo.ShardsNum == 0 {
@@ -451,8 +465,8 @@ func (t *DescribeCollectionReqTask) Execute(ctx context.Context) error {
 	t.Rsp.CreatedTimestamp = collInfo.CreateTime
 	createdPhysicalTime, _ := tsoutil.ParseHybridTs(collInfo.CreateTime)
 	t.Rsp.CreatedUtcTimestamp = uint64(createdPhysicalTime)
-	t.Rsp.Aliases = t.core.MetaTable.ListAliases(collInfo.ID)
-	t.Rsp.StartPositions = collInfo.GetStartPositions()
+	t.Rsp.Aliases = t.core.MetaTable.ListAliases(collInfo.CollectionID)
+	t.Rsp.StartPositions = collInfo.StartPositions
 	t.Rsp.CollectionName = t.Rsp.Schema.Name
 	return nil
 }
@@ -480,7 +494,7 @@ func (t *ShowCollectionReqTask) Execute(ctx context.Context) error {
 	}
 	for name, meta := range coll {
 		t.Rsp.CollectionNames = append(t.Rsp.CollectionNames, name)
-		t.Rsp.CollectionIds = append(t.Rsp.CollectionIds, meta.ID)
+		t.Rsp.CollectionIds = append(t.Rsp.CollectionIds, meta.CollectionID)
 		t.Rsp.CreatedTimestamps = append(t.Rsp.CreatedTimestamps, meta.CreateTime)
 		physical, _ := tsoutil.ParseHybridTs(meta.CreateTime)
 		t.Rsp.CreatedUtcTimestamps = append(t.Rsp.CreatedUtcTimestamps, uint64(physical))
@@ -519,7 +533,7 @@ func (t *CreatePartitionReqTask) Execute(ctx context.Context) error {
 		CollectionName: t.Req.CollectionName,
 		PartitionName:  t.Req.PartitionName,
 		DbID:           0, // todo, not used
-		CollectionID:   collMeta.ID,
+		CollectionID:   collMeta.CollectionID,
 		PartitionID:    partID,
 	}
 
@@ -552,7 +566,7 @@ func (t *CreatePartitionReqTask) Execute(ctx context.Context) error {
 		}
 
 		// update meta table after send dd operation
-		if err = t.core.MetaTable.AddPartition(collMeta.ID, t.Req.PartitionName, partID, ts, ddOpStr); err != nil {
+		if err = t.core.MetaTable.AddPartition(collMeta.CollectionID, t.Req.PartitionName, partID, ts, ddOpStr); err != nil {
 			return err
 		}
 
@@ -595,7 +609,7 @@ func (t *DropPartitionReqTask) Execute(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	partID, err := t.core.MetaTable.GetPartitionByName(collInfo.ID, t.Req.PartitionName, 0)
+	partID, err := t.core.MetaTable.GetPartitionByName(collInfo.CollectionID, t.Req.PartitionName, 0)
 	if err != nil {
 		return err
 	}
@@ -606,7 +620,7 @@ func (t *DropPartitionReqTask) Execute(ctx context.Context) error {
 		CollectionName: t.Req.CollectionName,
 		PartitionName:  t.Req.PartitionName,
 		DbID:           0, //todo,not used
-		CollectionID:   collInfo.ID,
+		CollectionID:   collInfo.CollectionID,
 		PartitionID:    partID,
 	}
 
@@ -639,7 +653,7 @@ func (t *DropPartitionReqTask) Execute(ctx context.Context) error {
 		}
 
 		// update meta table after send dd operation
-		if _, err = t.core.MetaTable.DeletePartition(collInfo.ID, t.Req.PartitionName, ts, ddOpStr); err != nil {
+		if _, err = t.core.MetaTable.DeletePartition(collInfo.CollectionID, t.Req.PartitionName, ts, ddOpStr); err != nil {
 			return err
 		}
 
@@ -690,7 +704,7 @@ func (t *HasPartitionReqTask) Execute(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	t.HasPartition = t.core.MetaTable.HasPartition(coll.ID, t.Req.PartitionName, 0)
+	t.HasPartition = t.core.MetaTable.HasPartition(coll.CollectionID, t.Req.PartitionName, 0)
 	return nil
 }
 
@@ -711,7 +725,7 @@ func (t *ShowPartitionReqTask) Execute(ctx context.Context) error {
 	if t.Type() != commonpb.MsgType_ShowPartitions {
 		return fmt.Errorf("show partition, msg type = %s", commonpb.MsgType_name[int32(t.Type())])
 	}
-	var coll *etcdpb.CollectionInfo
+	var coll *model.Collection
 	var err error
 	if t.Req.CollectionName == "" {
 		coll, err = t.core.MetaTable.GetCollectionByID(t.Req.CollectionID, 0)
@@ -721,12 +735,13 @@ func (t *ShowPartitionReqTask) Execute(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	t.Rsp.PartitionIDs = coll.PartitionIDs
-	t.Rsp.PartitionNames = coll.PartitionNames
-	t.Rsp.CreatedTimestamps = coll.PartitionCreatedTimestamps
-	t.Rsp.CreatedUtcTimestamps = make([]uint64, 0, len(coll.PartitionCreatedTimestamps))
-	for _, ts := range coll.PartitionCreatedTimestamps {
-		physical, _ := tsoutil.ParseHybridTs(ts)
+
+	for _, part := range coll.Partitions {
+		t.Rsp.PartitionIDs = append(t.Rsp.PartitionIDs, part.PartitionID)
+		t.Rsp.PartitionNames = append(t.Rsp.PartitionNames, part.PartitionName)
+		t.Rsp.CreatedTimestamps = append(t.Rsp.CreatedTimestamps, part.PartitionCreatedTimestamp)
+
+		physical, _ := tsoutil.ParseHybridTs(part.PartitionCreatedTimestamp)
 		t.Rsp.CreatedUtcTimestamps = append(t.Rsp.CreatedUtcTimestamps, uint64(physical))
 	}
 
@@ -757,7 +772,7 @@ func (t *DescribeSegmentReqTask) Execute(ctx context.Context) error {
 
 	segIDs, err := t.core.CallGetFlushedSegmentsService(ctx, t.Req.CollectionID, -1)
 	if err != nil {
-		log.Debug("Get flushed segment from data coord failed", zap.String("collection_name", coll.Schema.Name), zap.Error(err))
+		log.Debug("Get flushed segment from data coord failed", zap.String("collection_name", coll.Name), zap.Error(err))
 		return err
 	}
 
@@ -808,8 +823,8 @@ func (t *ShowSegmentReqTask) Execute(ctx context.Context) error {
 		return err
 	}
 	exist := false
-	for _, partID := range coll.PartitionIDs {
-		if partID == t.Req.PartitionID {
+	for _, partition := range coll.Partitions {
+		if partition.PartitionID == t.Req.PartitionID {
 			exist = true
 			break
 		}
@@ -819,7 +834,7 @@ func (t *ShowSegmentReqTask) Execute(ctx context.Context) error {
 	}
 	segIDs, err := t.core.CallGetFlushedSegmentsService(ctx, t.Req.CollectionID, t.Req.PartitionID)
 	if err != nil {
-		log.Debug("Get flushed segments from data coord failed", zap.String("collection name", coll.Schema.Name), zap.Int64("partition id", t.Req.PartitionID), zap.Error(err))
+		log.Debug("Get flushed segments from data coord failed", zap.String("collection name", coll.Name), zap.Int64("partition id", t.Req.PartitionID), zap.Error(err))
 		return err
 	}
 
@@ -949,13 +964,13 @@ func (t *CreateIndexReqTask) Execute(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	segID2PartID, err := t.core.getSegments(ctx, collMeta.ID)
+	segID2PartID, err := t.core.getSegments(ctx, collMeta.CollectionID)
 	flushedSegs := make([]typeutil.UniqueID, 0, len(segID2PartID))
 	for k := range segID2PartID {
 		flushedSegs = append(flushedSegs, k)
 	}
 	if err != nil {
-		log.Debug("Get flushed segments from data coord failed", zap.String("collection_name", collMeta.Schema.Name), zap.Error(err))
+		log.Debug("Get flushed segments from data coord failed", zap.String("collection_name", collMeta.Name), zap.Error(err))
 		return err
 	}
 
@@ -965,7 +980,7 @@ func (t *CreateIndexReqTask) Execute(ctx context.Context) error {
 		return err
 	}
 
-	collectionID := collMeta.ID
+	collectionID := collMeta.CollectionID
 	cnt := 0
 
 	for _, segID := range segIDs {
@@ -985,7 +1000,7 @@ func (t *CreateIndexReqTask) Execute(ctx context.Context) error {
 			info.EnableIndex = true
 		}
 		if err := t.core.MetaTable.AddIndex(&info); err != nil {
-			log.Debug("Add index into meta table failed", zap.Int64("collection_id", collMeta.ID), zap.Int64("index_id", info.IndexID), zap.Int64("build_id", info.BuildID), zap.Error(err))
+			log.Debug("Add index into meta table failed", zap.Int64("collection_id", collMeta.CollectionID), zap.Int64("index_id", info.IndexID), zap.Int64("build_id", info.BuildID), zap.Error(err))
 		}
 		cnt++
 	}
