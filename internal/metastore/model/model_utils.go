@@ -2,6 +2,7 @@ package model
 
 import (
 	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
+	"github.com/milvus-io/milvus/internal/proto/internalpb"
 	"github.com/milvus-io/milvus/internal/proto/schemapb"
 )
 
@@ -89,5 +90,15 @@ func ConvertToSegmentIndexPB(segIndex *SegmentIndex) *pb.SegmentIndexInfo {
 		IndexID:      segIndex.IndexID,
 		BuildID:      segIndex.BuildID,
 		EnableIndex:  segIndex.EnableIndex,
+	}
+}
+
+func ConvertToCredentialPB(cred *Credential) *internalpb.CredentialInfo {
+	if cred == nil {
+		return nil
+	}
+	return &internalpb.CredentialInfo{
+		Username:          cred.Username,
+		EncryptedPassword: cred.EncryptedPassword,
 	}
 }

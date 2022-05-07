@@ -25,12 +25,16 @@ type Catalog interface {
 	CreateIndex(ctx context.Context, index *model.SegmentIndex) error
 	DropIndex(ctx context.Context, collectionInfo *model.Collection, dropIdxID typeutil.UniqueID, ts typeutil.Timestamp) error
 
+	GetCredential(ctx context.Context, username string) (*model.Credential, error)
 	CreateCredential(ctx context.Context, credential *model.Credential) error
 	DropCredential(ctx context.Context, username string) error
 
 	CreateAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error
 	DropAlias(ctx context.Context, collectionID typeutil.UniqueID, alias string, ts typeutil.Timestamp) error
 	AlterAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error
+
+	ListCollections(ctx context.Context, ts typeutil.Timestamp) (map[string]*model.Collection, error)
+	ListCredentials(ctx context.Context) ([]string, error)
 
 	Close()
 }

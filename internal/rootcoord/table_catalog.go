@@ -6,6 +6,7 @@ import (
 	"github.com/milvus-io/milvus/internal/db"
 	"github.com/milvus-io/milvus/internal/metastore/model"
 	"github.com/milvus-io/milvus/internal/proto/datapb"
+	"github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 
@@ -43,4 +44,8 @@ func (tc *TableCatalog) CollectionExists(ctx context.Context, collectionID typeu
 
 func (tc *TableCatalog) AlterAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error {
 	return nil
+}
+
+func (tc *TableCatalog) ListCollections(ctx context.Context, ts typeutil.Timestamp) (map[string]*etcdpb.CollectionInfo, error) {
+	return nil, nil
 }

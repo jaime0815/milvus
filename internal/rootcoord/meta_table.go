@@ -19,7 +19,6 @@ package rootcoord
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"path"
 	"strconv"
@@ -408,20 +407,8 @@ func (mt *MetaTable) ListCollections(ts typeutil.Timestamp) (map[string]*model.C
 		}
 		return cols, nil
 	}
-	_, vals, err := mt.snapshot.LoadWithPrefix(CollectionMetaPrefix, ts)
-	if err != nil {
-		log.Debug("load with prefix error", zap.Uint64("timestamp", ts), zap.Error(err))
-		return nil, nil
-	}
-	for _, val := range vals {
-		col := pb.CollectionInfo{}
-		err := proto.Unmarshal([]byte(val), &col)
-		if err != nil {
-			log.Debug("unmarshal collection info failed", zap.Error(err))
-		}
-		cols[col.Schema.Name] = model.ConvertCollectionPBToModel(&col, map[string]string{})
-	}
-	return cols, nil
+
+	return mt.catalog.ListCollections(mt.ctx, ts)
 }
 
 // ListAliases list all collection aliases
@@ -519,13 +506,8 @@ func (mt *MetaTable) GetPartitionNameByID(collID, partitionID typeutil.UniqueID,
 		}
 		return "", fmt.Errorf("partition %d does not exist", partitionID)
 	}
-	collKey := fmt.Sprintf("%s/%d", CollectionMetaPrefix, collID)
-	collVal, err := mt.snapshot.Load(collKey, ts)
-	if err != nil {
-		return "", err
-	}
-	col := pb.CollectionInfo{}
-	err = proto.Unmarshal([]byte(collVal), &col)
+
+	col, err := mt.catalog.GetCollectionByID(mt.ctx, collID, ts)
 	if err != nil {
 		return "", err
 	}
@@ -1104,9 +1086,6 @@ func (mt *MetaTable) IsAlias(collectionAlias string) bool {
 
 // AddCredential add credential
 func (mt *MetaTable) AddCredential(credInfo *internalpb.CredentialInfo) error {
-	mt.credLock.Lock()
-	defer mt.credLock.Unlock()
-
 	if credInfo.Username == "" {
 		return fmt.Errorf("username is empty")
 	}
@@ -1120,22 +1099,8 @@ func (mt *MetaTable) AddCredential(credInfo *internalpb.CredentialInfo) error {
 
 // GetCredential get credential by username
 func (mt *MetaTable) getCredential(username string) (*internalpb.CredentialInfo, error) {
-	mt.credLock.RLock()
-	defer mt.credLock.RUnlock()
-
-	k := fmt.Sprintf("%s/%s", CredentialPrefix, username)
-	v, err := mt.txn.Load(k)
-	if err != nil {
-		log.Warn("MetaTable load fail", zap.String("key", k), zap.Error(err))
-		return nil, err
-	}
-
-	credentialInfo := internalpb.CredentialInfo{}
-	err = json.Unmarshal([]byte(v), &credentialInfo)
-	if err != nil {
-		return nil, fmt.Errorf("get credential unmarshal err:%w", err)
-	}
-	return &internalpb.CredentialInfo{Username: username, EncryptedPassword: credentialInfo.EncryptedPassword}, nil
+	credential, err := mt.catalog.GetCredential(mt.ctx, username)
+	return model.ConvertToCredentialPB(credential), err
 }
 
 // DeleteCredential delete credential
@@ -1145,23 +1110,9 @@ func (mt *MetaTable) DeleteCredential(username string) error {
 
 // ListCredentialUsernames list credential usernames
 func (mt *MetaTable) ListCredentialUsernames() (*milvuspb.ListCredUsersResponse, error) {
-	mt.credLock.RLock()
-	defer mt.credLock.RUnlock()
-
-	keys, _, err := mt.txn.LoadWithPrefix(CredentialPrefix)
+	usernames, err := mt.catalog.ListCredentials(mt.ctx)
 	if err != nil {
-		log.Error("MetaTable list all credential usernames fail", zap.Error(err))
-		return &milvuspb.ListCredUsersResponse{}, err
-	}
-
-	var usernames []string
-	for _, path := range keys {
-		username := typeutil.After(path, UserSubPrefix+"/")
-		if len(username) == 0 {
-			log.Warn("no username extract from path:", zap.String("path", path))
-			continue
-		}
-		usernames = append(usernames, username)
+		return nil, fmt.Errorf("list credential usernames err:%w", err)
 	}
 	return &milvuspb.ListCredUsersResponse{Usernames: usernames}, nil
 }

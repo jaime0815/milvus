@@ -131,6 +131,22 @@ func (kc *KVCatalog) CollectionExists(ctx context.Context, collectionID typeutil
 	return err == nil
 }
 
+func (kc *KVCatalog) GetCredential(ctx context.Context, username string) (*model.Credential, error) {
+	k := fmt.Sprintf("%s/%s", CredentialPrefix, username)
+	v, err := kc.txn.Load(k)
+	if err != nil {
+		log.Warn("TxnKV load fail", zap.String("key", k), zap.Error(err))
+		return nil, err
+	}
+
+	credentialInfo := internalpb.CredentialInfo{}
+	err = json.Unmarshal([]byte(v), &credentialInfo)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal credential info err:%w", err)
+	}
+	return &model.Credential{Username: username, EncryptedPassword: credentialInfo.EncryptedPassword}, nil
+}
+
 func (kc *KVCatalog) AlterAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error {
 	return kc.CreateAlias(ctx, collAlias, ts)
 }
@@ -292,6 +308,44 @@ func (kc *KVCatalog) GetCollectionWithVersion(ctx context.Context, collectionID 
 	}
 
 	return model.ConvertCollectionPBToModel(&colMeta, map[string]string{}), nil
+}
+
+func (kc *KVCatalog) ListCollections(ctx context.Context, ts typeutil.Timestamp) (map[string]*model.Collection, error) {
+	_, vals, err := kc.snapshot.LoadWithPrefix(CollectionMetaPrefix, ts)
+	if err != nil {
+		log.Error("load with prefix error", zap.Uint64("timestamp", ts), zap.Error(err))
+		return nil, err
+	}
+	colls := make(map[string]*model.Collection)
+	for _, val := range vals {
+		collMeta := pb.CollectionInfo{}
+		err := proto.Unmarshal([]byte(val), &collMeta)
+		if err != nil {
+			log.Warn("unmarshal collection info failed", zap.Error(err))
+			continue
+		}
+		colls[collMeta.Schema.Name] = model.ConvertCollectionPBToModel(&collMeta, map[string]string{})
+	}
+	return colls, nil
+}
+
+func (kc *KVCatalog) ListCredentials(ctx context.Context) ([]string, error) {
+	keys, _, err := kc.txn.LoadWithPrefix(CredentialPrefix)
+	if err != nil {
+		log.Error("MetaTable list all credential usernames fail", zap.Error(err))
+		return nil, err
+	}
+
+	var usernames []string
+	for _, path := range keys {
+		username := typeutil.After(path, UserSubPrefix+"/")
+		if len(username) == 0 {
+			log.Warn("no username extract from path:", zap.String("path", path))
+			continue
+		}
+		usernames = append(usernames, username)
+	}
+	return usernames, nil
 }
 
 func (kc *KVCatalog) GetPartition(ctx context.Context, collectionName string, partitionName string) (*model.Partition, error) {
