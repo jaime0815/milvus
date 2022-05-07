@@ -441,20 +441,8 @@ func (mt *MetaTable) ListCollections(ts typeutil.Timestamp) (map[string]*pb.Coll
 		}
 		return colls, nil
 	}
-	_, vals, err := mt.snapshot.LoadWithPrefix(CollectionMetaPrefix, ts)
-	if err != nil {
-		log.Debug("load with prefix error", zap.Uint64("timestamp", ts), zap.Error(err))
-		return nil, nil
-	}
-	for _, val := range vals {
-		collMeta := pb.CollectionInfo{}
-		err := proto.Unmarshal([]byte(val), &collMeta)
-		if err != nil {
-			log.Debug("unmarshal collection info failed", zap.Error(err))
-		}
-		colls[collMeta.Schema.Name] = &collMeta
-	}
-	return colls, nil
+
+	return mt.catalog.ListCollections(mt.ctx, ts)
 }
 
 // ListAliases list all collection aliases

@@ -11,6 +11,7 @@ import (
 	"github.com/milvus-io/milvus/internal/kv"
 	"github.com/milvus-io/milvus/internal/log"
 	"github.com/milvus-io/milvus/internal/metastore/model"
+	"github.com/milvus-io/milvus/internal/proto/etcdpb"
 	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
 	"github.com/milvus-io/milvus/internal/proto/schemapb"
@@ -257,4 +258,22 @@ func (kc *KVCatalog) DropAlias(ctx context.Context, collectionID typeutil.Unique
 	}
 
 	return nil
+}
+
+func (kc *KVCatalog) ListCollections(ctx context.Context, ts typeutil.Timestamp) (map[string]*etcdpb.CollectionInfo, error) {
+	_, vals, err := kc.snapshot.LoadWithPrefix(CollectionMetaPrefix, ts)
+	if err != nil {
+		log.Error("load with prefix error", zap.Uint64("timestamp", ts), zap.Error(err))
+		return nil, err
+	}
+	colls := make(map[string]*pb.CollectionInfo)
+	for _, val := range vals {
+		collMeta := pb.CollectionInfo{}
+		err := proto.Unmarshal([]byte(val), &collMeta)
+		if err != nil {
+			log.Debug("unmarshal collection info failed", zap.Error(err))
+		}
+		colls[collMeta.Schema.Name] = &collMeta
+	}
+	return colls, nil
 }

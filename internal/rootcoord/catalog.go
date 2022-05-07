@@ -25,4 +25,6 @@ type Catalog interface {
 	DropIndex(ctx context.Context, collectionInfo *model.Collection, dropIdxID typeutil.UniqueID, ts typeutil.Timestamp) error
 	DropCredential(ctx context.Context, username string) error
 	DropAlias(ctx context.Context, collectionID typeutil.UniqueID, alias string, ts typeutil.Timestamp) error
+
+	ListCollections(ctx context.Context, ts typeutil.Timestamp) (map[string]*etcdpb.CollectionInfo, error)
 }
