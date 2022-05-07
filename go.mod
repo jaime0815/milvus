@@ -67,5 +67,3 @@ replace (
 	github.com/go-kit/kit => github.com/go-kit/kit v0.1.0
 	google.golang.org/grpc => google.golang.org/grpc v1.38.0
 )
-
-replace github.com/tecbot/gorocksdb => github.com/soothing-rain/gorocksdb v0.0.1

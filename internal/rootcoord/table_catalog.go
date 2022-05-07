@@ -27,3 +27,7 @@ func (tc *TableCatalog) CreateIndex(ctx context.Context, index *model.SegmentInd
 func (tc *TableCatalog) CreateAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error {
 	return nil
 }
+
+func (tc *TableCatalog) CreateCredential(ctx context.Context, credential *model.Credential) error {
+	return nil
+}

@@ -670,15 +670,14 @@ func TestRootCoordInitData(t *testing.T) {
 	mt, err := NewMetaTable(context.TODO(), txnKV, snapshotKV)
 	assert.NoError(t, err)
 	mockTxnKV := &mockTestTxnKV{
-		TxnKV:  mt.txn,
-		save:   func(key, value string) error { return txnKV.Save(key, value) },
+		TxnKV: mt.txn,
+		save: func(key, value string) error {
+			return fmt.Errorf("save error")
+		},
 		remove: func(key string) error { return txnKV.Remove(key) },
 	}
-	mt.txn = mockTxnKV
-	// mock save data error
-	mockTxnKV.save = func(key, value string) error {
-		return fmt.Errorf("save error")
-	}
+	//mt.txn = mockTxnKV
+	mt.catalog = &KVCatalog{txn: mockTxnKV, snapshot: snapshotKV}
 	core.MetaTable = mt
 	err = core.initData()
 	assert.Error(t, err)

@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/milvus-io/milvus/internal/metastore/model"
-
 	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 
@@ -13,6 +12,7 @@ type Catalog interface {
 	CreatePartition(ctx context.Context, coll *model.Collection, partitionInfo *model.Partition, ts typeutil.Timestamp) error
 	CreateIndex(ctx context.Context, index *model.SegmentIndex) error
 	CreateAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error
+	CreateCredential(ctx context.Context, credential *model.Credential) error
 
 	DropCollection(ctx context.Context, collectionInfo *model.Collection, ts typeutil.Timestamp) error
 	DropPartition(ctx context.Context, collectionInfo *model.Collection, partitionID typeutil.UniqueID, ts typeutil.Timestamp) error

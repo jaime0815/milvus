@@ -2,16 +2,17 @@ package rootcoord
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path"
 	"strconv"
 
-	"github.com/milvus-io/milvus/internal/metastore/model"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/milvus-io/milvus/internal/kv"
 	"github.com/milvus-io/milvus/internal/log"
+	"github.com/milvus-io/milvus/internal/metastore/model"
 	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
+	"github.com/milvus-io/milvus/internal/proto/internalpb"
 	"github.com/milvus-io/milvus/internal/proto/schemapb"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
 	"go.uber.org/zap"
@@ -88,6 +89,22 @@ func (kc *KVCatalog) CreateAlias(ctx context.Context, collAlias *model.Collectio
 	if err != nil {
 		log.Error("SnapShotKV Save fail", zap.Error(err))
 		panic("SnapShotKV Save fail")
+	}
+
+	return nil
+}
+
+func (kc *KVCatalog) CreateCredential(ctx context.Context, credential *model.Credential) error {
+	k := fmt.Sprintf("%s/%s", CredentialPrefix, credential.Username)
+	v, err := json.Marshal(&internalpb.CredentialInfo{EncryptedPassword: credential.EncryptedPassword})
+	if err != nil {
+		log.Error("marshal credential info fail", zap.String("key", k), zap.Error(err))
+		return fmt.Errorf("marshal credential info fail key:%s, err:%w", k, err)
+	}
+	err = kc.txn.Save(k, string(v))
+	if err != nil {
+		log.Error("TxnKV save fail", zap.Error(err))
+		return fmt.Errorf("TxnKV save fail key:%s, err:%w", credential.Username, err)
 	}
 
 	return nil

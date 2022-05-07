@@ -1186,18 +1186,12 @@ func (mt *MetaTable) AddCredential(credInfo *internalpb.CredentialInfo) error {
 	if credInfo.Username == "" {
 		return fmt.Errorf("username is empty")
 	}
-	k := fmt.Sprintf("%s/%s", CredentialPrefix, credInfo.Username)
-	v, err := json.Marshal(&internalpb.CredentialInfo{EncryptedPassword: credInfo.EncryptedPassword})
-	if err != nil {
-		log.Error("MetaTable marshal credential info fail", zap.String("key", k), zap.Error(err))
-		return fmt.Errorf("metaTable marshal credential info fail key:%s, err:%w", k, err)
+
+	credential := &model.Credential{
+		Username:          credInfo.Username,
+		EncryptedPassword: credInfo.EncryptedPassword,
 	}
-	err = mt.txn.Save(k, string(v))
-	if err != nil {
-		log.Error("MetaTable save fail", zap.Error(err))
-		return fmt.Errorf("save credential fail key:%s, err:%w", credInfo.Username, err)
-	}
-	return nil
+	return mt.catalog.CreateCredential(context.TODO(), credential)
 }
 
 // GetCredential get credential by username
