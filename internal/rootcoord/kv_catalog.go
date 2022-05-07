@@ -110,7 +110,7 @@ func (kc *KVCatalog) CreateCredential(ctx context.Context, credential *model.Cre
 	return nil
 }
 
-func (kc *KVCatalog) GetCollectionByID(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*pb.CollectionInfo, error) {
+func (kc *KVCatalog) GetCollectionByID(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*model.Collection, error) {
 	collKey := fmt.Sprintf("%s/%d", CollectionMetaPrefix, collectionID)
 	collVal, err := kc.snapshot.Load(collKey, ts)
 	if err != nil {
@@ -123,7 +123,7 @@ func (kc *KVCatalog) GetCollectionByID(ctx context.Context, collectionID typeuti
 		log.Error("unmarshal collection info fail", zap.String("key", collKey), zap.Error(err))
 		return nil, err
 	}
-	return collMeta, nil
+	return model.ConvertCollectionPBToModel(collMeta, map[string]string{}), nil
 }
 
 func (kc *KVCatalog) CollectionExists(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) bool {
@@ -293,21 +293,6 @@ func (kc *KVCatalog) GetCollectionByName(ctx context.Context, collectionName str
 		}
 	}
 	return nil, fmt.Errorf("can't find collection: %s, at timestamp = %d", collectionName, ts)
-}
-
-func (kc *KVCatalog) GetCollectionWithVersion(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*model.Collection, error) {
-	key := fmt.Sprintf("%s/%d", CollectionMetaPrefix, collectionID)
-	val, err := kc.snapshot.Load(key, ts)
-	if err != nil {
-		return nil, err
-	}
-	colMeta := pb.CollectionInfo{}
-	err = proto.Unmarshal([]byte(val), &colMeta)
-	if err != nil {
-		return nil, err
-	}
-
-	return model.ConvertCollectionPBToModel(&colMeta, map[string]string{}), nil
 }
 
 func (kc *KVCatalog) ListCollections(ctx context.Context, ts typeutil.Timestamp) (map[string]*model.Collection, error) {

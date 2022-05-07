@@ -4,15 +4,13 @@ import (
 	"context"
 
 	"github.com/milvus-io/milvus/internal/metastore/model"
-	"github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 
 type Catalog interface {
 	CreateCollection(ctx context.Context, collectionInfo *model.Collection, ts typeutil.Timestamp) error
-	GetCollectionByID(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*etcdpb.CollectionInfo, error)
+	GetCollectionByID(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*model.Collection, error)
 	GetCollectionByName(ctx context.Context, collectionName string, ts typeutil.Timestamp) (*model.Collection, error)
-	GetCollectionWithVersion(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*model.Collection, error)
 
 	CollectionExists(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) bool
 	DropCollection(ctx context.Context, collectionInfo *model.Collection, ts typeutil.Timestamp) error
