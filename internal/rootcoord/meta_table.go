@@ -19,7 +19,6 @@ package rootcoord
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"path"
 	"strconv"
@@ -1142,22 +1141,8 @@ func (mt *MetaTable) AddCredential(credInfo *internalpb.CredentialInfo) error {
 
 // GetCredential get credential by username
 func (mt *MetaTable) getCredential(username string) (*internalpb.CredentialInfo, error) {
-	mt.credLock.RLock()
-	defer mt.credLock.RUnlock()
-
-	k := fmt.Sprintf("%s/%s", CredentialPrefix, username)
-	v, err := mt.txn.Load(k)
-	if err != nil {
-		log.Warn("MetaTable load fail", zap.String("key", k), zap.Error(err))
-		return nil, err
-	}
-
-	credentialInfo := internalpb.CredentialInfo{}
-	err = json.Unmarshal([]byte(v), &credentialInfo)
-	if err != nil {
-		return nil, fmt.Errorf("get credential unmarshal err:%w", err)
-	}
-	return &internalpb.CredentialInfo{Username: username, EncryptedPassword: credentialInfo.EncryptedPassword}, nil
+	credential, err := mt.catalog.GetCredential(mt.ctx, username)
+	return model.ConvertToCredentialPB(credential), err
 }
 
 // DeleteCredential delete credential

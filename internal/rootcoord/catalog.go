@@ -17,6 +17,7 @@ type Catalog interface {
 
 	GetCollection(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*etcdpb.CollectionInfo, error)
 	CollectionExists(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) bool
+	GetCredential(ctx context.Context, username string) (*model.Credential, error)
 
 	AlterAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error
 

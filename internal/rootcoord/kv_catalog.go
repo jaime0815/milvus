@@ -132,6 +132,22 @@ func (kc *KVCatalog) CollectionExists(ctx context.Context, collectionID typeutil
 	return err == nil
 }
 
+func (kc *KVCatalog) GetCredential(ctx context.Context, username string) (*model.Credential, error) {
+	k := fmt.Sprintf("%s/%s", CredentialPrefix, username)
+	v, err := kc.txn.Load(k)
+	if err != nil {
+		log.Warn("TxnKV load fail", zap.String("key", k), zap.Error(err))
+		return nil, err
+	}
+
+	credentialInfo := internalpb.CredentialInfo{}
+	err = json.Unmarshal([]byte(v), &credentialInfo)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal credential info err:%w", err)
+	}
+	return &model.Credential{Username: username, EncryptedPassword: credentialInfo.EncryptedPassword}, nil
+}
+
 func (kc *KVCatalog) AlterAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error {
 	return kc.CreateAlias(ctx, collAlias, ts)
 }
