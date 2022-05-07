@@ -39,3 +39,7 @@ func (tc *TableCatalog) GetCollection(ctx context.Context, collectionID typeutil
 func (tc *TableCatalog) CollectionExists(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) bool {
 	return false
 }
+
+func (tc *TableCatalog) AlterAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error {
+	return nil
+}

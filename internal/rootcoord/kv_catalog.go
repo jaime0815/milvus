@@ -131,6 +131,10 @@ func (kc *KVCatalog) CollectionExists(ctx context.Context, collectionID typeutil
 	return err == nil
 }
 
+func (kc *KVCatalog) AlterAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error {
+	return kc.CreateAlias(ctx, collAlias, ts)
+}
+
 func (kc *KVCatalog) DropCollection(ctx context.Context, collectionInfo *model.Collection, ts typeutil.Timestamp) error {
 	delMetakeysSnap := []string{
 		fmt.Sprintf("%s/%d", CollectionMetaPrefix, collectionInfo.CollectionID),
