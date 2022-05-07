@@ -1185,20 +1185,9 @@ func (mt *MetaTable) ListCredentialUsernames() (*milvuspb.ListCredUsersResponse,
 	mt.credLock.RLock()
 	defer mt.credLock.RUnlock()
 
-	keys, _, err := mt.txn.LoadWithPrefix(CredentialPrefix)
+	usernames, err := mt.catalog.ListCredentials(mt.ctx)
 	if err != nil {
-		log.Error("MetaTable list all credential usernames fail", zap.Error(err))
-		return &milvuspb.ListCredUsersResponse{}, err
-	}
-
-	var usernames []string
-	for _, path := range keys {
-		username := typeutil.After(path, UserSubPrefix+"/")
-		if len(username) == 0 {
-			log.Warn("no username extract from path:", zap.String("path", path))
-			continue
-		}
-		usernames = append(usernames, username)
+		return nil, fmt.Errorf("list credential usernames err:%w", err)
 	}
 	return &milvuspb.ListCredUsersResponse{Usernames: usernames}, nil
 }

@@ -277,3 +277,22 @@ func (kc *KVCatalog) ListCollections(ctx context.Context, ts typeutil.Timestamp)
 	}
 	return colls, nil
 }
+
+func (kc *KVCatalog) ListCredentials(ctx context.Context) ([]string, error) {
+	keys, _, err := kc.txn.LoadWithPrefix(CredentialPrefix)
+	if err != nil {
+		log.Error("MetaTable list all credential usernames fail", zap.Error(err))
+		return nil, err
+	}
+
+	var usernames []string
+	for _, path := range keys {
+		username := typeutil.After(path, UserSubPrefix+"/")
+		if len(username) == 0 {
+			log.Warn("no username extract from path:", zap.String("path", path))
+			continue
+		}
+		usernames = append(usernames, username)
+	}
+	return usernames, nil
+}

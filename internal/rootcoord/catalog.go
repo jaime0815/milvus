@@ -27,4 +27,5 @@ type Catalog interface {
 	DropAlias(ctx context.Context, collectionID typeutil.UniqueID, alias string, ts typeutil.Timestamp) error
 
 	ListCollections(ctx context.Context, ts typeutil.Timestamp) (map[string]*etcdpb.CollectionInfo, error)
+	ListCredentials(ctx context.Context) ([]string, error)
 }
