@@ -539,19 +539,7 @@ func (mt *MetaTable) AddPartition(collID typeutil.UniqueID, partitionName string
 	// save ddOpStr into etcd
 	metaTxn[DDMsgSendPrefix] = "false"
 	metaTxn[DDOperationPrefix] = ddOpStr
-	collection := &model.Collection{
-		CollectionID:               coll.ID,
-		Schema:                     coll.Schema,
-		PartitionIDs:               coll.PartitionIDs,
-		PartitionNames:             coll.PartitionNames,
-		FieldIndexes:               coll.FieldIndexes,
-		VirtualChannelNames:        coll.VirtualChannelNames,
-		PhysicalChannelNames:       coll.PhysicalChannelNames,
-		ShardsNum:                  coll.ShardsNum,
-		PartitionCreatedTimestamps: coll.PartitionCreatedTimestamps,
-		ConsistencyLevel:           coll.ConsistencyLevel,
-		// no need Extra here
-	}
+	collection := model.ConvertCollectionPBToModel(&coll, nil)
 	partition := &model.Partition{
 		Extra: metaTxn,
 	}

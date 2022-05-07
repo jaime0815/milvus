@@ -1,5 +1,7 @@
 package model
 
 type Partition struct {
-	Extra map[string]string
+	PartitionID   int64
+	PartitionName string
+	Extra         map[string]string
 }

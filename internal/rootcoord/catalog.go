@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/milvus-io/milvus/internal/metastore/model"
+	"github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 
@@ -14,7 +15,7 @@ type Catalog interface {
 	CreateAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error
 	CreateCredential(ctx context.Context, credential *model.Credential) error
 
-	GetCollection(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*model.Collection, error)
+	GetCollection(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*etcdpb.CollectionInfo, error)
 	CollectionExists(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) bool
 
 	AlterAlias(ctx context.Context, collAlias *model.CollectionAlias, ts typeutil.Timestamp) error

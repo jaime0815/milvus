@@ -5,6 +5,7 @@ import (
 
 	"github.com/milvus-io/milvus/internal/db"
 	"github.com/milvus-io/milvus/internal/metastore/model"
+	"github.com/milvus-io/milvus/internal/proto/datapb"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 
@@ -32,7 +33,7 @@ func (tc *TableCatalog) CreateCredential(ctx context.Context, credential *model.
 	return nil
 }
 
-func (tc *TableCatalog) GetCollection(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*model.Collection, error) {
+func (tc *TableCatalog) GetCollection(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*datapb.CollectionInfo, error) {
 	return nil, nil
 }
 

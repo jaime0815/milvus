@@ -1,13 +1,25 @@
 package model
 
-import pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
+import (
+	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
+	"github.com/milvus-io/milvus/internal/proto/schemapb"
+)
 
 func ConvertCollectionPBToModel(coll *pb.CollectionInfo, extra map[string]string) *Collection {
+	partitions := make([]Partition, len(coll.PartitionIDs))
+	for idx := range coll.PartitionIDs {
+		partitions[idx] = Partition{
+			PartitionID:   coll.PartitionIDs[idx],
+			PartitionName: coll.PartitionNames[idx],
+		}
+	}
 	return &Collection{
 		CollectionID:               coll.ID,
-		Schema:                     coll.Schema,
-		PartitionIDs:               coll.PartitionIDs,
-		PartitionNames:             coll.PartitionNames,
+		Name:                       coll.Schema.Name,
+		Description:                coll.Schema.Description,
+		AutoID:                     coll.Schema.AutoID,
+		Fields:                     coll.Schema.Fields,
+		Partitions:                 partitions,
 		FieldIndexes:               coll.FieldIndexes,
 		VirtualChannelNames:        coll.VirtualChannelNames,
 		PhysicalChannelNames:       coll.PhysicalChannelNames,
@@ -19,11 +31,23 @@ func ConvertCollectionPBToModel(coll *pb.CollectionInfo, extra map[string]string
 }
 
 func ConvertToCollectionPB(coll *Collection) *pb.CollectionInfo {
+	collSchema := &schemapb.CollectionSchema{
+		Name:        coll.Name,
+		Description: coll.Description,
+		AutoID:      coll.AutoID,
+		Fields:      coll.Fields,
+	}
+	partitionIDs := make([]int64, len(coll.Partitions))
+	partitionNames := make([]string, len(coll.Partitions))
+	for idx, partition := range coll.Partitions {
+		partitionIDs[idx] = partition.PartitionID
+		partitionNames[idx] = partition.PartitionName
+	}
 	return &pb.CollectionInfo{
 		ID:                         coll.CollectionID,
-		Schema:                     coll.Schema,
-		PartitionIDs:               coll.PartitionIDs,
-		PartitionNames:             coll.PartitionNames,
+		Schema:                     collSchema,
+		PartitionIDs:               partitionIDs,
+		PartitionNames:             partitionNames,
 		FieldIndexes:               coll.FieldIndexes,
 		VirtualChannelNames:        coll.VirtualChannelNames,
 		PhysicalChannelNames:       coll.PhysicalChannelNames,

@@ -9,9 +9,11 @@ import (
 type Collection struct {
 	TenantID                   string
 	CollectionID               int64
-	PartitionNames             []string
-	PartitionIDs               []int64
-	Schema                     *schemapb.CollectionSchema
+	Partitions                 []Partition
+	Name                       string
+	Description                string
+	AutoID                     bool
+	Fields                     []*schemapb.FieldSchema
 	FieldIndexes               []*etcdpb.FieldIndexInfo
 	VirtualChannelNames        []string
 	PhysicalChannelNames       []string
