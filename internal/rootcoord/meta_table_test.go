@@ -370,7 +370,7 @@ func TestMetaTable(t *testing.T) {
 	wg.Add(1)
 	t.Run("add segment index", func(t *testing.T) {
 		defer wg.Done()
-		segIdxInfo := pb.SegmentIndexInfo{
+		segIdxInfo := model.Index{
 			CollectionID: collID,
 			PartitionID:  partID,
 			SegmentID:    segID,
@@ -779,7 +779,7 @@ func TestMetaTable(t *testing.T) {
 		err = mt.AddCollection(collInfo, ts, "")
 		assert.Nil(t, err)
 
-		segIdxInfo := pb.SegmentIndexInfo{
+		segIdxInfo := model.Index{
 			CollectionID: collID,
 			PartitionID:  partID,
 			SegmentID:    segID,
@@ -904,7 +904,7 @@ func TestMetaTable(t *testing.T) {
 		assert.Equal(t, fieldID, seg.FieldID)
 		assert.Equal(t, false, seg.EnableIndex)
 
-		segIdxInfo := pb.SegmentIndexInfo{
+		segIdxInfo := model.Index{
 			CollectionID: collID,
 			PartitionID:  partID,
 			SegmentID:    segID,
@@ -1311,14 +1311,14 @@ func TestFixIssue10540(t *testing.T) {
 
 func TestMetaTable_GetSegmentIndexInfos(t *testing.T) {
 	meta := &MetaTable{
-		segID2IndexMeta: map[typeutil.UniqueID]map[typeutil.UniqueID]pb.SegmentIndexInfo{},
+		segID2IndexMeta: map[typeutil.UniqueID]map[typeutil.UniqueID]model.Index{},
 	}
 
 	segID := typeutil.UniqueID(100)
 	_, err := meta.GetSegmentIndexInfos(segID)
 	assert.Error(t, err)
 
-	meta.segID2IndexMeta[segID] = map[typeutil.UniqueID]pb.SegmentIndexInfo{
+	meta.segID2IndexMeta[segID] = map[typeutil.UniqueID]model.Index{
 		5: {
 			CollectionID: 1,
 			PartitionID:  2,
@@ -1333,11 +1333,11 @@ func TestMetaTable_GetSegmentIndexInfos(t *testing.T) {
 	assert.NoError(t, err)
 	indexInfos, ok := infos[5]
 	assert.True(t, ok)
-	assert.Equal(t, typeutil.UniqueID(1), indexInfos.GetCollectionID())
-	assert.Equal(t, typeutil.UniqueID(2), indexInfos.GetPartitionID())
-	assert.Equal(t, segID, indexInfos.GetSegmentID())
-	assert.Equal(t, typeutil.UniqueID(4), indexInfos.GetFieldID())
-	assert.Equal(t, typeutil.UniqueID(5), indexInfos.GetIndexID())
-	assert.Equal(t, typeutil.UniqueID(6), indexInfos.GetBuildID())
-	assert.Equal(t, true, indexInfos.GetEnableIndex())
+	assert.Equal(t, typeutil.UniqueID(1), indexInfos.CollectionID)
+	assert.Equal(t, typeutil.UniqueID(2), indexInfos.PartitionID)
+	assert.Equal(t, segID, indexInfos.SegmentID)
+	assert.Equal(t, typeutil.UniqueID(4), indexInfos.FieldID)
+	assert.Equal(t, typeutil.UniqueID(5), indexInfos.IndexID)
+	assert.Equal(t, typeutil.UniqueID(6), indexInfos.BuildID)
+	assert.Equal(t, true, indexInfos.EnableIndex)
 }

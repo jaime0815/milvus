@@ -25,7 +25,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/milvus-io/milvus/internal/mq/msgstream"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
-	"github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 
@@ -100,7 +99,7 @@ func DecodeDdOperation(str string, ddOp *DdOperation) error {
 }
 
 // SegmentIndexInfoEqual return true if SegmentIndexInfos are identical
-func SegmentIndexInfoEqual(info1 *etcdpb.SegmentIndexInfo, info2 *etcdpb.SegmentIndexInfo) bool {
+func SegmentIndexInfoEqual(info1 *model.Index, info2 *model.Index) bool {
 	return info1.CollectionID == info2.CollectionID &&
 		info1.PartitionID == info2.PartitionID &&
 		info1.SegmentID == info2.SegmentID &&

@@ -41,7 +41,6 @@ import (
 	ms "github.com/milvus-io/milvus/internal/mq/msgstream"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
 	"github.com/milvus-io/milvus/internal/proto/datapb"
-	"github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/proto/indexpb"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
 	"github.com/milvus-io/milvus/internal/proto/milvuspb"
@@ -401,7 +400,7 @@ func (c *Core) checkFlushedSegments(ctx context.Context) {
 						log.Debug("index meta does not exist", zap.Int64("index_id", idxInfo.IndexID))
 						continue
 					}
-					info := etcdpb.SegmentIndexInfo{
+					info := model.Index{
 						CollectionID: collMeta.CollectionID,
 						PartitionID:  part.PartitionID,
 						SegmentID:    segID,
@@ -2084,7 +2083,7 @@ func (c *Core) SegmentFlushCompleted(ctx context.Context, in *datapb.SegmentFlus
 			continue
 		}
 
-		info := etcdpb.SegmentIndexInfo{
+		info := model.Index{
 			CollectionID: in.Segment.CollectionID,
 			PartitionID:  in.Segment.PartitionID,
 			SegmentID:    segID,

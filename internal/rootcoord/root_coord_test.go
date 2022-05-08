@@ -37,7 +37,6 @@ import (
 	"github.com/milvus-io/milvus/internal/mq/msgstream"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
 	"github.com/milvus-io/milvus/internal/proto/datapb"
-	"github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/proto/indexpb"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
 	"github.com/milvus-io/milvus/internal/proto/milvuspb"
@@ -3032,7 +3031,7 @@ func TestCheckFlushedSegments(t *testing.T) {
 		var segID int64 = 1001
 		var fieldID int64 = 101
 		var indexID int64 = 6001
-		core.MetaTable.segID2IndexMeta[segID] = make(map[int64]etcdpb.SegmentIndexInfo)
+		core.MetaTable.segID2IndexMeta[segID] = make(map[int64]model.Index)
 		core.MetaTable.partID2SegID[partID] = make(map[int64]bool)
 		core.MetaTable.collID2Meta[collID] = model.Collection{CollectionID: collID}
 		// do nothing, since collection has 0 index
@@ -3263,7 +3262,7 @@ func TestCore_DescribeSegments(t *testing.T) {
 
 	// success.
 	c.MetaTable = &MetaTable{
-		segID2IndexMeta: map[typeutil.UniqueID]map[typeutil.UniqueID]etcdpb.SegmentIndexInfo{
+		segID2IndexMeta: map[typeutil.UniqueID]map[typeutil.UniqueID]model.Index{
 			segID: {
 				indexID: {
 					CollectionID: collID,

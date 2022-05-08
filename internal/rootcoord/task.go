@@ -983,7 +983,7 @@ func (t *CreateIndexReqTask) Execute(ctx context.Context) error {
 	cnt := 0
 
 	for _, segID := range segIDs {
-		info := etcdpb.SegmentIndexInfo{
+		info := model.Index{
 			CollectionID: collectionID,
 			PartitionID:  segID2PartID[segID],
 			SegmentID:    segID,

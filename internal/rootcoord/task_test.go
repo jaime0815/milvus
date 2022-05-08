@@ -7,7 +7,6 @@ import (
 
 	"github.com/milvus-io/milvus/internal/metastore/model"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
-	"github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/proto/rootcoordpb"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
 	"github.com/stretchr/testify/assert"
@@ -65,13 +64,13 @@ func TestDescribeSegmentsReqTask_Execute(t *testing.T) {
 		return []typeutil.UniqueID{segID}, nil
 	}
 	c.MetaTable = &MetaTable{
-		segID2IndexMeta: map[typeutil.UniqueID]map[typeutil.UniqueID]etcdpb.SegmentIndexInfo{},
+		segID2IndexMeta: map[typeutil.UniqueID]map[typeutil.UniqueID]model.Index{},
 	}
 	assert.NoError(t, tsk.Execute(context.Background()))
 
 	// index not found in meta.
 	c.MetaTable = &MetaTable{
-		segID2IndexMeta: map[typeutil.UniqueID]map[typeutil.UniqueID]etcdpb.SegmentIndexInfo{
+		segID2IndexMeta: map[typeutil.UniqueID]map[typeutil.UniqueID]model.Index{
 			segID: {
 				indexID: {
 					CollectionID: collID,
@@ -89,7 +88,7 @@ func TestDescribeSegmentsReqTask_Execute(t *testing.T) {
 
 	// success.
 	c.MetaTable = &MetaTable{
-		segID2IndexMeta: map[typeutil.UniqueID]map[typeutil.UniqueID]etcdpb.SegmentIndexInfo{
+		segID2IndexMeta: map[typeutil.UniqueID]map[typeutil.UniqueID]model.Index{
 			segID: {
 				indexID: {
 					CollectionID: collID,
