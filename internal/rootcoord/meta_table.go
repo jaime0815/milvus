@@ -165,60 +165,46 @@ func (mt *MetaTable) reloadFromKV() error {
 		mt.collName2ID[coll.Name] = coll.CollectionID
 	}
 
+	segIndexes, err := mt.catalog.ListSegmentIndexes(mt.ctx)
+	if err != nil {
+		return err
+	}
+	for _, segIndexInfo := range segIndexes {
+		// update partID2SegID
+		segIDMap, ok := mt.partID2SegID[segIndexInfo.PartitionID]
+		if ok {
+			segIDMap[segIndexInfo.SegmentID] = true
+		} else {
+			idMap := make(map[typeutil.UniqueID]bool)
+			idMap[segIndexInfo.SegmentID] = true
+			mt.partID2SegID[segIndexInfo.PartitionID] = idMap
+		}
+
+		// update segID2IndexMeta
+		idx, ok := mt.segID2IndexMeta[segIndexInfo.SegmentID]
+		if ok {
+			idx[segIndexInfo.IndexID] = *model.ConvertToSegmentIndexPB(segIndexInfo)
+		} else {
+			meta := make(map[typeutil.UniqueID]pb.SegmentIndexInfo)
+			meta[segIndexInfo.IndexID] = *model.ConvertToSegmentIndexPB(segIndexInfo)
+			mt.segID2IndexMeta[segIndexInfo.SegmentID] = meta
+		}
+	}
+
 	indexes, err := mt.catalog.ListIndexes(mt.ctx)
 	if err != nil {
 		return err
 	}
 	for _, indexInfo := range indexes {
-		// update partID2SegID
-		segIDMap, ok := mt.partID2SegID[indexInfo.PartitionID]
-		if ok {
-			segIDMap[indexInfo.SegmentID] = true
-		} else {
-			idMap := make(map[typeutil.UniqueID]bool)
-			idMap[indexInfo.SegmentID] = true
-			mt.partID2SegID[indexInfo.PartitionID] = idMap
-		}
-
-		// update segID2IndexMeta
-		idx, ok := mt.segID2IndexMeta[indexInfo.SegmentID]
-		if ok {
-			idx[indexInfo.IndexID] = *model.ConvertToSegmentIndexPB(indexInfo)
-		} else {
-			meta := make(map[typeutil.UniqueID]pb.SegmentIndexInfo)
-			meta[indexInfo.IndexID] = *model.ConvertToSegmentIndexPB(indexInfo)
-			mt.segID2IndexMeta[indexInfo.SegmentID] = meta
-		}
+		mt.indexID2Meta[indexInfo.IndexID] = *model.ConvertToIndexPB(indexInfo)
 	}
 
-	_, values, err = mt.txn.LoadWithPrefix(IndexMetaPrefix)
+	collAliases, err := mt.catalog.ListAliases(mt.ctx)
 	if err != nil {
 		return err
 	}
-	for _, value := range values {
-		if bytes.Equal([]byte(value), suffixSnapshotTombstone) {
-			// backward compatibility, IndexMeta used to be in SnapshotKV
-			continue
-		}
-		meta := pb.IndexInfo{}
-		err = proto.Unmarshal([]byte(value), &meta)
-		if err != nil {
-			return fmt.Errorf("rootcoord Unmarshal pb.IndexInfo err:%w", err)
-		}
-		mt.indexID2Meta[meta.IndexID] = meta
-	}
-
-	_, values, err = mt.snapshot.LoadWithPrefix(CollectionAliasMetaPrefix, 0)
-	if err != nil {
-		return err
-	}
-	for _, value := range values {
-		aliasInfo := pb.CollectionInfo{}
-		err = proto.Unmarshal([]byte(value), &aliasInfo)
-		if err != nil {
-			return fmt.Errorf("rootcoord Unmarshal pb.AliasInfo err:%w", err)
-		}
-		mt.collAlias2ID[aliasInfo.Schema.Name] = aliasInfo.ID
+	for _, aliasInfo := range collAliases {
+		mt.collAlias2ID[aliasInfo.Name] = aliasInfo.CollectionID
 	}
 
 	log.Debug("reload meta table from KV successfully")

@@ -168,13 +168,24 @@ func ConvertSegmentIndexPBToModel(segIndex *pb.SegmentIndexInfo) *Index {
 		SegmentID:    segIndex.SegmentID,
 		FieldID:      segIndex.FieldID,
 		IndexID:      segIndex.IndexID,
-		//IndexName      : segIndex,
-		//IndexParams    : segIndex,
-		BuildID: segIndex.BuildID,
-		//IndexSize      : segIndex,
-		//IndexFilePaths : segIndex,
-		EnableIndex: segIndex.EnableIndex,
-		//Extra          : segIndex,
+		BuildID:      segIndex.BuildID,
+		EnableIndex:  segIndex.EnableIndex,
+	}
+}
+
+func ConvertIndexPBToModel(indexInfo *pb.IndexInfo) *Index {
+	return &Index{
+		IndexName:   indexInfo.IndexName,
+		IndexID:     indexInfo.IndexID,
+		IndexParams: indexInfo.IndexParams,
+	}
+}
+
+func ConvertToIndexPB(index *Index) *pb.IndexInfo {
+	return &pb.IndexInfo{
+		IndexName:   index.IndexName,
+		IndexID:     index.IndexID,
+		IndexParams: index.IndexParams,
 	}
 }
 

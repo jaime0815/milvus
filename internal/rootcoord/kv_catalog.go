@@ -315,7 +315,26 @@ func (kc *KVCatalog) ListCollections(ctx context.Context, ts typeutil.Timestamp)
 	return colls, nil
 }
 
-func (kc *KVCatalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
+func (kc *KVCatalog) ListAliases(ctx context.Context) ([]*model.Collection, error) {
+	_, values, err := kc.snapshot.LoadWithPrefix(CollectionAliasMetaPrefix, 0)
+	if err != nil {
+		log.Error("load with prefix error", zap.Error(err))
+		return nil, err
+	}
+	var colls []*model.Collection
+	for _, value := range values {
+		aliasInfo := pb.CollectionInfo{}
+		err = proto.Unmarshal([]byte(value), &aliasInfo)
+		if err != nil {
+			log.Warn("unmarshal collection info failed", zap.Error(err))
+			continue
+		}
+		colls = append(colls, model.ConvertCollectionPBToModel(&aliasInfo, map[string]string{}))
+	}
+	return colls, nil
+}
+
+func (kc *KVCatalog) ListSegmentIndexes(ctx context.Context) ([]*model.Index, error) {
 	_, values, err := kc.txn.LoadWithPrefix(SegmentIndexMetaPrefix)
 	if err != nil {
 		log.Error("load with prefix error", zap.Error(err))
@@ -338,6 +357,29 @@ func (kc *KVCatalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
 	return indexes, nil
 }
 
+func (kc *KVCatalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
+	_, values, err := kc.txn.LoadWithPrefix(IndexMetaPrefix)
+	if err != nil {
+		log.Error("load with prefix error", zap.Error(err))
+		return nil, err
+	}
+	var indexes []*model.Index
+	for _, value := range values {
+		if bytes.Equal([]byte(value), suffixSnapshotTombstone) {
+			// backward compatibility, IndexMeta used to be in SnapshotKV
+			continue
+		}
+		meta := pb.IndexInfo{}
+		err = proto.Unmarshal([]byte(value), &meta)
+		if err != nil {
+			log.Warn("unmarshal index info failed", zap.Error(err))
+			continue
+		}
+		indexes = append(indexes, model.ConvertIndexPBToModel(&meta))
+	}
+	return indexes, nil
+}
+
 func (kc *KVCatalog) ListCredentials(ctx context.Context) ([]string, error) {
 	keys, _, err := kc.txn.LoadWithPrefix(CredentialPrefix)
 	if err != nil {
@@ -355,14 +397,6 @@ func (kc *KVCatalog) ListCredentials(ctx context.Context) ([]string, error) {
 		usernames = append(usernames, username)
 	}
 	return usernames, nil
-}
-
-func (kc *KVCatalog) GetPartition(ctx context.Context, collectionName string, partitionName string) (*model.Partition, error) {
-	panic("implement me")
-}
-
-func (kc *KVCatalog) GetPartitionWithVersion(ctx context.Context, collectionName string, partitionName string, version int) (model.Partition, error) {
-	panic("implement me")
 }
 
 func (kc *KVCatalog) Close() {
