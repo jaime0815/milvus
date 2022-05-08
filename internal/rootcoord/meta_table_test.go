@@ -26,16 +26,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/milvus-io/milvus/internal/metastore/model"
-
-	"github.com/milvus-io/milvus/internal/proto/internalpb"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/milvus-io/milvus/internal/kv"
 	etcdkv "github.com/milvus-io/milvus/internal/kv/etcd"
 	memkv "github.com/milvus-io/milvus/internal/kv/mem"
+	"github.com/milvus-io/milvus/internal/metastore/model"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
 	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
+	"github.com/milvus-io/milvus/internal/proto/internalpb"
 	"github.com/milvus-io/milvus/internal/proto/schemapb"
 	"github.com/milvus-io/milvus/internal/util/etcd"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
@@ -270,7 +268,7 @@ func TestMetaTable(t *testing.T) {
 		},
 	}
 
-	idxInfo := []*pb.IndexInfo{
+	idxInfo := []*model.Index{
 		{
 			IndexName: "testColl_index_110",
 			IndexID:   indexID,
@@ -406,7 +404,7 @@ func TestMetaTable(t *testing.T) {
 				Value: "field110-v2",
 			},
 		}
-		idxInfo := &pb.IndexInfo{
+		idxInfo := &model.Index{
 			IndexName:   "testColl_index_110",
 			IndexID:     indexID,
 			IndexParams: params,
@@ -440,7 +438,7 @@ func TestMetaTable(t *testing.T) {
 				Value: "field110-v2",
 			},
 		}
-		idxInfo := &pb.IndexInfo{
+		idxInfo := &model.Index{
 			IndexName:   "field110",
 			IndexID:     2000,
 			IndexParams: params,
@@ -859,7 +857,7 @@ func TestMetaTable(t *testing.T) {
 			},
 		}
 		mt.collID2Meta[coll.CollectionID] = coll
-		mt.indexID2Meta = make(map[int64]pb.IndexInfo)
+		mt.indexID2Meta = make(map[int64]model.Index)
 		idxID, isDroped, err := mt.DropIndex(collInfo.Name, collInfo.Fields[0].Name, idxInfo[0].IndexName)
 		assert.Zero(t, idxID)
 		assert.False(t, isDroped)
@@ -993,7 +991,7 @@ func TestMetaTable(t *testing.T) {
 		err := mt.reloadFromKV()
 		assert.Nil(t, err)
 
-		idx := &pb.IndexInfo{
+		idx := &model.Index{
 			IndexName: "no-idx",
 			IndexID:   456,
 			IndexParams: []*commonpb.KeyValuePair{
@@ -1028,7 +1026,7 @@ func TestMetaTable(t *testing.T) {
 		assert.EqualError(t, err, fmt.Sprintf("collection %s doesn't have filed no-field", collInfo.Name))
 
 		bakMeta := mt.indexID2Meta
-		mt.indexID2Meta = make(map[int64]pb.IndexInfo)
+		mt.indexID2Meta = make(map[int64]model.Index)
 		_, _, err = mt.GetNotIndexedSegments(collInfo.Name, collInfo.Fields[0].Name, idx, nil)
 		assert.Nil(t, err)
 		mt.indexID2Meta = bakMeta
@@ -1090,7 +1088,7 @@ func TestMetaTable(t *testing.T) {
 		ts := ftso()
 		err = mt.AddCollection(collInfo, ts, "")
 		assert.Nil(t, err)
-		mt.indexID2Meta = make(map[int64]pb.IndexInfo)
+		mt.indexID2Meta = make(map[int64]model.Index)
 		_, _, err = mt.GetIndexByName(collInfo.Name, idxInfo[0].IndexName)
 		assert.NotNil(t, err)
 		assert.EqualError(t, err, fmt.Sprintf("index id = %d not found", idxInfo[0].IndexID))

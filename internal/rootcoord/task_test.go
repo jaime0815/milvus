@@ -5,13 +5,12 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
-	"github.com/milvus-io/milvus/internal/proto/etcdpb"
-	"github.com/milvus-io/milvus/internal/util/typeutil"
-
+	"github.com/milvus-io/milvus/internal/metastore/model"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
+	"github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/proto/rootcoordpb"
+	"github.com/milvus-io/milvus/internal/util/typeutil"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDescribeSegmentReqTask_Type(t *testing.T) {
@@ -103,7 +102,7 @@ func TestDescribeSegmentsReqTask_Execute(t *testing.T) {
 				},
 			},
 		},
-		indexID2Meta: map[typeutil.UniqueID]etcdpb.IndexInfo{
+		indexID2Meta: map[typeutil.UniqueID]model.Index{
 			indexID: {
 				IndexName:   indexName,
 				IndexID:     indexID,

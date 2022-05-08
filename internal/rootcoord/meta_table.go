@@ -103,7 +103,7 @@ type MetaTable struct {
 	collAlias2ID    map[string]typeutil.UniqueID                                    // collection alias to collection id
 	partID2SegID    map[typeutil.UniqueID]map[typeutil.UniqueID]bool                // partition id -> segment_id -> bool
 	segID2IndexMeta map[typeutil.UniqueID]map[typeutil.UniqueID]pb.SegmentIndexInfo // collection id/index_id/partition_id/segment_id -> meta
-	indexID2Meta    map[typeutil.UniqueID]pb.IndexInfo                              // collection id/index_id -> meta
+	indexID2Meta    map[typeutil.UniqueID]model.Index                               // collection id/index_id -> meta
 
 	proxyLock sync.RWMutex
 	ddLock    sync.RWMutex
@@ -136,7 +136,7 @@ func (mt *MetaTable) reloadFromKV() error {
 	mt.collAlias2ID = make(map[string]typeutil.UniqueID)
 	mt.partID2SegID = make(map[typeutil.UniqueID]map[typeutil.UniqueID]bool)
 	mt.segID2IndexMeta = make(map[typeutil.UniqueID]map[typeutil.UniqueID]pb.SegmentIndexInfo)
-	mt.indexID2Meta = make(map[typeutil.UniqueID]pb.IndexInfo)
+	mt.indexID2Meta = make(map[typeutil.UniqueID]model.Index)
 
 	_, values, err := mt.txn.LoadWithPrefix(ProxyMetaPrefix)
 	if err != nil {
@@ -196,7 +196,7 @@ func (mt *MetaTable) reloadFromKV() error {
 		return err
 	}
 	for _, indexInfo := range indexes {
-		mt.indexID2Meta[indexInfo.IndexID] = *model.ConvertToIndexPB(indexInfo)
+		mt.indexID2Meta[indexInfo.IndexID] = *indexInfo
 	}
 
 	collAliases, err := mt.catalog.ListAliases(mt.ctx)
@@ -826,7 +826,7 @@ func (mt *MetaTable) unlockIsSegmentIndexed(segID typeutil.UniqueID, fieldSchema
 }
 
 // GetNotIndexedSegments return segment ids which have no index
-func (mt *MetaTable) GetNotIndexedSegments(collName string, fieldName string, idxInfo *pb.IndexInfo, segIDs []typeutil.UniqueID) ([]typeutil.UniqueID, model.Field, error) {
+func (mt *MetaTable) GetNotIndexedSegments(collName string, fieldName string, idxInfo *model.Index, segIDs []typeutil.UniqueID) ([]typeutil.UniqueID, model.Field, error) {
 	mt.ddLock.Lock()
 	defer mt.ddLock.Unlock()
 
@@ -891,7 +891,7 @@ func (mt *MetaTable) GetNotIndexedSegments(collName string, fieldName string, id
 		}
 
 		k2 := path.Join(IndexMetaPrefix, strconv.FormatInt(idx.IndexID, 10))
-		v2, err := proto.Marshal(idxInfo)
+		v2, err := proto.Marshal(model.ConvertToIndexPB(idxInfo))
 		if err != nil {
 			log.Error("MetaTable GetNotIndexedSegments Marshal idxInfo fail",
 				zap.String("key", k2), zap.Error(err))
@@ -919,7 +919,7 @@ func (mt *MetaTable) GetNotIndexedSegments(collName string, fieldName string, id
 }
 
 // GetIndexByName return index info by index name
-func (mt *MetaTable) GetIndexByName(collName, indexName string) (model.Collection, []pb.IndexInfo, error) {
+func (mt *MetaTable) GetIndexByName(collName, indexName string) (model.Collection, []model.Index, error) {
 	mt.ddLock.RLock()
 	defer mt.ddLock.RUnlock()
 
@@ -935,7 +935,7 @@ func (mt *MetaTable) GetIndexByName(collName, indexName string) (model.Collectio
 		return model.Collection{}, nil, fmt.Errorf("collection %s not found", collName)
 	}
 
-	rstIndex := make([]pb.IndexInfo, 0, len(col.FieldIndexes))
+	rstIndex := make([]model.Index, 0, len(col.FieldIndexes))
 	for _, idx := range col.FieldIndexes {
 		idxInfo, ok := mt.indexID2Meta[idx.IndexID]
 		if !ok {
@@ -949,7 +949,7 @@ func (mt *MetaTable) GetIndexByName(collName, indexName string) (model.Collectio
 }
 
 // GetIndexByID return index info by index id
-func (mt *MetaTable) GetIndexByID(indexID typeutil.UniqueID) (*pb.IndexInfo, error) {
+func (mt *MetaTable) GetIndexByID(indexID typeutil.UniqueID) (*model.Index, error) {
 	mt.ddLock.RLock()
 	defer mt.ddLock.RUnlock()
 
@@ -963,14 +963,14 @@ func (mt *MetaTable) GetIndexByID(indexID typeutil.UniqueID) (*pb.IndexInfo, err
 func (mt *MetaTable) dupMeta() (
 	map[typeutil.UniqueID]model.Collection,
 	map[typeutil.UniqueID]map[typeutil.UniqueID]pb.SegmentIndexInfo,
-	map[typeutil.UniqueID]pb.IndexInfo,
+	map[typeutil.UniqueID]model.Index,
 ) {
 	mt.ddLock.RLock()
 	defer mt.ddLock.RUnlock()
 
 	collID2Meta := map[typeutil.UniqueID]model.Collection{}
 	segID2IndexMeta := map[typeutil.UniqueID]map[typeutil.UniqueID]pb.SegmentIndexInfo{}
-	indexID2Meta := map[typeutil.UniqueID]pb.IndexInfo{}
+	indexID2Meta := map[typeutil.UniqueID]model.Index{}
 	for k, v := range mt.collID2Meta {
 		collID2Meta[k] = v
 	}

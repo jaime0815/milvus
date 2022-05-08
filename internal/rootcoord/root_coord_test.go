@@ -27,18 +27,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/milvus-io/milvus/internal/metastore/model"
-
 	"github.com/golang/protobuf/proto"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	clientv3 "go.etcd.io/etcd/client/v3"
-
 	"github.com/milvus-io/milvus/internal/common"
 	"github.com/milvus-io/milvus/internal/kv"
 	etcdkv "github.com/milvus-io/milvus/internal/kv/etcd"
 	memkv "github.com/milvus-io/milvus/internal/kv/mem"
 	"github.com/milvus-io/milvus/internal/log"
+	"github.com/milvus-io/milvus/internal/metastore/model"
 	"github.com/milvus-io/milvus/internal/mq/msgstream"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
 	"github.com/milvus-io/milvus/internal/proto/datapb"
@@ -59,6 +54,9 @@ import (
 	"github.com/milvus-io/milvus/internal/util/retry"
 	"github.com/milvus-io/milvus/internal/util/sessionutil"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 const (
@@ -2910,7 +2908,7 @@ func TestCheckInit(t *testing.T) {
 	err = c.checkInit()
 	assert.Error(t, err)
 
-	c.CallBuildIndexService = func(ctx context.Context, binlog []string, field *model.Field, idxInfo *etcdpb.IndexInfo, numRows int64) (typeutil.UniqueID, error) {
+	c.CallBuildIndexService = func(ctx context.Context, binlog []string, field *model.Field, idxInfo *model.Index, numRows int64) (typeutil.UniqueID, error) {
 		return 0, nil
 	}
 	err = c.checkInit()
@@ -3097,10 +3095,10 @@ func TestCheckFlushedSegments(t *testing.T) {
 			assert.Equal(t, partID, pid)
 			return []int64{segID}, nil
 		}
-		core.MetaTable.indexID2Meta[indexID] = etcdpb.IndexInfo{
+		core.MetaTable.indexID2Meta[indexID] = model.Index{
 			IndexID: indexID,
 		}
-		core.CallBuildIndexService = func(_ context.Context, binlog []string, field *model.Field, idx *etcdpb.IndexInfo, numRows int64) (int64, error) {
+		core.CallBuildIndexService = func(_ context.Context, binlog []string, field *model.Field, idx *model.Index, numRows int64) (int64, error) {
 			assert.Equal(t, fieldID, field.FieldID)
 			assert.Equal(t, indexID, idx.IndexID)
 			return -1, errors.New("build index build")
@@ -3109,7 +3107,7 @@ func TestCheckFlushedSegments(t *testing.T) {
 		core.checkFlushedSegments(ctx)
 
 		var indexBuildID int64 = 10001
-		core.CallBuildIndexService = func(_ context.Context, binlog []string, field *model.Field, idx *etcdpb.IndexInfo, numRows int64) (int64, error) {
+		core.CallBuildIndexService = func(_ context.Context, binlog []string, field *model.Field, idx *model.Index, numRows int64) (int64, error) {
 			return indexBuildID, nil
 		}
 		core.checkFlushedSegments(core.ctx)
@@ -3278,7 +3276,7 @@ func TestCore_DescribeSegments(t *testing.T) {
 				},
 			},
 		},
-		indexID2Meta: map[typeutil.UniqueID]etcdpb.IndexInfo{
+		indexID2Meta: map[typeutil.UniqueID]model.Index{
 			indexID: {
 				IndexName:   indexName,
 				IndexID:     indexID,

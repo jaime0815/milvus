@@ -131,7 +131,7 @@ type Core struct {
 	CallGetFlushedSegmentsService func(ctx context.Context, collID, partID typeutil.UniqueID) ([]typeutil.UniqueID, error)
 
 	//call index builder's client to build index, return build id or get index state.
-	CallBuildIndexService     func(ctx context.Context, binlog []string, field *model.Field, idxInfo *etcdpb.IndexInfo, numRows int64) (typeutil.UniqueID, error)
+	CallBuildIndexService     func(ctx context.Context, binlog []string, field *model.Field, idxInfo *model.Index, numRows int64) (typeutil.UniqueID, error)
 	CallDropIndexService      func(ctx context.Context, indexID typeutil.UniqueID) error
 	CallGetIndexStatesService func(ctx context.Context, IndexBuildIDs []int64) ([]*indexpb.IndexInfo, error)
 
@@ -755,7 +755,7 @@ func (c *Core) SetIndexCoord(s types.IndexCoord) error {
 		}
 	}()
 
-	c.CallBuildIndexService = func(ctx context.Context, binlog []string, field *model.Field, idxInfo *etcdpb.IndexInfo, numRows int64) (retID typeutil.UniqueID, retErr error) {
+	c.CallBuildIndexService = func(ctx context.Context, binlog []string, field *model.Field, idxInfo *model.Index, numRows int64) (retID typeutil.UniqueID, retErr error) {
 		defer func() {
 			if err := recover(); err != nil {
 				retErr = fmt.Errorf("build index panic, msg = %v", err)
@@ -914,7 +914,7 @@ func (c *Core) SetQueryCoord(s types.QueryCoord) error {
 }
 
 // BuildIndex will check row num and call build index service
-func (c *Core) BuildIndex(ctx context.Context, segID typeutil.UniqueID, field *model.Field, idxInfo *etcdpb.IndexInfo, isFlush bool) (typeutil.UniqueID, error) {
+func (c *Core) BuildIndex(ctx context.Context, segID typeutil.UniqueID, field *model.Field, idxInfo *model.Index, isFlush bool) (typeutil.UniqueID, error) {
 	log.Debug("start build index", zap.String("index name", idxInfo.IndexName),
 		zap.String("field name", field.Name), zap.Int64("segment id", segID))
 	sp, ctx := trace.StartSpanFromContext(ctx)

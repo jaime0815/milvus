@@ -21,11 +21,10 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/milvus-io/milvus/internal/metastore/model"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/milvus-io/milvus/internal/common"
 	"github.com/milvus-io/milvus/internal/log"
+	"github.com/milvus-io/milvus/internal/metastore/model"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
 	"github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
@@ -917,7 +916,7 @@ func (t *DescribeSegmentsReqTask) Execute(ctx context.Context) error {
 					zap.Int64("segment", segID))
 				return err
 			}
-			t.Rsp.SegmentInfos[segID].ExtraIndexInfos[indexID] = extraIndexInfo
+			t.Rsp.SegmentInfos[segID].ExtraIndexInfos[indexID] = model.ConvertToIndexPB(extraIndexInfo)
 		}
 	}
 
@@ -949,7 +948,7 @@ func (t *CreateIndexReqTask) Execute(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	idxInfo := &etcdpb.IndexInfo{
+	idxInfo := &model.Index{
 		IndexName:   indexName,
 		IndexID:     indexID,
 		IndexParams: t.Req.ExtraParams,
