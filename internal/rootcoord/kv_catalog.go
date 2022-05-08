@@ -1,6 +1,7 @@
 package rootcoord
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -59,7 +60,7 @@ func (kc *KVCatalog) CreatePartition(ctx context.Context, coll *model.Collection
 	return nil
 }
 
-func (kc *KVCatalog) CreateIndex(ctx context.Context, segIndex *model.SegmentIndex) error {
+func (kc *KVCatalog) CreateIndex(ctx context.Context, segIndex *model.Index) error {
 	k := fmt.Sprintf("%s/%d/%d/%d/%d", SegmentIndexMetaPrefix, segIndex.CollectionID, segIndex.IndexID, segIndex.PartitionID, segIndex.SegmentID)
 	segIdxInfo := model.ConvertToSegmentIndexPB(segIndex)
 	v, err := proto.Marshal(segIdxInfo)
@@ -312,6 +313,29 @@ func (kc *KVCatalog) ListCollections(ctx context.Context, ts typeutil.Timestamp)
 		colls[collMeta.Schema.Name] = model.ConvertCollectionPBToModel(&collMeta, map[string]string{})
 	}
 	return colls, nil
+}
+
+func (kc *KVCatalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
+	_, values, err := kc.txn.LoadWithPrefix(SegmentIndexMetaPrefix)
+	if err != nil {
+		log.Error("load with prefix error", zap.Error(err))
+		return nil, err
+	}
+	var indexes []*model.Index
+	for _, value := range values {
+		if bytes.Equal([]byte(value), suffixSnapshotTombstone) {
+			// backward compatibility, IndexMeta used to be in SnapshotKV
+			continue
+		}
+		segmentIndexInfo := pb.SegmentIndexInfo{}
+		err = proto.Unmarshal([]byte(value), &segmentIndexInfo)
+		if err != nil {
+			log.Warn("unmarshal segment index info failed", zap.Error(err))
+			continue
+		}
+		indexes = append(indexes, model.ConvertSegmentIndexPBToModel(&segmentIndexInfo))
+	}
+	return indexes, nil
 }
 
 func (kc *KVCatalog) ListCredentials(ctx context.Context) ([]string, error) {

@@ -162,13 +162,13 @@ func (t *CreateCollectionReqTask) Execute(ctx context.Context) error {
 		Name:                 schema.Name,
 		Description:          schema.Description,
 		AutoID:               schema.AutoID,
-		Fields:               schema.Fields,
+		Fields:               model.BatchConvertFieldPBToModel(schema.Fields),
 		VirtualChannelNames:  vchanNames,
 		PhysicalChannelNames: chanNames,
 		ShardsNum:            t.Req.ShardsNum,
 		ConsistencyLevel:     t.Req.ConsistencyLevel,
-		FieldIndexes:         make([]*etcdpb.FieldIndexInfo, 0, 16),
-		Partitions: []model.Partition{
+		FieldIndexes:         make([]*model.Index, 0, 16),
+		Partitions: []*model.Partition{
 			{
 				PartitionID:               partID,
 				PartitionName:             Params.CommonCfg.DefaultPartitionName,
@@ -451,7 +451,7 @@ func (t *DescribeCollectionReqTask) Execute(ctx context.Context) error {
 		Name:        collInfo.Name,
 		Description: collInfo.Description,
 		AutoID:      collInfo.AutoID,
-		Fields:      collInfo.Fields,
+		Fields:      model.BatchConvertToFieldSchemaPB(collInfo.Fields),
 	}
 	t.Rsp.CollectionID = collInfo.CollectionID
 	t.Rsp.VirtualChannelNames = collInfo.VirtualChannelNames

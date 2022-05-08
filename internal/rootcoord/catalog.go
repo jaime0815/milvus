@@ -20,7 +20,7 @@ type Catalog interface {
 	GetPartitionWithVersion(ctx context.Context, collectionName string, partitionName string, version int) (model.Partition, error)
 	DropPartition(ctx context.Context, collectionInfo *model.Collection, partitionID typeutil.UniqueID, ts typeutil.Timestamp) error
 
-	CreateIndex(ctx context.Context, index *model.SegmentIndex) error
+	CreateIndex(ctx context.Context, index *model.Index) error
 	DropIndex(ctx context.Context, collectionInfo *model.Collection, dropIdxID typeutil.UniqueID, ts typeutil.Timestamp) error
 
 	GetCredential(ctx context.Context, username string) (*model.Credential, error)
@@ -32,6 +32,7 @@ type Catalog interface {
 	AlterAlias(ctx context.Context, collection *model.Collection, ts typeutil.Timestamp) error
 
 	ListCollections(ctx context.Context, ts typeutil.Timestamp) (map[string]*model.Collection, error)
+	ListIndexes(ctx context.Context) ([]*model.Index, error)
 	ListCredentials(ctx context.Context) ([]string, error)
 
 	Close()

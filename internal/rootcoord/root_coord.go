@@ -31,14 +31,12 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	clientv3 "go.etcd.io/etcd/client/v3"
-	"go.uber.org/zap"
-
 	"github.com/milvus-io/milvus/internal/allocator"
 	"github.com/milvus-io/milvus/internal/common"
 	"github.com/milvus-io/milvus/internal/kv"
 	etcdkv "github.com/milvus-io/milvus/internal/kv/etcd"
 	"github.com/milvus-io/milvus/internal/log"
+	"github.com/milvus-io/milvus/internal/metastore/model"
 	"github.com/milvus-io/milvus/internal/metrics"
 	ms "github.com/milvus-io/milvus/internal/mq/msgstream"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
@@ -50,7 +48,6 @@ import (
 	"github.com/milvus-io/milvus/internal/proto/proxypb"
 	"github.com/milvus-io/milvus/internal/proto/querypb"
 	"github.com/milvus-io/milvus/internal/proto/rootcoordpb"
-	"github.com/milvus-io/milvus/internal/proto/schemapb"
 	"github.com/milvus-io/milvus/internal/tso"
 	"github.com/milvus-io/milvus/internal/types"
 	"github.com/milvus-io/milvus/internal/util"
@@ -64,6 +61,8 @@ import (
 	"github.com/milvus-io/milvus/internal/util/trace"
 	"github.com/milvus-io/milvus/internal/util/tsoutil"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
+	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.uber.org/zap"
 )
 
 // UniqueID is an alias of typeutil.UniqueID.
@@ -132,7 +131,7 @@ type Core struct {
 	CallGetFlushedSegmentsService func(ctx context.Context, collID, partID typeutil.UniqueID) ([]typeutil.UniqueID, error)
 
 	//call index builder's client to build index, return build id or get index state.
-	CallBuildIndexService     func(ctx context.Context, binlog []string, field *schemapb.FieldSchema, idxInfo *etcdpb.IndexInfo, numRows int64) (typeutil.UniqueID, error)
+	CallBuildIndexService     func(ctx context.Context, binlog []string, field *model.Field, idxInfo *etcdpb.IndexInfo, numRows int64) (typeutil.UniqueID, error)
 	CallDropIndexService      func(ctx context.Context, indexID typeutil.UniqueID) error
 	CallGetIndexStatesService func(ctx context.Context, IndexBuildIDs []int64) ([]*indexpb.IndexInfo, error)
 
@@ -377,7 +376,7 @@ func (c *Core) checkFlushedSegments(ctx context.Context) {
 				continue
 			}
 			for _, segID := range segIDs {
-				var indexInfos []*etcdpb.FieldIndexInfo
+				var indexInfos []*model.Index
 				indexMeta, ok := segID2IndexMeta[segID]
 				if !ok {
 					indexInfos = append(indexInfos, collMeta.FieldIndexes...)
@@ -390,11 +389,11 @@ func (c *Core) checkFlushedSegments(ctx context.Context) {
 				}
 				for _, idxInfo := range indexInfos {
 					/* #nosec G601 */
-					field, err := GetFieldSchemaByID(&collMeta, idxInfo.FiledID)
+					field, err := GetFieldSchemaByID(&collMeta, idxInfo.FieldID)
 					if err != nil {
 						log.Debug("GetFieldSchemaByID",
 							zap.Any("collection_meta", collMeta),
-							zap.Int64("field id", idxInfo.FiledID))
+							zap.Int64("field id", idxInfo.FieldID))
 						continue
 					}
 					indexMeta, ok := indexID2Meta[idxInfo.IndexID]
@@ -406,7 +405,7 @@ func (c *Core) checkFlushedSegments(ctx context.Context) {
 						CollectionID: collMeta.CollectionID,
 						PartitionID:  part.PartitionID,
 						SegmentID:    segID,
-						FieldID:      idxInfo.FiledID,
+						FieldID:      idxInfo.FieldID,
 						IndexID:      idxInfo.IndexID,
 						EnableIndex:  false,
 					}
@@ -756,7 +755,7 @@ func (c *Core) SetIndexCoord(s types.IndexCoord) error {
 		}
 	}()
 
-	c.CallBuildIndexService = func(ctx context.Context, binlog []string, field *schemapb.FieldSchema, idxInfo *etcdpb.IndexInfo, numRows int64) (retID typeutil.UniqueID, retErr error) {
+	c.CallBuildIndexService = func(ctx context.Context, binlog []string, field *model.Field, idxInfo *etcdpb.IndexInfo, numRows int64) (retID typeutil.UniqueID, retErr error) {
 		defer func() {
 			if err := recover(); err != nil {
 				retErr = fmt.Errorf("build index panic, msg = %v", err)
@@ -770,7 +769,7 @@ func (c *Core) SetIndexCoord(s types.IndexCoord) error {
 			IndexID:     idxInfo.IndexID,
 			IndexName:   idxInfo.IndexName,
 			NumRows:     numRows,
-			FieldSchema: field,
+			FieldSchema: model.ConvertToFieldSchemaPB(field),
 		})
 		if err != nil {
 			return retID, err
@@ -915,7 +914,7 @@ func (c *Core) SetQueryCoord(s types.QueryCoord) error {
 }
 
 // BuildIndex will check row num and call build index service
-func (c *Core) BuildIndex(ctx context.Context, segID typeutil.UniqueID, field *schemapb.FieldSchema, idxInfo *etcdpb.IndexInfo, isFlush bool) (typeutil.UniqueID, error) {
+func (c *Core) BuildIndex(ctx context.Context, segID typeutil.UniqueID, field *model.Field, idxInfo *etcdpb.IndexInfo, isFlush bool) (typeutil.UniqueID, error) {
 	log.Debug("start build index", zap.String("index name", idxInfo.IndexName),
 		zap.String("field name", field.Name), zap.Int64("segment id", segID))
 	sp, ctx := trace.StartSpanFromContext(ctx)
@@ -2069,10 +2068,10 @@ func (c *Core) SegmentFlushCompleted(ctx context.Context, in *datapb.SegmentFlus
 	}
 
 	for _, f := range coll.FieldIndexes {
-		fieldSch, err := GetFieldSchemaByID(coll, f.FiledID)
+		fieldSch, err := GetFieldSchemaByID(coll, f.FieldID)
 		if err != nil {
 			log.Warn("field schema not found", zap.String("role", typeutil.RootCoordRole),
-				zap.String("collection_name", coll.Name), zap.Int64("field id", f.FiledID),
+				zap.String("collection_name", coll.Name), zap.Int64("field id", f.FieldID),
 				zap.Int64("msgID", in.Base.MsgID), zap.Error(err))
 			continue
 		}
@@ -2080,7 +2079,7 @@ func (c *Core) SegmentFlushCompleted(ctx context.Context, in *datapb.SegmentFlus
 		idxInfo, err := c.MetaTable.GetIndexByID(f.IndexID)
 		if err != nil {
 			log.Warn("index not found", zap.String("role", typeutil.RootCoordRole),
-				zap.String("collection_name", coll.Name), zap.Int64("field id", f.FiledID),
+				zap.String("collection_name", coll.Name), zap.Int64("field id", f.FieldID),
 				zap.Int64("index id", f.IndexID), zap.Int64("msgID", in.Base.MsgID), zap.Error(err))
 			continue
 		}
@@ -2098,7 +2097,7 @@ func (c *Core) SegmentFlushCompleted(ctx context.Context, in *datapb.SegmentFlus
 			info.EnableIndex = true
 		} else {
 			log.Error("BuildIndex failed", zap.String("role", typeutil.RootCoordRole),
-				zap.String("collection_name", coll.Name), zap.Int64("field id", f.FiledID),
+				zap.String("collection_name", coll.Name), zap.Int64("field id", f.FieldID),
 				zap.Int64("index id", f.IndexID), zap.Int64("build id", info.BuildID),
 				zap.Int64("msgID", in.Base.MsgID), zap.Error(err))
 			continue
@@ -2106,7 +2105,7 @@ func (c *Core) SegmentFlushCompleted(ctx context.Context, in *datapb.SegmentFlus
 		err = c.MetaTable.AddIndex(&info)
 		if err != nil {
 			log.Error("AddIndex failed", zap.String("role", typeutil.RootCoordRole),
-				zap.String("collection_name", coll.Name), zap.Int64("field id", f.FiledID),
+				zap.String("collection_name", coll.Name), zap.Int64("field id", f.FieldID),
 				zap.Int64("index id", f.IndexID), zap.Int64("msgID", in.Base.MsgID), zap.Error(err))
 			continue
 		}

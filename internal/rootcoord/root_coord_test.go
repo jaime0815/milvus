@@ -433,12 +433,12 @@ func createCollectionInMeta(dbName, collName string, core *Core, shardsNum int32
 		Name:                 schema.Name,
 		Description:          schema.Description,
 		AutoID:               schema.AutoID,
-		Fields:               schema.Fields,
-		FieldIndexes:         make([]*etcdpb.FieldIndexInfo, 0, 16),
+		Fields:               model.BatchConvertFieldPBToModel(schema.Fields),
+		FieldIndexes:         make([]*model.Index, 0, 16),
 		VirtualChannelNames:  vchanNames,
 		PhysicalChannelNames: chanNames,
 		ShardsNum:            0, // intend to set zero
-		Partitions: []model.Partition{
+		Partitions: []*model.Partition{
 			{
 				PartitionID:               partID,
 				PartitionName:             Params.CommonCfg.DefaultPartitionName,
@@ -1450,7 +1450,7 @@ func TestRootCoord_Base(t *testing.T) {
 		core.MetaTable.collName2ID["new"+collName] = 123
 		core.MetaTable.collID2Meta[123] = model.Collection{
 			CollectionID: 123,
-			Partitions: []model.Partition{
+			Partitions: []*model.Partition{
 				{
 					PartitionID:   456,
 					PartitionName: "testPartition",
@@ -2910,7 +2910,7 @@ func TestCheckInit(t *testing.T) {
 	err = c.checkInit()
 	assert.Error(t, err)
 
-	c.CallBuildIndexService = func(ctx context.Context, binlog []string, field *schemapb.FieldSchema, idxInfo *etcdpb.IndexInfo, numRows int64) (typeutil.UniqueID, error) {
+	c.CallBuildIndexService = func(ctx context.Context, binlog []string, field *model.Field, idxInfo *etcdpb.IndexInfo, numRows int64) (typeutil.UniqueID, error) {
 		return 0, nil
 	}
 	err = c.checkInit()
@@ -3043,18 +3043,18 @@ func TestCheckFlushedSegments(t *testing.T) {
 		// get field schema by id fail
 		core.MetaTable.collID2Meta[collID] = model.Collection{
 			CollectionID: collID,
-			Partitions: []model.Partition{
+			Partitions: []*model.Partition{
 				{
 					PartitionID: partID,
 				},
 			},
-			FieldIndexes: []*etcdpb.FieldIndexInfo{
+			FieldIndexes: []*model.Index{
 				{
-					FiledID: fieldID,
+					FieldID: fieldID,
 					IndexID: indexID,
 				},
 			},
-			Fields: []*schemapb.FieldSchema{},
+			Fields: []*model.Field{},
 		}
 		core.checkFlushedSegments(ctx)
 
@@ -3072,18 +3072,18 @@ func TestCheckFlushedSegments(t *testing.T) {
 		// missing index info
 		core.MetaTable.collID2Meta[collID] = model.Collection{
 			CollectionID: collID,
-			Fields: []*schemapb.FieldSchema{
+			Fields: []*model.Field{
 				{
 					FieldID: fieldID,
 				},
 			},
-			FieldIndexes: []*etcdpb.FieldIndexInfo{
+			FieldIndexes: []*model.Index{
 				{
-					FiledID: fieldID,
+					FieldID: fieldID,
 					IndexID: indexID,
 				},
 			},
-			Partitions: []model.Partition{
+			Partitions: []*model.Partition{
 				{
 					PartitionID: partID,
 				},
@@ -3100,7 +3100,7 @@ func TestCheckFlushedSegments(t *testing.T) {
 		core.MetaTable.indexID2Meta[indexID] = etcdpb.IndexInfo{
 			IndexID: indexID,
 		}
-		core.CallBuildIndexService = func(_ context.Context, binlog []string, field *schemapb.FieldSchema, idx *etcdpb.IndexInfo, numRows int64) (int64, error) {
+		core.CallBuildIndexService = func(_ context.Context, binlog []string, field *model.Field, idx *etcdpb.IndexInfo, numRows int64) (int64, error) {
 			assert.Equal(t, fieldID, field.FieldID)
 			assert.Equal(t, indexID, idx.IndexID)
 			return -1, errors.New("build index build")
@@ -3109,7 +3109,7 @@ func TestCheckFlushedSegments(t *testing.T) {
 		core.checkFlushedSegments(ctx)
 
 		var indexBuildID int64 = 10001
-		core.CallBuildIndexService = func(_ context.Context, binlog []string, field *schemapb.FieldSchema, idx *etcdpb.IndexInfo, numRows int64) (int64, error) {
+		core.CallBuildIndexService = func(_ context.Context, binlog []string, field *model.Field, idx *etcdpb.IndexInfo, numRows int64) (int64, error) {
 			return indexBuildID, nil
 		}
 		core.checkFlushedSegments(core.ctx)

@@ -23,8 +23,6 @@ import (
 
 	"github.com/milvus-io/milvus/internal/mq/msgstream"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
-	"github.com/milvus-io/milvus/internal/proto/etcdpb"
-	"github.com/milvus-io/milvus/internal/proto/schemapb"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -63,7 +61,7 @@ func Test_EqualKeyPairArray(t *testing.T) {
 
 func Test_GetFieldSchemaByID(t *testing.T) {
 	coll := &model.Collection{
-		Fields: []*schemapb.FieldSchema{
+		Fields: []*model.Field{
 			{
 				FieldID: 1,
 			},
@@ -77,14 +75,14 @@ func Test_GetFieldSchemaByID(t *testing.T) {
 
 func Test_GetFieldSchemaByIndexID(t *testing.T) {
 	coll := &model.Collection{
-		Fields: []*schemapb.FieldSchema{
+		Fields: []*model.Field{
 			{
 				FieldID: 1,
 			},
 		},
-		FieldIndexes: []*etcdpb.FieldIndexInfo{
+		FieldIndexes: []*model.Index{
 			{
-				FiledID: 1,
+				FieldID: 1,
 				IndexID: 2,
 			},
 		},

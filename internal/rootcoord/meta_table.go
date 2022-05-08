@@ -24,11 +24,10 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/milvus-io/milvus/internal/metastore/model"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/milvus-io/milvus/internal/kv"
 	"github.com/milvus-io/milvus/internal/log"
+	"github.com/milvus-io/milvus/internal/metastore/model"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
 	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
@@ -166,39 +165,29 @@ func (mt *MetaTable) reloadFromKV() error {
 		mt.collName2ID[coll.Name] = coll.CollectionID
 	}
 
-	_, values, err = mt.txn.LoadWithPrefix(SegmentIndexMetaPrefix)
+	indexes, err := mt.catalog.ListIndexes(mt.ctx)
 	if err != nil {
 		return err
 	}
-	for _, value := range values {
-		if bytes.Equal([]byte(value), suffixSnapshotTombstone) {
-			// backward compatibility, IndexMeta used to be in SnapshotKV
-			continue
-		}
-		segmentIndexInfo := pb.SegmentIndexInfo{}
-		err = proto.Unmarshal([]byte(value), &segmentIndexInfo)
-		if err != nil {
-			return fmt.Errorf("rootcoord Unmarshal pb.SegmentIndexInfo err:%w", err)
-		}
-
+	for _, indexInfo := range indexes {
 		// update partID2SegID
-		segIDMap, ok := mt.partID2SegID[segmentIndexInfo.PartitionID]
+		segIDMap, ok := mt.partID2SegID[indexInfo.PartitionID]
 		if ok {
-			segIDMap[segmentIndexInfo.SegmentID] = true
+			segIDMap[indexInfo.SegmentID] = true
 		} else {
 			idMap := make(map[typeutil.UniqueID]bool)
-			idMap[segmentIndexInfo.SegmentID] = true
-			mt.partID2SegID[segmentIndexInfo.PartitionID] = idMap
+			idMap[indexInfo.SegmentID] = true
+			mt.partID2SegID[indexInfo.PartitionID] = idMap
 		}
 
 		// update segID2IndexMeta
-		idx, ok := mt.segID2IndexMeta[segmentIndexInfo.SegmentID]
+		idx, ok := mt.segID2IndexMeta[indexInfo.SegmentID]
 		if ok {
-			idx[segmentIndexInfo.IndexID] = segmentIndexInfo
+			idx[indexInfo.IndexID] = *model.ConvertToSegmentIndexPB(indexInfo)
 		} else {
 			meta := make(map[typeutil.UniqueID]pb.SegmentIndexInfo)
-			meta[segmentIndexInfo.IndexID] = segmentIndexInfo
-			mt.segID2IndexMeta[segmentIndexInfo.SegmentID] = meta
+			meta[indexInfo.IndexID] = *model.ConvertToSegmentIndexPB(indexInfo)
+			mt.segID2IndexMeta[indexInfo.SegmentID] = meta
 		}
 	}
 
@@ -467,7 +456,7 @@ func (mt *MetaTable) AddPartition(collID typeutil.UniqueID, partitionName string
 	}
 
 	coll.Partitions = append(coll.Partitions,
-		model.Partition{
+		&model.Partition{
 			PartitionID:               partitionID,
 			PartitionName:             partitionName,
 			PartitionCreatedTimestamp: ts,
@@ -571,7 +560,7 @@ func (mt *MetaTable) DeletePartition(collID typeutil.UniqueID, partitionName str
 	// check tag exists
 	exist := false
 
-	parts := make([]model.Partition, 0, len(col.Partitions))
+	parts := make([]*model.Partition, 0, len(col.Partitions))
 
 	var partID typeutil.UniqueID
 	for _, partition := range col.Partitions {
@@ -654,7 +643,7 @@ func (mt *MetaTable) AddIndex(segIdxInfo *pb.SegmentIndexInfo) error {
 	mt.segID2IndexMeta[segIdxInfo.SegmentID][segIdxInfo.IndexID] = *segIdxInfo
 	mt.partID2SegID[segIdxInfo.PartitionID][segIdxInfo.SegmentID] = true
 
-	index := &model.SegmentIndex{
+	index := &model.Index{
 		CollectionID: segIdxInfo.CollectionID,
 		PartitionID:  segIdxInfo.PartitionID,
 		SegmentID:    segIdxInfo.SegmentID,
@@ -686,10 +675,10 @@ func (mt *MetaTable) DropIndex(collName, fieldName, indexName string) (typeutil.
 	if err != nil {
 		return 0, false, err
 	}
-	fieldIdxInfo := make([]*pb.FieldIndexInfo, 0, len(col.FieldIndexes))
+	fieldIdxInfo := make([]*model.Index, 0, len(col.FieldIndexes))
 	var dropIdxID typeutil.UniqueID
 	for i, info := range col.FieldIndexes {
-		if info.FiledID != fieldSch.FieldID {
+		if info.FieldID != fieldSch.FieldID {
 			fieldIdxInfo = append(fieldIdxInfo, info)
 			continue
 		}
@@ -793,24 +782,24 @@ func (mt *MetaTable) GetSegmentIndexInfos(segID typeutil.UniqueID) (map[typeutil
 }
 
 // GetFieldSchema return field schema
-func (mt *MetaTable) GetFieldSchema(collName string, fieldName string) (schemapb.FieldSchema, error) {
+func (mt *MetaTable) GetFieldSchema(collName string, fieldName string) (model.Field, error) {
 	mt.ddLock.RLock()
 	defer mt.ddLock.RUnlock()
 
 	return mt.unlockGetFieldSchema(collName, fieldName)
 }
 
-func (mt *MetaTable) unlockGetFieldSchema(collName string, fieldName string) (schemapb.FieldSchema, error) {
+func (mt *MetaTable) unlockGetFieldSchema(collName string, fieldName string) (model.Field, error) {
 	collID, ok := mt.collName2ID[collName]
 	if !ok {
 		collID, ok = mt.collAlias2ID[collName]
 		if !ok {
-			return schemapb.FieldSchema{}, fmt.Errorf("collection %s not found", collName)
+			return model.Field{}, fmt.Errorf("collection %s not found", collName)
 		}
 	}
 	col, ok := mt.collID2Meta[collID]
 	if !ok {
-		return schemapb.FieldSchema{}, fmt.Errorf("collection %s not found", collName)
+		return model.Field{}, fmt.Errorf("collection %s not found", collName)
 	}
 
 	for _, field := range col.Fields {
@@ -818,17 +807,17 @@ func (mt *MetaTable) unlockGetFieldSchema(collName string, fieldName string) (sc
 			return *field, nil
 		}
 	}
-	return schemapb.FieldSchema{}, fmt.Errorf("collection %s doesn't have filed %s", collName, fieldName)
+	return model.Field{}, fmt.Errorf("collection %s doesn't have filed %s", collName, fieldName)
 }
 
 // IsSegmentIndexed check if segment has indexed
-func (mt *MetaTable) IsSegmentIndexed(segID typeutil.UniqueID, fieldSchema *schemapb.FieldSchema, indexParams []*commonpb.KeyValuePair) bool {
+func (mt *MetaTable) IsSegmentIndexed(segID typeutil.UniqueID, fieldSchema *model.Field, indexParams []*commonpb.KeyValuePair) bool {
 	mt.ddLock.RLock()
 	defer mt.ddLock.RUnlock()
 	return mt.unlockIsSegmentIndexed(segID, fieldSchema, indexParams)
 }
 
-func (mt *MetaTable) unlockIsSegmentIndexed(segID typeutil.UniqueID, fieldSchema *schemapb.FieldSchema, indexParams []*commonpb.KeyValuePair) bool {
+func (mt *MetaTable) unlockIsSegmentIndexed(segID typeutil.UniqueID, fieldSchema *model.Field, indexParams []*commonpb.KeyValuePair) bool {
 	segIdx, ok := mt.segID2IndexMeta[segID]
 	if !ok {
 		return false
@@ -851,7 +840,7 @@ func (mt *MetaTable) unlockIsSegmentIndexed(segID typeutil.UniqueID, fieldSchema
 }
 
 // GetNotIndexedSegments return segment ids which have no index
-func (mt *MetaTable) GetNotIndexedSegments(collName string, fieldName string, idxInfo *pb.IndexInfo, segIDs []typeutil.UniqueID) ([]typeutil.UniqueID, schemapb.FieldSchema, error) {
+func (mt *MetaTable) GetNotIndexedSegments(collName string, fieldName string, idxInfo *pb.IndexInfo, segIDs []typeutil.UniqueID) ([]typeutil.UniqueID, model.Field, error) {
 	mt.ddLock.Lock()
 	defer mt.ddLock.Unlock()
 
@@ -862,7 +851,7 @@ func (mt *MetaTable) GetNotIndexedSegments(collName string, fieldName string, id
 
 	//TODO:: check index params for sclar field
 	// set default index type for scalar index
-	if !typeutil.IsVectorType(fieldSchema.GetDataType()) {
+	if !typeutil.IsVectorType(fieldSchema.DataType) {
 		if fieldSchema.DataType == schemapb.DataType_VarChar {
 			idxInfo.IndexParams = []*commonpb.KeyValuePair{{Key: "index_type", Value: DefaultStringIndexType}}
 		} else {
@@ -871,18 +860,18 @@ func (mt *MetaTable) GetNotIndexedSegments(collName string, fieldName string, id
 	}
 
 	if idxInfo.IndexParams == nil {
-		return nil, schemapb.FieldSchema{}, fmt.Errorf("index param is nil")
+		return nil, model.Field{}, fmt.Errorf("index param is nil")
 	}
 	collID, ok := mt.collName2ID[collName]
 	if !ok {
 		collID, ok = mt.collAlias2ID[collName]
 		if !ok {
-			return nil, schemapb.FieldSchema{}, fmt.Errorf("collection %s not found", collName)
+			return nil, model.Field{}, fmt.Errorf("collection %s not found", collName)
 		}
 	}
 	col, ok := mt.collID2Meta[collID]
 	if !ok {
-		return nil, schemapb.FieldSchema{}, fmt.Errorf("collection %s not found", collName)
+		return nil, model.Field{}, fmt.Errorf("collection %s not found", collName)
 	}
 
 	dupIdx := false
@@ -890,8 +879,8 @@ func (mt *MetaTable) GetNotIndexedSegments(collName string, fieldName string, id
 		if info, ok := mt.indexID2Meta[f.IndexID]; ok {
 			if info.IndexName == idxInfo.IndexName {
 				// the index name must be different for different indexes
-				if !EqualKeyPairArray(info.IndexParams, idxInfo.IndexParams) || f.FiledID != fieldSchema.FieldID {
-					return nil, schemapb.FieldSchema{}, fmt.Errorf("index name(%s) has been exist in collectio(%s), field(%s)", info.IndexName, collName, fieldName)
+				if !EqualKeyPairArray(info.IndexParams, idxInfo.IndexParams) || f.FieldID != fieldSchema.FieldID {
+					return nil, model.Field{}, fmt.Errorf("index name(%s) has been exist in collectio(%s), field(%s)", info.IndexName, collName, fieldName)
 				}
 
 				// same index name, index params, and fieldId
@@ -902,8 +891,8 @@ func (mt *MetaTable) GetNotIndexedSegments(collName string, fieldName string, id
 
 	// if no same index exist, save new index info to etcd
 	if !dupIdx {
-		idx := &pb.FieldIndexInfo{
-			FiledID: fieldSchema.FieldID,
+		idx := &model.Index{
+			FieldID: fieldSchema.FieldID,
 			IndexID: idxInfo.IndexID,
 		}
 		col.FieldIndexes = append(col.FieldIndexes, idx)
@@ -912,7 +901,7 @@ func (mt *MetaTable) GetNotIndexedSegments(collName string, fieldName string, id
 		if err != nil {
 			log.Error("MetaTable GetNotIndexedSegments Marshal collMeta fail",
 				zap.String("key", k1), zap.Error(err))
-			return nil, schemapb.FieldSchema{}, fmt.Errorf("metaTable GetNotIndexedSegments Marshal collMeta fail key:%s, err:%w", k1, err)
+			return nil, model.Field{}, fmt.Errorf("metaTable GetNotIndexedSegments Marshal collMeta fail key:%s, err:%w", k1, err)
 		}
 
 		k2 := path.Join(IndexMetaPrefix, strconv.FormatInt(idx.IndexID, 10))
@@ -920,7 +909,7 @@ func (mt *MetaTable) GetNotIndexedSegments(collName string, fieldName string, id
 		if err != nil {
 			log.Error("MetaTable GetNotIndexedSegments Marshal idxInfo fail",
 				zap.String("key", k2), zap.Error(err))
-			return nil, schemapb.FieldSchema{}, fmt.Errorf("metaTable GetNotIndexedSegments Marshal idxInfo fail key:%s, err:%w", k2, err)
+			return nil, model.Field{}, fmt.Errorf("metaTable GetNotIndexedSegments Marshal idxInfo fail key:%s, err:%w", k2, err)
 		}
 		meta := map[string]string{k1: string(v1), k2: string(v2)}
 

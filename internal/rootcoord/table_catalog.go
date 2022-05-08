@@ -22,7 +22,7 @@ func (tc *TableCatalog) CreatePartition(ctx context.Context, coll *model.Collect
 	return nil
 }
 
-func (tc *TableCatalog) CreateIndex(ctx context.Context, index *model.SegmentIndex) error {
+func (tc *TableCatalog) CreateIndex(ctx context.Context, index *model.Index) error {
 	return nil
 }
 
