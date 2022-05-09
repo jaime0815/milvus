@@ -1,4 +1,4 @@
-package rootcoord
+package metastore
 
 import (
 	"context"

@@ -27,6 +27,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/milvus-io/milvus/internal/kv"
 	"github.com/milvus-io/milvus/internal/log"
+	"github.com/milvus-io/milvus/internal/metastore"
+	kvmetestore "github.com/milvus-io/milvus/internal/metastore/kv"
 	"github.com/milvus-io/milvus/internal/metastore/model"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
 	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
@@ -38,32 +40,14 @@ import (
 )
 
 const (
-	// ComponentPrefix prefix for rootcoord component
-	ComponentPrefix = "root-coord"
-
-	// ProxyMetaPrefix prefix for proxy meta
-	ProxyMetaPrefix = ComponentPrefix + "/proxy"
-
-	// CollectionMetaPrefix prefix for collection meta
-	CollectionMetaPrefix = ComponentPrefix + "/collection"
-
-	// SegmentIndexMetaPrefix prefix for segment index meta
-	SegmentIndexMetaPrefix = ComponentPrefix + "/segment-index"
-
-	// IndexMetaPrefix prefix for index meta
-	IndexMetaPrefix = ComponentPrefix + "/index"
-
-	// CollectionAliasMetaPrefix prefix for collection alias meta
-	CollectionAliasMetaPrefix = ComponentPrefix + "/collection-alias"
-
 	// TimestampPrefix prefix for timestamp
-	TimestampPrefix = ComponentPrefix + "/timestamp"
+	TimestampPrefix = kvmetestore.ComponentPrefix + "/timestamp"
 
 	// DDOperationPrefix prefix for DD operation
-	DDOperationPrefix = ComponentPrefix + "/dd-operation"
+	DDOperationPrefix = kvmetestore.ComponentPrefix + "/dd-operation"
 
 	// DDMsgSendPrefix prefix to indicate whether DD msg has been send
-	DDMsgSendPrefix = ComponentPrefix + "/dd-msg-send"
+	DDMsgSendPrefix = kvmetestore.ComponentPrefix + "/dd-msg-send"
 
 	// CreateCollectionDDType name of DD type for create collection
 	CreateCollectionDDType = "CreateCollection"
@@ -77,12 +61,6 @@ const (
 	// DropPartitionDDType name of DD type for drop partition
 	DropPartitionDDType = "DropPartition"
 
-	// UserSubPrefix subpath for credential user
-	UserSubPrefix = "/credential/users"
-
-	// CredentialPrefix prefix for credential user
-	CredentialPrefix = ComponentPrefix + UserSubPrefix
-
 	// DefaultIndexType name of default index type for scalar field
 	DefaultIndexType = "STL_SORT"
 
@@ -95,7 +73,7 @@ type MetaTable struct {
 	ctx      context.Context
 	txn      kv.TxnKV      // client of a reliable txnkv service, i.e. etcd client
 	snapshot kv.SnapShotKV // client of a reliable snapshotkv service, i.e. etcd client
-	catalog  Catalog
+	catalog  metastore.Catalog
 
 	proxyID2Meta    map[typeutil.UniqueID]pb.ProxyMeta                      // proxy id to proxy meta
 	collID2Meta     map[typeutil.UniqueID]model.Collection                  // collection id -> collection meta
@@ -117,7 +95,7 @@ func NewMetaTable(ctx context.Context, txn kv.TxnKV, snap kv.SnapShotKV) (*MetaT
 		ctx:       ctx,
 		txn:       txn,
 		snapshot:  snap,
-		catalog:   &KVCatalog{txn: txn, snapshot: snap},
+		catalog:   &kvmetestore.KVCatalog{Txn: txn, Snapshot: snap},
 		proxyLock: sync.RWMutex{},
 		ddLock:    sync.RWMutex{},
 		credLock:  sync.RWMutex{},
@@ -138,13 +116,13 @@ func (mt *MetaTable) reloadFromKV() error {
 	mt.segID2IndexMeta = make(map[typeutil.UniqueID]map[typeutil.UniqueID]model.Index)
 	mt.indexID2Meta = make(map[typeutil.UniqueID]model.Index)
 
-	_, values, err := mt.txn.LoadWithPrefix(ProxyMetaPrefix)
+	_, values, err := mt.txn.LoadWithPrefix(kvmetestore.ProxyMetaPrefix)
 	if err != nil {
 		return err
 	}
 
 	for _, value := range values {
-		if bytes.Equal([]byte(value), suffixSnapshotTombstone) {
+		if bytes.Equal([]byte(value), kvmetestore.SuffixSnapshotTombstone) {
 			// backward compatibility, IndexMeta used to be in SnapshotKV
 			continue
 		}
@@ -216,7 +194,7 @@ func (mt *MetaTable) AddProxy(po *pb.ProxyMeta) error {
 	mt.proxyLock.Lock()
 	defer mt.proxyLock.Unlock()
 
-	k := fmt.Sprintf("%s/%d", ProxyMetaPrefix, po.ID)
+	k := fmt.Sprintf("%s/%d", kvmetestore.ProxyMetaPrefix, po.ID)
 	v, err := proto.Marshal(po)
 	if err != nil {
 		log.Error("Failed to marshal ProxyMeta in AddProxy", zap.Error(err))
@@ -882,7 +860,7 @@ func (mt *MetaTable) GetNotIndexedSegments(collName string, fieldName string, id
 			IndexID: idxInfo.IndexID,
 		}
 		col.FieldIndexes = append(col.FieldIndexes, idx)
-		k1 := path.Join(CollectionMetaPrefix, strconv.FormatInt(col.CollectionID, 10))
+		k1 := path.Join(kvmetestore.CollectionMetaPrefix, strconv.FormatInt(col.CollectionID, 10))
 		v1, err := proto.Marshal(model.ConvertToCollectionPB(&col))
 		if err != nil {
 			log.Error("MetaTable GetNotIndexedSegments Marshal collMeta fail",
@@ -890,7 +868,7 @@ func (mt *MetaTable) GetNotIndexedSegments(collName string, fieldName string, id
 			return nil, model.Field{}, fmt.Errorf("metaTable GetNotIndexedSegments Marshal collMeta fail key:%s, err:%w", k1, err)
 		}
 
-		k2 := path.Join(IndexMetaPrefix, strconv.FormatInt(idx.IndexID, 10))
+		k2 := path.Join(kvmetestore.IndexMetaPrefix, strconv.FormatInt(idx.IndexID, 10))
 		v2, err := proto.Marshal(model.ConvertToIndexPB(idxInfo))
 		if err != nil {
 			log.Error("MetaTable GetNotIndexedSegments Marshal idxInfo fail",
