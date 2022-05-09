@@ -33,6 +33,7 @@ import (
 	etcdkv "github.com/milvus-io/milvus/internal/kv/etcd"
 	memkv "github.com/milvus-io/milvus/internal/kv/mem"
 	"github.com/milvus-io/milvus/internal/log"
+	kvmetestore "github.com/milvus-io/milvus/internal/metastore/kv"
 	"github.com/milvus-io/milvus/internal/metastore/model"
 	"github.com/milvus-io/milvus/internal/mq/msgstream"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
@@ -669,7 +670,7 @@ func TestRootCoordInitData(t *testing.T) {
 	err = core.MetaTable.DeleteCredential(util.UserRoot)
 	assert.NoError(t, err)
 
-	snapshotKV, err := newMetaSnapshot(etcdCli, Params.EtcdCfg.MetaRootPath, TimestampPrefix, 7)
+	snapshotKV, err := kvmetestore.NewMetaSnapshot(etcdCli, Params.EtcdCfg.MetaRootPath, TimestampPrefix, 7)
 	assert.NotNil(t, snapshotKV)
 	assert.NoError(t, err)
 	txnKV := etcdkv.NewEtcdKV(etcdCli, Params.EtcdCfg.MetaRootPath)
@@ -683,7 +684,7 @@ func TestRootCoordInitData(t *testing.T) {
 		remove: func(key string) error { return txnKV.Remove(key) },
 	}
 	//mt.txn = mockTxnKV
-	mt.catalog = &KVCatalog{txn: mockTxnKV, snapshot: snapshotKV}
+	mt.catalog = &kvmetestore.KVCatalog{Txn: mockTxnKV, Snapshot: snapshotKV}
 	core.MetaTable = mt
 	err = core.initData()
 	assert.Error(t, err)
@@ -2140,7 +2141,7 @@ func TestRootCoord_Base(t *testing.T) {
 		p2 := sessionutil.Session{
 			ServerID: 101,
 		}
-		ctx2, cancel2 := context.WithTimeout(ctx, RequestTimeout)
+		ctx2, cancel2 := context.WithTimeout(ctx, kvmetestore.RequestTimeout)
 		defer cancel2()
 		s1, err := json.Marshal(&p1)
 		assert.NoError(t, err)

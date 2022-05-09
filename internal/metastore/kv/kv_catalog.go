@@ -1,4 +1,4 @@
-package rootcoord
+package kv
 
 import (
 	"bytes"
@@ -20,8 +20,8 @@ import (
 )
 
 type KVCatalog struct {
-	txn      kv.TxnKV
-	snapshot kv.SnapShotKV
+	Txn      kv.TxnKV
+	Snapshot kv.SnapShotKV
 }
 
 func (kc *KVCatalog) CreateCollection(ctx context.Context, coll *model.Collection, ts typeutil.Timestamp) error {
@@ -39,7 +39,7 @@ func (kc *KVCatalog) CreateCollection(ctx context.Context, coll *model.Collectio
 		kvs[k] = v
 	}
 
-	err = kc.snapshot.MultiSave(kvs, ts)
+	err = kc.Snapshot.MultiSave(kvs, ts)
 	if err != nil {
 		log.Error("SnapShotKV MultiSave fail", zap.Error(err))
 		panic("SnapShotKV MultiSave fail")
@@ -51,7 +51,7 @@ func (kc *KVCatalog) CreateCollection(ctx context.Context, coll *model.Collectio
 func (kc *KVCatalog) CreatePartition(ctx context.Context, coll *model.Collection, partition *model.Partition, ts typeutil.Timestamp) error {
 	kc.CreateCollection(ctx, coll, ts)
 
-	err := kc.txn.MultiSave(partition.Extra)
+	err := kc.Txn.MultiSave(partition.Extra)
 	if err != nil {
 		// will not panic, missing create msg
 		log.Warn("TxnKV MultiSave fail", zap.Error(err))
@@ -69,7 +69,7 @@ func (kc *KVCatalog) CreateIndex(ctx context.Context, segIndex *model.Index) err
 		return fmt.Errorf("marshal segIdxInfo fail key:%s, err:%w", k, err)
 	}
 
-	err = kc.txn.Save(k, string(v))
+	err = kc.Txn.Save(k, string(v))
 	if err != nil {
 		log.Error("TxnKV Save fail", zap.Error(err))
 		panic("TxnKV Save fail")
@@ -86,7 +86,7 @@ func (kc *KVCatalog) CreateAlias(ctx context.Context, collection *model.Collecti
 		return fmt.Errorf("marshal CollectionInfo fail key:%s, err:%w", k, err)
 	}
 
-	err = kc.snapshot.Save(k, string(v), ts)
+	err = kc.Snapshot.Save(k, string(v), ts)
 	if err != nil {
 		log.Error("SnapShotKV Save fail", zap.Error(err))
 		panic("SnapShotKV Save fail")
@@ -102,7 +102,7 @@ func (kc *KVCatalog) CreateCredential(ctx context.Context, credential *model.Cre
 		log.Error("marshal credential info fail", zap.String("key", k), zap.Error(err))
 		return fmt.Errorf("marshal credential info fail key:%s, err:%w", k, err)
 	}
-	err = kc.txn.Save(k, string(v))
+	err = kc.Txn.Save(k, string(v))
 	if err != nil {
 		log.Error("TxnKV save fail", zap.Error(err))
 		return fmt.Errorf("TxnKV save fail key:%s, err:%w", credential.Username, err)
@@ -113,7 +113,7 @@ func (kc *KVCatalog) CreateCredential(ctx context.Context, credential *model.Cre
 
 func (kc *KVCatalog) GetCollectionByID(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*model.Collection, error) {
 	collKey := fmt.Sprintf("%s/%d", CollectionMetaPrefix, collectionID)
-	collVal, err := kc.snapshot.Load(collKey, ts)
+	collVal, err := kc.Snapshot.Load(collKey, ts)
 	if err != nil {
 		log.Error("SnapShotKV Load fail", zap.Error(err))
 		return nil, err
@@ -134,7 +134,7 @@ func (kc *KVCatalog) CollectionExists(ctx context.Context, collectionID typeutil
 
 func (kc *KVCatalog) GetCredential(ctx context.Context, username string) (*model.Credential, error) {
 	k := fmt.Sprintf("%s/%s", CredentialPrefix, username)
-	v, err := kc.txn.Load(k)
+	v, err := kc.Txn.Load(k)
 	if err != nil {
 		log.Warn("TxnKV load fail", zap.String("key", k), zap.Error(err))
 		return nil, err
@@ -162,13 +162,13 @@ func (kc *KVCatalog) DropCollection(ctx context.Context, collectionInfo *model.C
 		)
 	}
 
-	err := kc.snapshot.MultiSaveAndRemoveWithPrefix(map[string]string{}, delMetakeysSnap, ts)
+	err := kc.Snapshot.MultiSaveAndRemoveWithPrefix(map[string]string{}, delMetakeysSnap, ts)
 	if err != nil {
 		log.Error("SnapshotKV save and remove failed", zap.Error(err))
 		panic("save etcd failed")
 	}
 
-	// txn operation
+	// Txn operation
 	kvs := map[string]string{}
 	for k, v := range collectionInfo.Extra {
 		kvs[k] = v
@@ -179,7 +179,7 @@ func (kc *KVCatalog) DropCollection(ctx context.Context, collectionInfo *model.C
 		fmt.Sprintf("%s/%d", IndexMetaPrefix, collectionInfo.CollectionID),
 	}
 
-	err = kc.txn.MultiSaveAndRemoveWithPrefix(kvs, delMetaKeysTxn)
+	err = kc.Txn.MultiSaveAndRemoveWithPrefix(kvs, delMetaKeysTxn)
 	if err != nil {
 		log.Warn("TxnKV save and remove failed", zap.Error(err))
 	}
@@ -198,7 +198,7 @@ func (kc *KVCatalog) DropPartition(ctx context.Context, collectionInfo *model.Co
 		return fmt.Errorf("metaTable DeletePartition Marshal collectionMeta fail key:%s, err:%w", k, err)
 	}
 
-	err = kc.snapshot.Save(k, string(v), ts)
+	err = kc.Snapshot.Save(k, string(v), ts)
 	if err != nil {
 		log.Error("SnapShotKV MultiSaveAndRemoveWithPrefix fail", zap.Error(err))
 		panic("SnapShotKV MultiSaveAndRemoveWithPrefix fail")
@@ -210,15 +210,15 @@ func (kc *KVCatalog) DropPartition(ctx context.Context, collectionInfo *model.Co
 		delMetaKeys = append(delMetaKeys, k)
 	}
 
-	// txn operation
+	// Txn operation
 	metaTxn := map[string]string{}
 	for k, v := range collectionInfo.Extra {
 		metaTxn[k] = v
 	}
-	err = kc.txn.MultiSaveAndRemoveWithPrefix(metaTxn, delMetaKeys)
+	err = kc.Txn.MultiSaveAndRemoveWithPrefix(metaTxn, delMetaKeys)
 	if err != nil {
 		log.Warn("TxnKV MultiSaveAndRemoveWithPrefix fail", zap.Error(err))
-		// will not panic, failed txn shall be treated by garbage related logic
+		// will not panic, failed Txn shall be treated by garbage related logic
 	}
 
 	return nil
@@ -241,7 +241,7 @@ func (kc *KVCatalog) DropIndex(ctx context.Context, collectionInfo *model.Collec
 		fmt.Sprintf("%s/%d/%d", IndexMetaPrefix, collectionInfo.CollectionID, dropIdxID),
 	}
 
-	err = kc.txn.MultiSaveAndRemoveWithPrefix(saveMeta, delMeta)
+	err = kc.Txn.MultiSaveAndRemoveWithPrefix(saveMeta, delMeta)
 	if err != nil {
 		log.Error("TxnKV MultiSaveAndRemoveWithPrefix fail", zap.Error(err))
 		panic("TxnKV MultiSaveAndRemoveWithPrefix fail")
@@ -253,7 +253,7 @@ func (kc *KVCatalog) DropIndex(ctx context.Context, collectionInfo *model.Collec
 func (kc *KVCatalog) DropCredential(ctx context.Context, username string) error {
 	k := fmt.Sprintf("%s/%s", CredentialPrefix, username)
 
-	err := kc.txn.Remove(k)
+	err := kc.Txn.Remove(k)
 	if err != nil {
 		log.Error("MetaTable remove fail", zap.Error(err))
 		return fmt.Errorf("remove credential fail key:%s, err:%w", username, err)
@@ -267,7 +267,7 @@ func (kc *KVCatalog) DropAlias(ctx context.Context, collectionID typeutil.Unique
 	}
 
 	meta := make(map[string]string)
-	err := kc.snapshot.MultiSaveAndRemoveWithPrefix(meta, delMetakeys, ts)
+	err := kc.Snapshot.MultiSaveAndRemoveWithPrefix(meta, delMetakeys, ts)
 	if err != nil {
 		log.Error("SnapShotKV MultiSaveAndRemoveWithPrefix fail", zap.Error(err))
 		panic("SnapShotKV MultiSaveAndRemoveWithPrefix fail")
@@ -277,9 +277,9 @@ func (kc *KVCatalog) DropAlias(ctx context.Context, collectionID typeutil.Unique
 }
 
 func (kc *KVCatalog) GetCollectionByName(ctx context.Context, collectionName string, ts typeutil.Timestamp) (*model.Collection, error) {
-	_, vals, err := kc.snapshot.LoadWithPrefix(CollectionMetaPrefix, ts)
+	_, vals, err := kc.Snapshot.LoadWithPrefix(CollectionMetaPrefix, ts)
 	if err != nil {
-		log.Warn("failed to load table from meta snapshot", zap.Error(err))
+		log.Warn("failed to load table from meta Snapshot", zap.Error(err))
 		return nil, err
 	}
 	for _, val := range vals {
@@ -297,7 +297,7 @@ func (kc *KVCatalog) GetCollectionByName(ctx context.Context, collectionName str
 }
 
 func (kc *KVCatalog) ListCollections(ctx context.Context, ts typeutil.Timestamp) (map[string]*model.Collection, error) {
-	_, vals, err := kc.snapshot.LoadWithPrefix(CollectionMetaPrefix, ts)
+	_, vals, err := kc.Snapshot.LoadWithPrefix(CollectionMetaPrefix, ts)
 	if err != nil {
 		log.Error("load with prefix error", zap.Uint64("timestamp", ts), zap.Error(err))
 		return nil, nil
@@ -316,7 +316,7 @@ func (kc *KVCatalog) ListCollections(ctx context.Context, ts typeutil.Timestamp)
 }
 
 func (kc *KVCatalog) ListAliases(ctx context.Context) ([]*model.Collection, error) {
-	_, values, err := kc.snapshot.LoadWithPrefix(CollectionAliasMetaPrefix, 0)
+	_, values, err := kc.Snapshot.LoadWithPrefix(CollectionAliasMetaPrefix, 0)
 	if err != nil {
 		log.Error("load with prefix error", zap.Error(err))
 		return nil, err
@@ -335,14 +335,14 @@ func (kc *KVCatalog) ListAliases(ctx context.Context) ([]*model.Collection, erro
 }
 
 func (kc *KVCatalog) ListSegmentIndexes(ctx context.Context) ([]*model.Index, error) {
-	_, values, err := kc.txn.LoadWithPrefix(SegmentIndexMetaPrefix)
+	_, values, err := kc.Txn.LoadWithPrefix(SegmentIndexMetaPrefix)
 	if err != nil {
 		log.Error("load with prefix error", zap.Error(err))
 		return nil, err
 	}
 	var indexes []*model.Index
 	for _, value := range values {
-		if bytes.Equal([]byte(value), suffixSnapshotTombstone) {
+		if bytes.Equal([]byte(value), SuffixSnapshotTombstone) {
 			// backward compatibility, IndexMeta used to be in SnapshotKV
 			continue
 		}
@@ -358,14 +358,14 @@ func (kc *KVCatalog) ListSegmentIndexes(ctx context.Context) ([]*model.Index, er
 }
 
 func (kc *KVCatalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
-	_, values, err := kc.txn.LoadWithPrefix(IndexMetaPrefix)
+	_, values, err := kc.Txn.LoadWithPrefix(IndexMetaPrefix)
 	if err != nil {
 		log.Error("load with prefix error", zap.Error(err))
 		return nil, err
 	}
 	var indexes []*model.Index
 	for _, value := range values {
-		if bytes.Equal([]byte(value), suffixSnapshotTombstone) {
+		if bytes.Equal([]byte(value), SuffixSnapshotTombstone) {
 			// backward compatibility, IndexMeta used to be in SnapshotKV
 			continue
 		}
@@ -381,7 +381,7 @@ func (kc *KVCatalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
 }
 
 func (kc *KVCatalog) ListCredentials(ctx context.Context) ([]string, error) {
-	keys, _, err := kc.txn.LoadWithPrefix(CredentialPrefix)
+	keys, _, err := kc.Txn.LoadWithPrefix(CredentialPrefix)
 	if err != nil {
 		log.Error("MetaTable list all credential usernames fail", zap.Error(err))
 		return nil, err
