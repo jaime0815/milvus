@@ -17,7 +17,6 @@
 package rootcoord
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"path"
@@ -116,24 +115,6 @@ func (mt *MetaTable) reloadFromKV() error {
 	mt.segID2IndexMeta = make(map[typeutil.UniqueID]map[typeutil.UniqueID]model.Index)
 	mt.indexID2Meta = make(map[typeutil.UniqueID]model.Index)
 
-	_, values, err := mt.txn.LoadWithPrefix(kvmetestore.ProxyMetaPrefix)
-	if err != nil {
-		return err
-	}
-
-	for _, value := range values {
-		if bytes.Equal([]byte(value), kvmetestore.SuffixSnapshotTombstone) {
-			// backward compatibility, IndexMeta used to be in SnapshotKV
-			continue
-		}
-		proxyMeta := pb.ProxyMeta{}
-		err = proto.Unmarshal([]byte(value), &proxyMeta)
-		if err != nil {
-			return fmt.Errorf("rootcoord Unmarshal pb.ProxyMeta err:%w", err)
-		}
-		mt.proxyID2Meta[proxyMeta.ID] = proxyMeta
-	}
-
 	collMap, err := mt.catalog.ListCollections(mt.ctx, 0)
 	if err != nil {
 		return err
@@ -186,27 +167,6 @@ func (mt *MetaTable) reloadFromKV() error {
 	}
 
 	log.Debug("reload meta table from KV successfully")
-	return nil
-}
-
-// AddProxy add proxy
-func (mt *MetaTable) AddProxy(po *pb.ProxyMeta) error {
-	mt.proxyLock.Lock()
-	defer mt.proxyLock.Unlock()
-
-	k := fmt.Sprintf("%s/%d", kvmetestore.ProxyMetaPrefix, po.ID)
-	v, err := proto.Marshal(po)
-	if err != nil {
-		log.Error("Failed to marshal ProxyMeta in AddProxy", zap.Error(err))
-		return err
-	}
-
-	err = mt.txn.Save(k, string(v))
-	if err != nil {
-		log.Error("SnapShotKV Save fail", zap.Error(err))
-		panic("SnapShotKV Save fail")
-	}
-	mt.proxyID2Meta[po.ID] = *po
 	return nil
 }
 

@@ -120,23 +120,12 @@ func Test_MockKV(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.EqualError(t, err, "load prefix error")
 
-	// proxy
-	prefix[kvmetestore.ProxyMetaPrefix] = []string{"porxy-meta"}
-	_, err = NewMetaTable(context.TODO(), kt, k1)
-	assert.NotNil(t, err)
-
-	value, err := proto.Marshal(&pb.ProxyMeta{})
-	assert.Nil(t, err)
-	prefix[kvmetestore.ProxyMetaPrefix] = []string{string(value)}
-	_, err = NewMetaTable(context.TODO(), kt, k1)
-	assert.NotNil(t, err)
-
 	// collection
 	prefix[kvmetestore.CollectionMetaPrefix] = []string{"collection-meta"}
 	_, err = NewMetaTable(context.TODO(), kt, k1)
 	assert.NotNil(t, err)
 
-	value, err = proto.Marshal(&pb.CollectionInfo{Schema: &schemapb.CollectionSchema{}})
+	value, err := proto.Marshal(&pb.CollectionInfo{Schema: &schemapb.CollectionSchema{}})
 	assert.Nil(t, err)
 	prefix[kvmetestore.CollectionMetaPrefix] = []string{string(value)}
 	_, err = NewMetaTable(context.TODO(), kt, k1)
@@ -166,15 +155,9 @@ func Test_MockKV(t *testing.T) {
 	value, err = proto.Marshal(&pb.IndexInfo{})
 	assert.Nil(t, err)
 	prefix[kvmetestore.IndexMetaPrefix] = []string{string(value)}
-	m1, err := NewMetaTable(context.TODO(), kt, k1)
+	_, err = NewMetaTable(context.TODO(), kt, k1)
 	assert.NotNil(t, err)
 	assert.EqualError(t, err, "load prefix error")
-	prefix[kvmetestore.CollectionAliasMetaPrefix] = []string{"alias-meta"}
-
-	k1.save = func(key string, value string, ts typeutil.Timestamp) error {
-		return fmt.Errorf("save proxy error")
-	}
-	assert.Panics(t, func() { m1.AddProxy(&pb.ProxyMeta{}) })
 }
 
 func TestMetaTable(t *testing.T) {
@@ -493,19 +476,6 @@ func TestMetaTable(t *testing.T) {
 		_, idx, err = mt.GetIndexByName(collName, "idx201")
 		assert.Nil(t, err)
 		assert.Zero(t, len(idx))
-	})
-
-	wg.Add(1)
-	t.Run("reload meta", func(t *testing.T) {
-		defer wg.Done()
-		po := pb.ProxyMeta{
-			ID: 101,
-		}
-		err = mt.AddProxy(&po)
-		assert.Nil(t, err)
-
-		_, err = NewMetaTable(context.TODO(), txnKV, skv)
-		assert.Nil(t, err)
 	})
 
 	wg.Add(1)
@@ -1302,7 +1272,6 @@ func TestFixIssue10540(t *testing.T) {
 	//txnKV := etcdkv.NewEtcdKVWithClient(etcdCli, rootPath)
 	txnKV := memkv.NewMemoryKV()
 	// compose rc7 legace tombstone cases
-	txnKV.Save(path.Join(kvmetestore.ProxyMetaPrefix, "1"), string(kvmetestore.SuffixSnapshotTombstone))
 	txnKV.Save(path.Join(kvmetestore.SegmentIndexMetaPrefix, "2"), string(kvmetestore.SuffixSnapshotTombstone))
 	txnKV.Save(path.Join(kvmetestore.IndexMetaPrefix, "3"), string(kvmetestore.SuffixSnapshotTombstone))
 

@@ -4,9 +4,6 @@ const (
 	// ComponentPrefix prefix for rootcoord component
 	ComponentPrefix = "root-coord"
 
-	// ProxyMetaPrefix prefix for proxy meta
-	ProxyMetaPrefix = ComponentPrefix + "/proxy"
-
 	// CollectionMetaPrefix prefix for collection meta
 	CollectionMetaPrefix = ComponentPrefix + "/collection"
 
