@@ -31,6 +31,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/milvus-io/milvus/cmd/roles"
+	"github.com/milvus-io/milvus/cmd/tools"
 	"github.com/milvus-io/milvus/internal/log"
 	"github.com/milvus-io/milvus/internal/util/metricsinfo"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
@@ -196,6 +197,9 @@ func printUsage(w io.Writer, f *flag.Flag) {
 }
 
 func main() {
+	if tools.RunTool(os.Args) {
+		return
+	}
 	if len(os.Args) < 3 {
 		_, _ = fmt.Fprint(os.Stderr, "usage: milvus [command] [server type] [flags]\n")
 		return
