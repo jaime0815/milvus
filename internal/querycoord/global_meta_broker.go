@@ -193,7 +193,9 @@ func (broker *globalMetaBroker) getIndexBuildID(ctx context.Context, collectionI
 		zap.Int64("collectionID", collectionID),
 		zap.Int64("segmentID", segmentID),
 		zap.Bool("enableIndex", true),
+		zap.Any("response", response),
 		zap.Int64("buildID", response.BuildID))
+
 	return true, response.BuildID, nil
 }
 
@@ -345,6 +347,7 @@ func (broker *globalMetaBroker) describeSegments(ctx context.Context, collection
 
 	log.Info("describe segments successfully",
 		zap.Int64("collection", collectionID),
+		zap.Any("response", resp.GetSegmentInfos()),
 		zap.Int64s("segments", segmentIDs))
 
 	return resp, nil

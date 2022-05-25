@@ -365,7 +365,8 @@ func TestMetaTable(t *testing.T) {
 						SegmentID:   segID,
 						PartitionID: partID,
 					},
-					BuildID: buildID,
+					BuildID:     buildID,
+					EnableIndex: true,
 				},
 			},
 		}
@@ -375,6 +376,11 @@ func TestMetaTable(t *testing.T) {
 		// it's legal to add index twice
 		err = mt.AlterIndex(&index)
 		assert.Nil(t, err)
+
+		idxMeta, ok := mt.segID2IndexMeta[segID]
+		assert.True(t, ok)
+		segMeta, ok := idxMeta[indexID]
+		assert.True(t, segMeta.SegmentIndexes[segID].EnableIndex)
 	})
 
 	wg.Add(1)
@@ -396,7 +402,7 @@ func TestMetaTable(t *testing.T) {
 			IndexParams: params,
 		}
 
-		_, _, err := mt.GetNotIndexedSegments("collTest", "field110", idxInfo, nil)
+		err := mt.AddIndex("collTest", "field110", idxInfo, []typeutil.UniqueID{segID})
 		assert.NotNil(t, err)
 	})
 

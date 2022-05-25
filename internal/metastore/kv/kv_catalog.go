@@ -26,7 +26,10 @@ type Catalog struct {
 
 func (kc *Catalog) CreateCollection(ctx context.Context, coll *model.Collection, ts typeutil.Timestamp) error {
 	k1 := fmt.Sprintf("%s/%d", CollectionMetaPrefix, coll.CollectionID)
+	log.Info("---CreateCollection before -----------", zap.Any("col", coll))
 	collInfo := model.ConvertToCollectionPB(coll)
+	log.Info("---CreateCollection after -----------", zap.Any("col", collInfo))
+
 	v1, err := proto.Marshal(collInfo)
 	if err != nil {
 		log.Error("create collection marshal fail", zap.String("key", k1), zap.Error(err))

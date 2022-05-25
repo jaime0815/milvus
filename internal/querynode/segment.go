@@ -702,6 +702,7 @@ func (s *Segment) segmentLoadFieldData(fieldID int64, rowCount int64, data *sche
 		CStatus
 		LoadFieldData(CSegmentInterface c_segment, CLoadFieldDataInfo load_field_data_info);
 	*/
+
 	s.segPtrMu.RLock()
 	defer s.segPtrMu.RUnlock() // thread safe guaranteed by segCore, use RLock
 	if s.segmentPtr == nil {
@@ -716,6 +717,13 @@ func (s *Segment) segmentLoadFieldData(fieldID int64, rowCount int64, data *sche
 	if err != nil {
 		return err
 	}
+	log.Info("======segmentLoadFieldData=========",
+		zap.Any("fieldID", fieldID),
+		zap.Int64("segmentID", s.segmentID),
+		zap.Int64("collectionID", s.collectionID),
+		zap.Int64("segmentRowCount", s.getRowCount()),
+		zap.Int64("rowCount", fieldID),
+	)
 
 	loadInfo := C.CLoadFieldDataInfo{
 		field_id:  C.int64_t(fieldID),

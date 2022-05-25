@@ -77,6 +77,7 @@ func ConvertCollectionPBToModel(coll *pb.CollectionInfo, extra map[string]string
 		ShardsNum:            coll.ShardsNum,
 		ConsistencyLevel:     coll.ConsistencyLevel,
 		CreateTime:           coll.CreateTime,
+		StartPositions:       coll.StartPositions,
 		Extra:                extra,
 	}
 }
@@ -95,6 +96,7 @@ func CloneCollectionModel(coll Collection) *Collection {
 		ShardsNum:            coll.ShardsNum,
 		ConsistencyLevel:     coll.ConsistencyLevel,
 		CreateTime:           coll.CreateTime,
+		StartPositions:       coll.StartPositions,
 		Extra:                coll.Extra,
 	}
 }
@@ -140,6 +142,7 @@ func ConvertToCollectionPB(coll *Collection) *pb.CollectionInfo {
 		PartitionIDs:               partitionIDs,
 		PartitionNames:             partitionNames,
 		FieldIndexes:               fieldIndexes,
+		CreateTime:                 coll.CreateTime,
 		VirtualChannelNames:        coll.VirtualChannelNames,
 		PhysicalChannelNames:       coll.PhysicalChannelNames,
 		ShardsNum:                  coll.ShardsNum,
@@ -150,19 +153,37 @@ func ConvertToCollectionPB(coll *Collection) *pb.CollectionInfo {
 }
 
 func MergeIndexModel(a *Index, b *Index) *Index {
-	if a.IndexName == "" {
+	if b.SegmentIndexes != nil {
+		if a.SegmentIndexes == nil {
+			a.SegmentIndexes = b.SegmentIndexes
+		} else {
+			for segID, segmentIndex := range b.SegmentIndexes {
+				a.SegmentIndexes[segID] = segmentIndex
+			}
+		}
+	}
+
+	if a.CollectionID == 0 && b.CollectionID != 0 {
+		a.CollectionID = b.CollectionID
+	}
+
+	if a.FieldID == 0 && b.FieldID != 0 {
+		a.FieldID = b.FieldID
+	}
+
+	if a.IndexID == 0 && b.IndexID != 0 {
+		a.IndexID = b.IndexID
+	}
+
+	if a.IndexName == "" && b.IndexName != "" {
 		a.IndexName = b.IndexName
 	}
 
-	if a.IndexParams == nil {
+	if a.IndexParams == nil && b.IndexParams != nil {
 		a.IndexParams = b.IndexParams
 	}
 
-	if a.SegmentIndexes == nil {
-		a.SegmentIndexes = b.SegmentIndexes
-	}
-
-	if a.Extra == nil {
+	if a.Extra == nil && b.Extra != nil {
 		a.Extra = b.Extra
 	}
 

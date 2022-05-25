@@ -230,12 +230,15 @@ func (t *CreateCollectionReqTask) Execute(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("send dd create collection req failed, error = %w", err)
 		}
+
+		log.Info("---CreateCollection before  PhysicalChannelNames -----------", zap.Any("PhysicalChannelNames", collInfo.PhysicalChannelNames))
 		for _, pchan := range collInfo.PhysicalChannelNames {
 			collInfo.StartPositions = append(collInfo.StartPositions, &commonpb.KeyDataPair{
 				Key:  pchan,
 				Data: ids[pchan],
 			})
 		}
+		log.Info("---CreateCollection before  StartPositions -----------", zap.Any("StartPositions", collInfo.StartPositions))
 
 		// update meta table after send dd operation
 		if err = t.core.MetaTable.AddCollection(&collInfo, ts, ddOpStr); err != nil {
@@ -995,8 +998,6 @@ func (t *CreateIndexReqTask) Execute(ctx context.Context) error {
 		return err
 	}
 
-	collectionID := collMeta.CollectionID
-
 	for _, segID := range segIDs {
 		segmentIndex := model.SegmentIndex{
 			Segment: model.Segment{
@@ -1015,7 +1016,7 @@ func (t *CreateIndexReqTask) Execute(ctx context.Context) error {
 		}
 
 		index := &model.Index{
-			CollectionID:   collectionID,
+			CollectionID:   collMeta.CollectionID,
 			FieldID:        field.FieldID,
 			IndexID:        idxInfo.IndexID,
 			SegmentIndexes: map[int64]model.SegmentIndex{segID: segmentIndex},

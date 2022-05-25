@@ -436,6 +436,7 @@ func (w *watchDeltaChannelsTask) Execute(ctx context.Context) error {
 	VPDeltaChannels := make(map[string]string) // map[vChannel]pChannel
 	vChannel2SeekPosition := make(map[string]*internalpb.MsgPosition)
 	for _, info := range w.req.Infos {
+		log.Info("Starting WatchDeltaChannels Infos...", zap.Any("collectionID", collectionID), zap.Any("v", info.ChannelName), zap.Any("info", info))
 		v := info.ChannelName
 		p := funcutil.ToPhysicalChannel(info.ChannelName)
 		vDeltaChannels = append(vDeltaChannels, v)
@@ -485,6 +486,7 @@ func (w *watchDeltaChannelsTask) Execute(ctx context.Context) error {
 			log.Error("msgStream as consumer failed for deltaChannels", zap.Int64("collectionID", collectionID), zap.Strings("vDeltaChannels", vDeltaChannels))
 			break
 		}
+		log.Info("Starting WatchDeltaChannels FromDmlCPLoadDelete...", zap.Any("channel", channel), zap.Any("collectionID", collectionID))
 		err = w.node.loader.FromDmlCPLoadDelete(w.ctx, collectionID, vChannel2SeekPosition[channel])
 		if err != nil {
 			log.Error("watchDeltaChannelsTask from dml cp load delete failed", zap.Int64("collectionID", collectionID), zap.Strings("vDeltaChannels", vDeltaChannels))

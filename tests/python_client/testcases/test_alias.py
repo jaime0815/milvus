@@ -212,6 +212,10 @@ class TestAliasOperation(TestcaseBase):
         alias_name = cf.gen_unique_str(prefix)
         self.utility_wrap.create_alias(collection_w.name, alias_name)
         # collection_w.create_alias(alias_name)
+
+        print("--------------default_schema")
+        print(alias_name)
+        print(default_schema)
         collection_alias, _ = self.collection_wrap.init_collection(name=alias_name,
                                                                    check_task=CheckTasks.check_collection_property,
                                                                    check_items={exp_name: alias_name,

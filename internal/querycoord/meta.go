@@ -989,8 +989,10 @@ func (m *MetaReplica) getDeltaChannelsByCollectionID(collectionID UniqueID) ([]*
 func (m *MetaReplica) setDeltaChannel(collectionID UniqueID, infos []*datapb.VchannelInfo) error {
 	m.deltaChannelMu.Lock()
 	defer m.deltaChannelMu.Unlock()
-	_, ok := m.deltaChannelInfos[collectionID]
+	log.Info("========setDeltaChannel============ ", zap.Any("collectionID", collectionID), zap.Any("VchannelInfo", infos))
+	pre, ok := m.deltaChannelInfos[collectionID]
 	if ok {
+		log.Info("========setDeltaChannel===exists========= ", zap.Any("collectionID", collectionID), zap.Any("pre VchannelInfo", pre))
 		log.Debug("delta channel already exist", zap.Any("collectionID", collectionID))
 		return nil
 	}
@@ -1000,7 +1002,7 @@ func (m *MetaReplica) setDeltaChannel(collectionID UniqueID, infos []*datapb.Vch
 		log.Error("save delta channel info error", zap.Int64("collectionID", collectionID), zap.Error(err))
 		return err
 	}
-	log.Info("save delta channel infos to meta", zap.Any("collectionID", collectionID))
+	log.Info("save delta channel infos to meta", zap.Any("collectionID", collectionID), zap.Any("info", infos))
 	m.deltaChannelInfos[collectionID] = infos
 	return nil
 }

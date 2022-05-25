@@ -352,6 +352,15 @@ func (it *IndexBuildTask) loadFieldData(ctx context.Context) (storage.FieldID, s
 		if err != nil {
 			return nil, err
 		}
+
+		log.Debug("----IndexNode deserialize data success",
+			zap.Int64("index buildID", it.req.IndexBuildID),
+			zap.Int64("collectionID", it.collectionID),
+			zap.Int64("segmentID", it.segmentID),
+			zap.Int64("partitionID", it.partitionID),
+			zap.String("Key", path),
+		)
+
 		return &Blob{
 			Key:   path,
 			Value: value,
@@ -416,6 +425,14 @@ func (it *IndexBuildTask) loadFieldData(ctx context.Context) (storage.FieldID, s
 	for fID, value := range insertData.Data {
 		data = value
 		fieldID = fID
+		log.Debug("----IndexNode deserialize data success",
+			zap.Int64("index buildID", it.req.IndexBuildID),
+			zap.Int64("collectionID", it.collectionID),
+			zap.Int64("segmentID", it.segmentID),
+			zap.Int64("fieldID", fieldID),
+			zap.Int("data rows count", data.RowNum()),
+		)
+
 		break
 	}
 	return fieldID, data, nil
@@ -522,6 +539,13 @@ func (it *IndexBuildTask) saveIndex(ctx context.Context, blobs []*storage.Blob) 
 					zap.Any("indexMeta.Version", indexMeta.Version))
 				return errors.New("This task has been reassigned, check indexMeta.version and request ")
 			}
+
+			log.Info("============= save index:",
+				zap.Int64("collectionID", it.collectionID),
+				zap.Int64("partitionID", it.partitionID),
+				zap.Int64("segmentID", it.segmentID),
+				zap.Any("save key", savePath),
+			)
 			return it.cm.Write(savePath, blob.Value)
 		}
 		err := retry.Do(ctx, saveIndexFileFn, retry.Attempts(5))

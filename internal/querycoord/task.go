@@ -425,6 +425,9 @@ func (lct *loadCollectionTask) execute(ctx context.Context) error {
 			segmentLoadInfos = append(segmentLoadInfos, segmentLoadInfo)
 		}
 
+		log.Info("loadCollectionTask========before==============", zap.Int("vchannel len", len(vChannelInfos)), zap.Any("vchannel", vChannelInfos))
+		log.Info("loadCollectionTask==========before============", zap.Int("deltaChannelInfos len", len(deltaChannelInfos)), zap.Any("vchannel", deltaChannelInfos))
+
 		for _, info := range vChannelInfos {
 			deltaChannelInfo, err := generateWatchDeltaChannelInfo(info)
 			if err != nil {
@@ -435,6 +438,9 @@ func (lct *loadCollectionTask) execute(ctx context.Context) error {
 			deltaChannelInfos = append(deltaChannelInfos, deltaChannelInfo)
 			dmChannelInfos = append(dmChannelInfos, info)
 		}
+		log.Info("loadCollectionTask==========after============", zap.Int("vchannel len", len(vChannelInfos)), zap.Any("vchannel", vChannelInfos))
+		log.Info("loadCollectionTask===========after===========", zap.Int("deltaChannelInfos len", len(deltaChannelInfos)), zap.Any("vchannel", deltaChannelInfos))
+
 	}
 
 	mergedDeltaChannels := mergeWatchDeltaChannelInfo(deltaChannelInfos)
@@ -2518,6 +2524,8 @@ func mergeWatchDeltaChannelInfo(infos []*datapb.VchannelInfo) []*datapb.Vchannel
 			minPositions[info.ChannelName] = index
 		}
 		minTimeStampIndex := minPositions[info.ChannelName]
+		log.Info("mergeWatchDeltaChannelInfo",
+			zap.Any("info==", info), zap.Any("info seekp", info.SeekPosition), zap.Any("seek ts", info.SeekPosition.GetTimestamp()), zap.Any(" min seek ts", infos[minTimeStampIndex].SeekPosition.GetTimestamp()), zap.Any("min info==", infos[minTimeStampIndex]))
 		if info.SeekPosition.GetTimestamp() < infos[minTimeStampIndex].SeekPosition.GetTimestamp() {
 			minPositions[info.ChannelName] = index
 		}
@@ -2527,9 +2535,8 @@ func mergeWatchDeltaChannelInfo(infos []*datapb.VchannelInfo) []*datapb.Vchannel
 		result = append(result, infos[index])
 	}
 	log.Info("merge delta channels finished",
-		zap.Any("origin info length", len(infos)),
-		zap.Any("merged info length", len(result)),
-	)
+		zap.Any("origin info length", len(infos)), zap.Any("origin info", infos),
+		zap.Any("merged info length", len(result)), zap.Any("result info", result))
 	return result
 }
 

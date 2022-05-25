@@ -141,6 +141,10 @@ class ResponseChecker:
         """
         exp_func_name = "init_collection"
         exp_func_name_2 = "construct_from_dataframe"
+
+        print("##############res")
+        print(res)
+
         if func_name != exp_func_name and func_name != exp_func_name_2:
             log.warning("The function name is {} rather than {}".format(func_name, exp_func_name))
         if isinstance(res, Collection):
@@ -155,6 +159,16 @@ class ResponseChecker:
         if check_items.get("name", None):
             assert collection.name == check_items.get("name")
         if check_items.get("schema", None):
+            print("=======check_items.get======")
+            print(check_items.get("schema"))
+            print(collection.schema == check_items.get("schema"))
+            print("=======check_items.get======")
+
+            print("=======check_items======")
+            print(collection.schema)
+            print(collection.schema == check_items.get("schema"))
+            print("=======check_items======")
+
             assert collection.schema == check_items.get("schema")
         if check_items.get("num_entities", None):
             if check_items.get("num_entities") == 0:
