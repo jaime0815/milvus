@@ -162,6 +162,9 @@ case "${unameOut}" in
           *)   echo "==System:${unameOut}";
 esac
 
+export LDFLAGS="-fsanitize=address -pthread -lasan"
+#export CXXFLAGS="-fno-stack-protector -fno-omit-frame-pointer -fno-var-tracking -fsanitize=address -lasan"
+#export CFLAGS="-fno-stack-protector -fno-omit-frame-pointer -fno-var-tracking -fsanitize=address -lasan"
 
 CMAKE_CMD="cmake \
 -DBUILD_UNIT_TEST=${BUILD_UNITTEST} \

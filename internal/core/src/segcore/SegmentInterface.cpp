@@ -11,6 +11,7 @@
 
 #include "SegmentInterface.h"
 #include "query/generated/ExecPlanNodeVisitor.h"
+#include <iostream>
 
 namespace milvus::segcore {
 
@@ -98,6 +99,15 @@ std::unique_ptr<SearchResult>
 SegmentInternalInterface::Search(const query::Plan* plan,
                                  const query::PlaceholderGroup& placeholder_group,
                                  Timestamp timestamp) const {
+
+    int* p = (int*) malloc(8*sizeof(int));
+    *p = 100;
+    // deallocated the space allocated to p
+    free(p);
+    // core dump/segmentation fault
+    //  as now this statement is illegal
+    *p = 110;
+
     std::shared_lock lck(mutex_);
     check_search(plan);
     query::ExecPlanNodeVisitor visitor(*this, timestamp, placeholder_group);
@@ -217,6 +227,14 @@ SegmentInternalInterface::BulkSubScript(FieldOffset field_offset, const SegOffse
 
 std::unique_ptr<proto::segcore::RetrieveResults>
 SegmentInternalInterface::Retrieve(const query::RetrievePlan* plan, Timestamp timestamp) const {
+    int* p = (int*) malloc(8*sizeof(int));
+    *p = 100;
+    // deallocated the space allocated to p
+    free(p);
+    // core dump/segmentation fault
+    //  as now this statement is illegal
+    *p = 110;
+
     std::shared_lock lck(mutex_);
     auto results = std::make_unique<proto::segcore::RetrieveResults>();
     query::ExecPlanNodeVisitor visitor(*this, timestamp);
