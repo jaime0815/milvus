@@ -49,12 +49,14 @@ services:
   rootcoord:
     container_name: milvus-rootcoord
     image: milvusdb/milvus:v2.0.1
+    privileged: true
     command: ["milvus", "run", "rootcoord"]
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
       PULSAR_ADDRESS: pulsar://pulsar:6650
       ROOT_COORD_ADDRESS: rootcoord:53100
+      LD_PRELOAD: /usr/lib/gcc/x86_64-linux-gnu/9/libasan.so
     depends_on:
       - "etcd"
       - "pulsar"
@@ -64,10 +66,12 @@ services:
     container_name: milvus-proxy
     image: milvusdb/milvus:v2.0.1
     command: ["milvus", "run", "proxy"]
+    privileged: true
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
       PULSAR_ADDRESS: pulsar://pulsar:6650
+      LD_PRELOAD: /usr/lib/gcc/x86_64-linux-gnu/9/libasan.so
     ports:
       - "19530:19530"
 
@@ -75,11 +79,13 @@ services:
     container_name: milvus-querycoord
     image: milvusdb/milvus:v2.0.1
     command: ["milvus", "run", "querycoord"]
+    privileged: true
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
       PULSAR_ADDRESS: pulsar://pulsar:6650
       QUERY_COORD_ADDRESS: querycoord:19531
+      LD_PRELOAD: /usr/lib/gcc/x86_64-linux-gnu/9/libasan.so
     depends_on:
       - "etcd"
       - "pulsar"
@@ -89,10 +95,12 @@ services:
     container_name: milvus-querynode
     image: milvusdb/milvus:v2.0.1
     command: ["milvus", "run", "querynode"]
+    privileged: true
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
       PULSAR_ADDRESS: pulsar://pulsar:6650
+      LD_PRELOAD: /usr/lib/gcc/x86_64-linux-gnu/9/libasan.so
     depends_on:
       - "querycoord"
 
@@ -100,11 +108,13 @@ services:
     container_name: milvus-indexcoord
     image: milvusdb/milvus:v2.0.1
     command: ["milvus", "run", "indexcoord"]
+    privileged: true
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
       PULSAR_ADDRESS: pulsar://pulsar:6650
       INDEX_COORD_ADDRESS: indexcoord:31000
+      LD_PRELOAD: /usr/lib/gcc/x86_64-linux-gnu/9/libasan.so
     depends_on:
       - "etcd"
       - "pulsar"
@@ -114,11 +124,13 @@ services:
     container_name: milvus-indexnode
     image: milvusdb/milvus:v2.0.1
     command: ["milvus", "run", "indexnode"]
+    privileged: true
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
       PULSAR_ADDRESS: pulsar://pulsar:6650
       INDEX_COORD_ADDRESS: indexcoord:31000
+      LD_PRELOAD: /usr/lib/gcc/x86_64-linux-gnu/9/libasan.so
     depends_on:
       - "indexcoord"
 
@@ -126,11 +138,13 @@ services:
     container_name: milvus-datacoord
     image: milvusdb/milvus:v2.0.1
     command: ["milvus", "run", "datacoord"]
+    privileged: true
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
       PULSAR_ADDRESS: pulsar://pulsar:6650
       DATA_COORD_ADDRESS: datacoord:13333
+      LD_PRELOAD: /usr/lib/gcc/x86_64-linux-gnu/9/libasan.so
     depends_on:
       - "etcd"
       - "pulsar"
@@ -140,10 +154,12 @@ services:
     container_name: milvus-datanode
     image: milvusdb/milvus:v2.0.1
     command: ["milvus", "run", "datanode"]
+    privileged: true
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
       PULSAR_ADDRESS: pulsar://pulsar:6650
+      LD_PRELOAD: /usr/lib/gcc/x86_64-linux-gnu/9/libasan.so
     depends_on:
       - "datacoord"
 

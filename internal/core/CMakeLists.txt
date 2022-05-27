@@ -122,6 +122,24 @@ append_flags( CMAKE_CXX_FLAGS
               "-fopenmp"
               "-Werror"
               )
+
+append_flags( CMAKE_CXX_FLAGS
+        FLAGS
+        "-fno-stack-protector"
+        "-fno-omit-frame-pointer"
+        "-fno-var-tracking"
+        "-fsanitize=address"
+        "-lasan"
+        )
+
+append_flags( CMAKE_C_FLAGS
+        FLAGS
+        "-fno-stack-protector"
+        "-fno-omit-frame-pointer"
+        "-fno-var-tracking"
+        "-fsanitize=address"
+        "-lasan"
+        )
 endif ()
 
 if ( APPLE )
