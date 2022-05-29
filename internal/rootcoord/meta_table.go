@@ -271,6 +271,7 @@ func (mt *MetaTable) GetCollectionByID(collectionID typeutil.UniqueID, ts typeut
 	if ts == 0 {
 		col, ok := mt.collID2Meta[collectionID]
 		log.Info("=========GetCollectionByID====", zap.Any("ts", ts), zap.Any("coll", col))
+		log.Info("=========GetCollectionByID====", zap.Any("ts", ts), zap.Any("partID2Segment", mt.partID2SegID))
 		if !ok {
 			return nil, fmt.Errorf("can't find collection id : %d", collectionID)
 		}
@@ -284,6 +285,8 @@ func (mt *MetaTable) GetCollectionByID(collectionID typeutil.UniqueID, ts typeut
 func (mt *MetaTable) GetCollectionByName(collectionName string, ts typeutil.Timestamp) (*model.Collection, error) {
 	mt.ddLock.RLock()
 	defer mt.ddLock.RUnlock()
+
+	log.Info("=========GetCollectionByName====", zap.Any("ts", ts), zap.Any("partID2Segment", mt.partID2SegID))
 
 	if ts == 0 {
 		vid, ok := mt.collName2ID[collectionName]
