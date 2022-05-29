@@ -423,6 +423,7 @@ func (lct *loadCollectionTask) execute(ctx context.Context) error {
 			segmentLoadInfo := lct.broker.generateSegmentLoadInfo(ctx, collectionID, partitionID, segmentBinlog, true, lct.Schema)
 			collectionSize += uint64(segmentLoadInfo.SegmentSize)
 			segmentLoadInfos = append(segmentLoadInfos, segmentLoadInfo)
+			log.Info("loadCollectionTask=====segmentLoadInfo=================", zap.Any("segmentLoadInfo", segmentLoadInfo))
 		}
 
 		for _, info := range vChannelInfos {
@@ -494,9 +495,9 @@ func (lct *loadCollectionTask) execute(ctx context.Context) error {
 			}
 
 			loadSegmentReqs = append(loadSegmentReqs, loadSegmentReq)
-		}
 
-		log.Info("loadCollectionTask======================", zap.Any("loadSegmentReqs", loadSegmentReqs))
+			log.Info("loadCollectionTask=====loadSegmentReq=================", zap.Any("loadSegmentReqs", loadSegmentReq))
+		}
 
 		//TODO:: queryNode receive dm message according partitionID cache
 		//TODO:: queryNode add partitionID to cache if receive create partition message from dmChannel
