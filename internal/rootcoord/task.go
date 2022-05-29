@@ -156,26 +156,6 @@ func (t *CreateCollectionReqTask) Execute(ctx context.Context) error {
 		}
 	}
 
-	collInfo := model.Collection{
-		CollectionID:         collID,
-		Name:                 schema.Name,
-		Description:          schema.Description,
-		AutoID:               schema.AutoID,
-		Fields:               model.BatchConvertFieldPBToModel(schema.Fields),
-		VirtualChannelNames:  vchanNames,
-		PhysicalChannelNames: chanNames,
-		ShardsNum:            t.Req.ShardsNum,
-		ConsistencyLevel:     t.Req.ConsistencyLevel,
-		FieldIndexes:         make([]*model.Index, 0),
-		Partitions: []*model.Partition{
-			{
-				PartitionID:               partID,
-				PartitionName:             Params.CommonCfg.DefaultPartitionName,
-				PartitionCreatedTimestamp: 0,
-			},
-		},
-	}
-
 	// schema is modified (add RowIDField and TimestampField),
 	// so need Marshal again
 	schemaBytes, err := proto.Marshal(&schema)
@@ -208,6 +188,27 @@ func (t *CreateCollectionReqTask) Execute(ctx context.Context) error {
 	ddOpStr, err := EncodeDdOperation(&ddCollReq, CreateCollectionDDType)
 	if err != nil {
 		return fmt.Errorf("encodeDdOperation fail, error = %w", err)
+	}
+
+	collInfo := model.Collection{
+		CollectionID:         collID,
+		Name:                 schema.Name,
+		Description:          schema.Description,
+		AutoID:               schema.AutoID,
+		Fields:               model.BatchConvertFieldPBToModel(schema.Fields),
+		VirtualChannelNames:  vchanNames,
+		PhysicalChannelNames: chanNames,
+		ShardsNum:            t.Req.ShardsNum,
+		ConsistencyLevel:     t.Req.ConsistencyLevel,
+		FieldIndexes:         make([]*model.Index, 0, 16),
+		CreateTime:           ts,
+		Partitions: []*model.Partition{
+			{
+				PartitionID:               partID,
+				PartitionName:             Params.CommonCfg.DefaultPartitionName,
+				PartitionCreatedTimestamp: ts,
+			},
+		},
 	}
 
 	// use lambda function here to guarantee all resources to be released

@@ -172,11 +172,6 @@ func (mt *MetaTable) AddCollection(coll *model.Collection, ts typeutil.Timestamp
 		return fmt.Errorf("collection %s exist", coll.Name)
 	}
 
-	coll.CreateTime = ts
-	for _, partition := range coll.Partitions {
-		partition.PartitionCreatedTimestamp = ts
-	}
-
 	mt.collID2Meta[coll.CollectionID] = *coll
 	mt.collName2ID[coll.Name] = coll.CollectionID
 

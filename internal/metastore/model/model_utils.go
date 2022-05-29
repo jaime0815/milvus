@@ -84,6 +84,7 @@ func ConvertCollectionPBToModel(coll *pb.CollectionInfo, extra map[string]string
 
 func CloneCollectionModel(coll Collection) *Collection {
 	return &Collection{
+		TenantID:             coll.TenantID,
 		CollectionID:         coll.CollectionID,
 		Name:                 coll.Name,
 		Description:          coll.Description,
@@ -97,6 +98,7 @@ func CloneCollectionModel(coll Collection) *Collection {
 		ConsistencyLevel:     coll.ConsistencyLevel,
 		CreateTime:           coll.CreateTime,
 		StartPositions:       coll.StartPositions,
+		Aliases:              coll.Aliases,
 		Extra:                coll.Extra,
 	}
 }

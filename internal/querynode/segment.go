@@ -720,9 +720,11 @@ func (s *Segment) segmentLoadFieldData(fieldID int64, rowCount int64, data *sche
 	log.Info("======segmentLoadFieldData=========",
 		zap.Any("fieldID", fieldID),
 		zap.Int64("segmentID", s.segmentID),
+		zap.Int64("partitionID", s.partitionID),
 		zap.Int64("collectionID", s.collectionID),
 		zap.Int64("segmentRowCount", s.getRowCount()),
-		zap.Int64("rowCount", fieldID),
+		zap.Int64("lastRowCount", s.lastRowCount),
+		zap.Int64("RowCount", rowCount),
 	)
 
 	loadInfo := C.CLoadFieldDataInfo{

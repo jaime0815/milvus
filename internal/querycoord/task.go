@@ -425,9 +425,6 @@ func (lct *loadCollectionTask) execute(ctx context.Context) error {
 			segmentLoadInfos = append(segmentLoadInfos, segmentLoadInfo)
 		}
 
-		log.Info("loadCollectionTask========before==============", zap.Int("vchannel len", len(vChannelInfos)), zap.Any("vchannel", vChannelInfos))
-		log.Info("loadCollectionTask==========before============", zap.Int("deltaChannelInfos len", len(deltaChannelInfos)), zap.Any("vchannel", deltaChannelInfos))
-
 		for _, info := range vChannelInfos {
 			deltaChannelInfo, err := generateWatchDeltaChannelInfo(info)
 			if err != nil {
@@ -438,9 +435,6 @@ func (lct *loadCollectionTask) execute(ctx context.Context) error {
 			deltaChannelInfos = append(deltaChannelInfos, deltaChannelInfo)
 			dmChannelInfos = append(dmChannelInfos, info)
 		}
-		log.Info("loadCollectionTask==========after============", zap.Int("vchannel len", len(vChannelInfos)), zap.Any("vchannel", vChannelInfos))
-		log.Info("loadCollectionTask===========after===========", zap.Int("deltaChannelInfos len", len(deltaChannelInfos)), zap.Any("vchannel", deltaChannelInfos))
-
 	}
 
 	mergedDeltaChannels := mergeWatchDeltaChannelInfo(deltaChannelInfos)
@@ -501,6 +495,8 @@ func (lct *loadCollectionTask) execute(ctx context.Context) error {
 
 			loadSegmentReqs = append(loadSegmentReqs, loadSegmentReq)
 		}
+
+		log.Info("loadCollectionTask======================", zap.Any("loadSegmentReqs", loadSegmentReqs))
 
 		//TODO:: queryNode receive dm message according partitionID cache
 		//TODO:: queryNode add partitionID to cache if receive create partition message from dmChannel
