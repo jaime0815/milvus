@@ -921,6 +921,7 @@ func (mt *MetaTable) AddIndex(colName string, fieldName string, idxInfo *model.I
 	mt.catalog.CreateIndex(mt.ctx, &collMeta, idxInfo)
 
 	log.Info("====AddIndex========== ", zap.Any("index", *idxInfo))
+	log.Info("====AddIndex========== ", zap.Any("collection", collMeta))
 	mt.collID2Meta[collMeta.CollectionID] = collMeta
 	mt.indexID2Meta[idx.IndexID] = *idxInfo
 	return nil

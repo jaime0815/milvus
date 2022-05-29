@@ -166,7 +166,7 @@ func (t *CreateCollectionReqTask) Execute(ctx context.Context) error {
 		PhysicalChannelNames: chanNames,
 		ShardsNum:            t.Req.ShardsNum,
 		ConsistencyLevel:     t.Req.ConsistencyLevel,
-		FieldIndexes:         make([]*model.Index, 0, 16),
+		FieldIndexes:         make([]*model.Index, 0),
 		Partitions: []*model.Partition{
 			{
 				PartitionID:               partID,
@@ -230,15 +230,13 @@ func (t *CreateCollectionReqTask) Execute(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("send dd create collection req failed, error = %w", err)
 		}
-
-		log.Info("---CreateCollection before  PhysicalChannelNames -----------", zap.Any("PhysicalChannelNames", collInfo.PhysicalChannelNames))
 		for _, pchan := range collInfo.PhysicalChannelNames {
 			collInfo.StartPositions = append(collInfo.StartPositions, &commonpb.KeyDataPair{
 				Key:  pchan,
 				Data: ids[pchan],
 			})
 		}
-		log.Info("---CreateCollection before  StartPositions -----------", zap.Any("StartPositions", collInfo.StartPositions))
+		log.Info("---CreateCollection before  StartPositions -----------", zap.Any("collInfo", collInfo))
 
 		// update meta table after send dd operation
 		if err = t.core.MetaTable.AddCollection(&collInfo, ts, ddOpStr); err != nil {
