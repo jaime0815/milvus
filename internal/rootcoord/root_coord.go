@@ -2113,6 +2113,8 @@ func (c *Core) SegmentFlushCompleted(ctx context.Context, in *datapb.SegmentFlus
 		return failStatus(commonpb.ErrorCode_UnexpectedError, "GetCollectionByID failed: "+err.Error()), nil
 	}
 
+	log.Info("=======SegmentFlushCompleted========", zap.Any("coll", coll))
+
 	if len(coll.FieldIndexes) == 0 {
 		log.Debug("no index params on collection", zap.String("role", typeutil.RootCoordRole),
 			zap.String("collection_name", coll.Name), zap.Int64("msgID", in.Base.MsgID))
