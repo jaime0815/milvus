@@ -518,7 +518,7 @@ func (loader *segmentLoader) loadSealedSegments(segment *Segment, insertData *st
 		return err
 	}
 	numRows := insertRecord.NumRows
-	log.Info("======loadSealedSegments= start========",
+	log.Info("======loadSealedSegments start========",
 		zap.Int64("segmentID", segment.segmentID),
 		zap.Int64("partitionID", segment.partitionID),
 		zap.Int64("collectionID", segment.collectionID),
@@ -556,11 +556,16 @@ func (loader *segmentLoader) loadSealedSegments(segment *Segment, insertData *st
 
 		if err != nil {
 			// TODO: return or continue?
+			log.Info("======loadSealedSegments end========",
+				zap.Int64("segmentID", segment.segmentID),
+				zap.Int64("partitionID", segment.partitionID),
+				zap.Int64("collectionID", segment.collectionID),
+			)
 			return err
 		}
 	}
 
-	log.Info("======loadSealedSegments= end========",
+	log.Info("======loadSealedSegments end========",
 		zap.Int64("segmentID", segment.segmentID),
 		zap.Int64("partitionID", segment.partitionID),
 		zap.Int64("collectionID", segment.collectionID),
