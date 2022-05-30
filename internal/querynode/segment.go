@@ -87,6 +87,11 @@ type Segment struct {
 	lastMemSize  int64
 	lastRowCount int64
 
+	lastFiledID      UniqueID
+	lastSegmentID    UniqueID
+	lastPartitionID  UniqueID
+	lastCollectionID UniqueID
+
 	rmMutex          sync.RWMutex // guards recentlyModified
 	recentlyModified bool
 
