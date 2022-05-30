@@ -526,6 +526,18 @@ func (loader *segmentLoader) loadSealedSegments(segment *Segment, insertData *st
 		}
 
 		err := segment.segmentLoadFieldData(fieldID, numRows, fieldData)
+
+		log.Info("======loadSealedSegments=========",
+			zap.Any("fieldID", fieldID),
+			zap.Int64("segmentID", segment.segmentID),
+			zap.Int64("partitionID", segment.partitionID),
+			zap.Int64("collectionID", segment.collectionID),
+			zap.Int64("segmentRowCount", segment.getRowCount()),
+			zap.Int64("lastRowCount", segment.lastRowCount),
+			zap.Int64("RowCount", numRows),
+			zap.Any("err", err),
+		)
+
 		if err != nil {
 			// TODO: return or continue?
 			return err
