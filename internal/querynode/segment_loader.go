@@ -518,6 +518,11 @@ func (loader *segmentLoader) loadSealedSegments(segment *Segment, insertData *st
 		return err
 	}
 	numRows := insertRecord.NumRows
+	log.Info("======loadSealedSegments= start========",
+		zap.Int64("segmentID", segment.segmentID),
+		zap.Int64("partitionID", segment.partitionID),
+		zap.Int64("collectionID", segment.collectionID),
+	)
 	for _, fieldData := range insertRecord.FieldsData {
 		fieldID := fieldData.FieldId
 		if fieldID == common.TimeStampField {
@@ -554,6 +559,12 @@ func (loader *segmentLoader) loadSealedSegments(segment *Segment, insertData *st
 			return err
 		}
 	}
+
+	log.Info("======loadSealedSegments= end========",
+		zap.Int64("segmentID", segment.segmentID),
+		zap.Int64("partitionID", segment.partitionID),
+		zap.Int64("collectionID", segment.collectionID),
+	)
 	return nil
 }
 
