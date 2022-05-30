@@ -154,6 +154,7 @@ func (s *Server) AssignSegmentID(ctx context.Context, req *datapb.AssignSegmentI
 				},
 			}
 			assigns = append(assigns, result)
+			log.Info("================SegIDAssignments", zap.Any("SegIDAssignments", result))
 		}
 	}
 	return &datapb.AssignSegmentIDResponse{

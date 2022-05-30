@@ -201,8 +201,12 @@ SegmentSealedImpl::LoadFieldData(const LoadFieldDataInfo& info) {
         set_bit(field_data_ready_bitset_, field_id, true);
     }
 
-    printf("======field_id: %lld, row_count_opt_: %lld, info: %lld\n", (long long)info.field_id ,(long long)row_count_opt_.value(), (long long)info.row_count);
-
+    if (row_count_opt_.has_value()) {
+        printf("======field_id: %lld, row_count_opt_: %lld, info: %lld\n", (long long) info.field_id,
+               (long long) row_count_opt_.value(), (long long) info.row_count);
+    } else {
+        printf("======field_id: %lld, info: %lld\n", (long long) info.field_id, (long long) info.row_count);
+    }
     update_row_count(info.row_count);
 }
 

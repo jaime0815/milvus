@@ -300,6 +300,7 @@ func (mt *MetaTable) GetCollectionByName(collectionName string, ts typeutil.Time
 			return nil, fmt.Errorf("can't find collection %s with id %d", collectionName, vid)
 		}
 
+		log.Info("=========GetCollectionByName====", zap.Any("ts", ts), zap.Any("col", col))
 		return model.CloneCollectionModel(col), nil
 	}
 
