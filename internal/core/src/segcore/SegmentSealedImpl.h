@@ -119,7 +119,9 @@ class SegmentSealedImpl : public SegmentSealed {
     void
     update_row_count(int64_t row_count) {
         if (row_count_opt_.has_value()) {
-            AssertInfo(row_count_opt_.value() == row_count, "load data has different row count from other columns");
+            AssertInfo(row_count_opt_.value() == row_count, "load data has different row count from other columns,"
+                                                            " row_count_opt_.value:" +  std::to_string(row_count_opt_.value()) +
+                                                            " row_count:" +  std::to_string(row_count));
         } else {
             row_count_opt_ = row_count;
         }
