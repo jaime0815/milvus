@@ -1,8 +1,19 @@
-# Maintainers of GitHub Actions and Mergify
-reviewers:
-  - LoveEachDay
-  - scsven
-  - XuanYang-cn
-
-approvers:
-  - pr-inspection
+"base:<msg_type:LoadSegments msgID:433564488985225028 timestamp:433564491357618177 sourceID:48 > infos:<segmentID:433564490387685380 partitionID:433564490361733121 collectionID:433564490348625921 binlog_paths:<fieldID:102 binlogs:<entries_num:1249 log_path:\"files/insert_log/433564490348625921/433564490361733121/433564490387685380/102/433564491069259785\" log_
+size:4549 > > binlog_paths:<fieldID:103 binlogs:<entries_num:1249 log_path:\"files/insert_log/433564490348625921/433564490361733121/433564490387685380/103/433564491069259786\" log_size:38094 > > binlog_paths:<binlogs:<entries_num:1249 log_path:\"
+files/insert_log/433564490348625921/433564490361733121/433564490387685380/0/433564491069259787\" log_size:3593 > > binlog_paths:<fieldID:1 binlogs:<entries_num:1249 log_path:\"files/insert_log/433564490348625921/433564490361733121/433564490387685
+380/1/433564491069259788\" log_size:543 > > binlog_paths:<fieldID:100 binlogs:<entries_num:1249 log_path:\"files/insert_log/433564490348625921/433564490361733121/433564490387685380/100/433564491069259783\" log_size:3590 > > binlog_paths:<fieldID:
+101 binlogs:<entries_num:1249 log_path:\"files/insert_log/433564490348625921/433564490361733121/433564490387685380/101/433564491069259784\" log_size:5254 > > num_of_rows:1249 statslogs:<fieldID:100 binlogs:<log_path:\"files/stats_log/433564490348
+625921/433564490361733121/433564490387685380/100/433564491069259783\" log_size:183908 > > deltalogs:<> index_infos:<fieldID:103 enable_index:true index_name:\"_default_idx\" indexID:433564491200593921 buildID:433564491201642498 index_params:<key:
+\"index_type\" value:\"IVF_FLAT\" > index_params:<key:\"params\" value:\"{\\\"nlist\\\": 128}\" > index_params:<key:\"metric_type\" value:\"L2\" > index_file_paths:\"files/index_files/433564491201642498/1/433564490348625922/433564490387685378/ind
+exParams\" index_file_paths:\"files/index_files/433564491201642498/1/433564490348625922/433564490387685378/IVF\" index_file_paths:\"files/index_files/433564491201642498/1/433564490348625922/433564490387685378/RAW_DATA\" index_size:42634 > index_i
+nfos:<fieldID:103 enable_index:true index_name:\"_default_idx\" indexID:433564491200593921 buildID:433564491201642500 index_params:<key:\"index_type\" value:\"IVF_FLAT\" > index_params:<key:\"params\" value:\"{\\\"nlist\\\": 128}\" > index_params
+:<key:\"metric_type\" value:\"L2\" > index_file_paths:\"files/index_files/433564491201642500/1/433564490348625922/433564490387685377/indexParams\" index_file_paths:\"files/index_files/433564491201642500/1/433564490348625922/433564490387685377/IVF
+\" index_file_paths:\"files/index_files/433564491201642500/1/433564490348625922/433564490387685377/RAW_DATA\" index_size:42963 > index_infos:<fieldID:103 enable_index:true index_name:\"_default_idx\" indexID:433564491200593921 buildID:43356449121
+5011842 index_params:<key:\"index_type\" value:\"IVF_FLAT\" > index_params:<key:\"params\" value:\"{\\\"nlist\\\": 128}\" > index_params:<key:\"metric_type\" value:\"L2\" > index_file_paths:\"files/index_files/433564491215011842/1/433564490361733
+121/433564490387685380/indexParams\" index_file_paths:\"files/index_files/433564491215011842/1/433564490361733121/433564490387685380/IVF\" index_file_paths:\"files/index_files/433564491215011842/1/433564490361733121/433564490387685380/RAW_DATA\"
+index_size:42797 > index_infos:<fieldID:103 enable_index:true index_name:\"_default_idx\" indexID:433564491200593921 buildID:433564491215011844 index_params:<key:\"index_type\" value:\"IVF_FLAT\" > index_params:<key:\"params\" value:\"{\\\"nlist\
+\\": 128}\" > index_params:<key:\"metric_type\" value:\"L2\" > index_file_paths:\"files/index_files/433564491215011844/1/433564490361733121/433564490387685379/indexParams\" index_file_paths:\"files/index_files/433564491215011844/1/433564490361733
+121/433564490387685379/IVF\" index_file_paths:\"files/index_files/433564491215011844/1/433564490361733121/433564490387685379/RAW_DATA\" index_size:42915 > segment_size:244352 insert_channel:\"by-dev-rootcoord-dml_2_433564490348625921v0\" > schema
+:<name:\"search_collection_vJUK7vW4\" fields:<fieldID:100 name:\"int64\" is_primary_key:true data_type:Int64 > fields:<fieldID:101 name:\"float\" data_type:Float > fields:<fieldID:102 name:\"varchar\" data_type:VarChar type_params:<key:\"max_leng
+th_per_row\" value:\"65535\" > > fields:<fieldID:103 name:\"float_vector\" data_type:FloatVector type_params:<key:\"dim\" value:\"8\" > > > collectionID:433564490348625921 load_meta:<load_type:LoadCollection collectionID:433564490348625921 partit
+ionIDs:433564490348625922 partitionIDs:433564490361733121 > replicaID:433564488116994061 "]

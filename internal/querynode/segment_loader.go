@@ -177,6 +177,13 @@ func (loader *segmentLoader) loadSegment(req *querypb.LoadSegmentsRequest, segme
 		segment := newSegments[segmentID]
 
 		tr := timerecord.NewTimeRecorder("loadDurationPerSegment")
+		log.Info("============ loadSegmentInternal ",
+			zap.Int64("segmentID", segment.segmentID),
+			zap.Int64("partitionID", segment.partitionID),
+			zap.Int64("collectionID", segment.collectionID),
+			zap.Any("loadInfo", loadInfo),
+			zap.Any("newSegments", newSegments),
+		)
 		err := loader.loadSegmentInternal(segment, loadInfo)
 		if err != nil {
 			log.Error("load segment failed when load data into memory",
