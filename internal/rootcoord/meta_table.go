@@ -897,13 +897,6 @@ func (mt *MetaTable) AddIndex(colName string, fieldName string, idxInfo *model.I
 		return nil
 	}
 
-	idx := &model.Index{
-		FieldID:   fieldSchema.FieldID,
-		IndexID:   idxInfo.IndexID,
-		IndexName: idxInfo.IndexName,
-		Extra:     idxInfo.Extra,
-	}
-
 	segmentIndexes := make(map[int64]model.SegmentIndex, len(segIDs))
 	for _, segID := range segIDs {
 		segmentIndex := model.SegmentIndex{
@@ -916,14 +909,16 @@ func (mt *MetaTable) AddIndex(colName string, fieldName string, idxInfo *model.I
 	}
 
 	idxInfo.SegmentIndexes = segmentIndexes
-	collMeta.FieldIndexes = append(collMeta.FieldIndexes, idx)
+	idxInfo.FieldID = fieldSchema.FieldID
+	idxInfo.CollectionID = collMeta.CollectionID
+	collMeta.FieldIndexes = append(collMeta.FieldIndexes, idxInfo)
 
 	mt.catalog.CreateIndex(mt.ctx, &collMeta, idxInfo)
 
 	log.Info("====AddIndex========== ", zap.Any("index", *idxInfo))
 	log.Info("====AddIndex========== ", zap.Any("collection", collMeta))
 	mt.collID2Meta[collMeta.CollectionID] = collMeta
-	mt.indexID2Meta[idx.IndexID] = *idxInfo
+	mt.indexID2Meta[idxInfo.IndexID] = *idxInfo
 	return nil
 }
 
