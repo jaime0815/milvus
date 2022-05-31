@@ -911,7 +911,12 @@ func (mt *MetaTable) AddIndex(colName string, fieldName string, idxInfo *model.I
 	idxInfo.SegmentIndexes = segmentIndexes
 	idxInfo.FieldID = fieldSchema.FieldID
 	idxInfo.CollectionID = collMeta.CollectionID
-	collMeta.FieldIndexes = append(collMeta.FieldIndexes, idxInfo)
+
+	idx := &model.Index{
+		FieldID: fieldSchema.FieldID,
+		IndexID: idxInfo.IndexID,
+	}
+	collMeta.FieldIndexes = append(collMeta.FieldIndexes, idx)
 
 	mt.catalog.CreateIndex(mt.ctx, &collMeta, idxInfo)
 
