@@ -155,14 +155,20 @@ func ConvertToCollectionPB(coll *Collection) *pb.CollectionInfo {
 }
 
 func MergeIndexModel(a *Index, b *Index) *Index {
-	if b.SegmentIndexes != nil {
-		if a.SegmentIndexes == nil {
-			a.SegmentIndexes = b.SegmentIndexes
-		} else {
-			for segID, segmentIndex := range b.SegmentIndexes {
-				a.SegmentIndexes[segID] = segmentIndex
+	if a.SegmentIndexes != nil && b.SegmentIndexes != nil {
+		for k, _ := range a.SegmentIndexes {
+			segIdx, ok := b.SegmentIndexes[k]
+			if ok {
+				a.SegmentIndexes[k] = segIdx
 			}
 		}
+		//if a.SegmentIndexes == nil {
+		//	a.SegmentIndexes = b.SegmentIndexes
+		//} else {
+		//	for segID, segmentIndex := range b.SegmentIndexes {
+		//		a.SegmentIndexes[segID] = segmentIndex
+		//	}
+		//}
 	}
 
 	if a.CollectionID == 0 && b.CollectionID != 0 {
