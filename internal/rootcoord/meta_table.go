@@ -549,7 +549,7 @@ func (mt *MetaTable) updateSegmentIndexMetaCache(index *model.Index) {
 		log.Info("======updateSegmentIndexMetaCache2 ", zap.Any("segIdxInfo.SegmentID", segIdxInfo.SegmentID), zap.Any("segID2IndexMeta", mt.segID2IndexMeta))
 	}
 
-	mt.indexID2Meta[index.IndexID] = *index
+	//mt.indexID2Meta[index.IndexID] = *index
 	log.Info("======updateSegmentIndexMetaCache3 ", zap.Any("indexID2Meta", index.IndexID), zap.Any("indexID2Meta", index))
 }
 
@@ -569,9 +569,9 @@ func (mt *MetaTable) AlterIndex(newIndex *model.Index) error {
 		return fmt.Errorf("index id = %d not found", newIndex.IndexID)
 	}
 
-	updatedIndex := model.MergeIndexModel(&oldIndex, newIndex)
+	//updatedIndex := model.MergeIndexModel(&oldIndex, newIndex)
 	log.Info("====AlterIndex===2======= ", zap.Any("ok", ok), zap.Any("index", updatedIndex))
-	mt.updateSegmentIndexMetaCache(updatedIndex)
+	mt.updateSegmentIndexMetaCache(newIndex)
 	return mt.catalog.AlterIndex(mt.ctx, &oldIndex, newIndex)
 }
 
