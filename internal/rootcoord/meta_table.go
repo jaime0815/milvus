@@ -564,13 +564,13 @@ func (mt *MetaTable) AlterIndex(newIndex *model.Index) error {
 	}
 
 	oldIndex, ok := mt.indexID2Meta[newIndex.IndexID]
-	log.Info("====AlterIndex===1======= ", zap.Any("ok", ok), zap.Any("index", newIndex))
+	log.Info("====AlterIndex===1======= ", zap.Any("ok", ok), zap.Any("index", oldIndex))
 	if !ok {
 		return fmt.Errorf("index id = %d not found", newIndex.IndexID)
 	}
 
 	//updatedIndex := model.MergeIndexModel(&oldIndex, newIndex)
-	log.Info("====AlterIndex===2======= ", zap.Any("ok", ok), zap.Any("index", updatedIndex))
+	log.Info("====AlterIndex===2======= ", zap.Any("ok", ok), zap.Any("newIndex", newIndex))
 	mt.updateSegmentIndexMetaCache(newIndex)
 	return mt.catalog.AlterIndex(mt.ctx, &oldIndex, newIndex)
 }
