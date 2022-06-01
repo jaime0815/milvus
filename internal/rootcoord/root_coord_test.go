@@ -3002,7 +3002,7 @@ func TestCheckInit(t *testing.T) {
 	err = c.checkInit()
 	assert.Error(t, err)
 
-	c.CallBuildIndexService = func(ctx context.Context, segID UniqueID, binlog []string,field *model.Field, idxInfo *model.Index, numRows int64) (typeutil.UniqueID, error) {
+	c.CallBuildIndexService = func(ctx context.Context, segID UniqueID, binlog []string, field *model.Field, idxInfo *model.Index, numRows int64) (typeutil.UniqueID, error) {
 		return 0, nil
 	}
 	err = c.checkInit()

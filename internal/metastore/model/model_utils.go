@@ -154,6 +154,44 @@ func ConvertToCollectionPB(coll *Collection) *pb.CollectionInfo {
 	}
 }
 
+func MergeIndexModel(a *Index, b *Index) *Index {
+	if b.SegmentIndexes != nil {
+		if a.SegmentIndexes == nil {
+			a.SegmentIndexes = b.SegmentIndexes
+		} else {
+			for segID, segmentIndex := range b.SegmentIndexes {
+				a.SegmentIndexes[segID] = segmentIndex
+			}
+		}
+	}
+
+	if a.CollectionID == 0 && b.CollectionID != 0 {
+		a.CollectionID = b.CollectionID
+	}
+
+	if a.FieldID == 0 && b.FieldID != 0 {
+		a.FieldID = b.FieldID
+	}
+
+	if a.IndexID == 0 && b.IndexID != 0 {
+		a.IndexID = b.IndexID
+	}
+
+	if a.IndexName == "" && b.IndexName != "" {
+		a.IndexName = b.IndexName
+	}
+
+	if a.IndexParams == nil && b.IndexParams != nil {
+		a.IndexParams = b.IndexParams
+	}
+
+	if a.Extra == nil && b.Extra != nil {
+		a.Extra = b.Extra
+	}
+
+	return a
+}
+
 func ConvertSegmentIndexPBToModel(segIndex *pb.SegmentIndexInfo) *Index {
 	return &Index{
 		CollectionID: segIndex.CollectionID,
