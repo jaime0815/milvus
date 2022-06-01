@@ -36,16 +36,39 @@ type dataSyncService struct {
 	dmlChannel2FlowGraph   map[Channel]*queryNodeFlowGraph
 	deltaChannel2FlowGraph map[Channel]*queryNodeFlowGraph
 
-	streamingReplica  ReplicaInterface
-	historicalReplica ReplicaInterface
-	tSafeReplica      TSafeReplicaInterface
-	msFactory         msgstream.Factory
+	metaReplica  ReplicaInterface
+	tSafeReplica TSafeReplicaInterface
+	msFactory    msgstream.Factory
+}
+
+// checkReplica used to check replica info before init flow graph, it's a private method of dataSyncService
+func (dsService *dataSyncService) checkReplica(collectionID UniqueID) error {
+	// check if the collection exists
+	coll, err := dsService.metaReplica.getCollectionByID(collectionID)
+	if err != nil {
+		return err
+	}
+	for _, channel := range coll.getVChannels() {
+		if _, err := dsService.tSafeReplica.getTSafe(channel); err != nil {
+			return fmt.Errorf("getTSafe failed, err = %s", err)
+		}
+	}
+	for _, channel := range coll.getVDeltaChannels() {
+		if _, err := dsService.tSafeReplica.getTSafe(channel); err != nil {
+			return fmt.Errorf("getTSafe failed, err = %s", err)
+		}
+	}
+	return nil
 }
 
 // addFlowGraphsForDMLChannels add flowGraphs to dmlChannel2FlowGraph
 func (dsService *dataSyncService) addFlowGraphsForDMLChannels(collectionID UniqueID, dmlChannels []string) (map[string]*queryNodeFlowGraph, error) {
 	dsService.mu.Lock()
 	defer dsService.mu.Unlock()
+
+	if err := dsService.checkReplica(collectionID); err != nil {
+		return nil, err
+	}
 
 	results := make(map[string]*queryNodeFlowGraph)
 	for _, channel := range dmlChannels {
@@ -58,7 +81,7 @@ func (dsService *dataSyncService) addFlowGraphsForDMLChannels(collectionID Uniqu
 		}
 		newFlowGraph, err := newQueryNodeFlowGraph(dsService.ctx,
 			collectionID,
-			dsService.streamingReplica,
+			dsService.metaReplica,
 			dsService.tSafeReplica,
 			channel,
 			dsService.msFactory)
@@ -87,6 +110,10 @@ func (dsService *dataSyncService) addFlowGraphsForDeltaChannels(collectionID Uni
 	dsService.mu.Lock()
 	defer dsService.mu.Unlock()
 
+	if err := dsService.checkReplica(collectionID); err != nil {
+		return nil, err
+	}
+
 	results := make(map[string]*queryNodeFlowGraph)
 	for _, channel := range deltaChannels {
 		if _, ok := dsService.deltaChannel2FlowGraph[channel]; ok {
@@ -98,7 +125,7 @@ func (dsService *dataSyncService) addFlowGraphsForDeltaChannels(collectionID Uni
 		}
 		newFlowGraph, err := newQueryNodeDeltaFlowGraph(dsService.ctx,
 			collectionID,
-			dsService.historicalReplica,
+			dsService.metaReplica,
 			dsService.tSafeReplica,
 			channel,
 			dsService.msFactory)
@@ -212,8 +239,7 @@ func (dsService *dataSyncService) removeFlowGraphsByDeltaChannels(channels []Cha
 
 // newDataSyncService returns a new dataSyncService
 func newDataSyncService(ctx context.Context,
-	streamingReplica ReplicaInterface,
-	historicalReplica ReplicaInterface,
+	metaReplica ReplicaInterface,
 	tSafeReplica TSafeReplicaInterface,
 	factory msgstream.Factory) *dataSyncService {
 
@@ -221,8 +247,7 @@ func newDataSyncService(ctx context.Context,
 		ctx:                    ctx,
 		dmlChannel2FlowGraph:   make(map[Channel]*queryNodeFlowGraph),
 		deltaChannel2FlowGraph: make(map[Channel]*queryNodeFlowGraph),
-		streamingReplica:       streamingReplica,
-		historicalReplica:      historicalReplica,
+		metaReplica:            metaReplica,
 		tSafeReplica:           tSafeReplica,
 		msFactory:              factory,
 	}

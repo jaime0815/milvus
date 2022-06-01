@@ -18,6 +18,20 @@
 using milvus::scalar::ScalarIndexPtr;
 
 namespace {
+
+bool
+compare_float(float x, float y, float epsilon = 0.000001f) {
+    if (fabs(x - y) < epsilon)
+        return true;
+    return false;
+}
+bool
+compare_double(double x, double y, double epsilon = 0.000001f) {
+    if (fabs(x - y) < epsilon)
+        return true;
+    return false;
+}
+
 template <typename T>
 inline void
 assert_in(const ScalarIndexPtr<T>& index, const std::vector<T>& arr) {
@@ -53,25 +67,57 @@ assert_range(const ScalarIndexPtr<T>& index, const std::vector<T>& arr) {
     auto test_min = arr[0];
     auto test_max = arr[arr.size() - 1];
 
-    auto bitset1 = index->Range(test_min - 1, milvus::scalar::OperatorType::GT);
+    auto bitset1 = index->Range(test_min - 1, milvus::OpType::GreaterThan);
     ASSERT_EQ(arr.size(), bitset1->size());
     ASSERT_TRUE(bitset1->any());
 
-    auto bitset2 = index->Range(test_min, milvus::scalar::OperatorType::GE);
+    auto bitset2 = index->Range(test_min, milvus::OpType::GreaterEqual);
     ASSERT_EQ(arr.size(), bitset2->size());
     ASSERT_TRUE(bitset2->any());
 
-    auto bitset3 = index->Range(test_max + 1, milvus::scalar::OperatorType::LT);
+    auto bitset3 = index->Range(test_max + 1, milvus::OpType::LessThan);
     ASSERT_EQ(arr.size(), bitset3->size());
     ASSERT_TRUE(bitset3->any());
 
-    auto bitset4 = index->Range(test_max, milvus::scalar::OperatorType::LE);
+    auto bitset4 = index->Range(test_max, milvus::OpType::LessEqual);
     ASSERT_EQ(arr.size(), bitset4->size());
     ASSERT_TRUE(bitset4->any());
 
     auto bitset5 = index->Range(test_min, true, test_max, true);
     ASSERT_EQ(arr.size(), bitset5->size());
     ASSERT_TRUE(bitset5->any());
+}
+
+template <typename T>
+inline void
+assert_reverse(const ScalarIndexPtr<T>& index, const std::vector<T>& arr) {
+    for (size_t offset = 0; offset < arr.size(); ++offset) {
+        ASSERT_EQ(index->Reverse_Lookup(offset), arr[offset]);
+    }
+}
+
+template <>
+inline void
+assert_reverse(const ScalarIndexPtr<float>& index, const std::vector<float>& arr) {
+    for (size_t offset = 0; offset < arr.size(); ++offset) {
+        ASSERT_TRUE(compare_float(index->Reverse_Lookup(offset), arr[offset]));
+    }
+}
+
+template <>
+inline void
+assert_reverse(const ScalarIndexPtr<double>& index, const std::vector<double>& arr) {
+    for (size_t offset = 0; offset < arr.size(); ++offset) {
+        ASSERT_TRUE(compare_double(index->Reverse_Lookup(offset), arr[offset]));
+    }
+}
+
+template <>
+inline void
+assert_reverse(const ScalarIndexPtr<std::string>& index, const std::vector<std::string>& arr) {
+    for (size_t offset = 0; offset < arr.size(); ++offset) {
+        ASSERT_TRUE(arr[offset].compare(index->Reverse_Lookup(offset)) == 0);
+    }
 }
 
 template <>
@@ -96,11 +142,11 @@ assert_range(const ScalarIndexPtr<std::string>& index, const std::vector<std::st
     auto test_min = arr[0];
     auto test_max = arr[arr.size() - 1];
 
-    auto bitset2 = index->Range(test_min, milvus::scalar::OperatorType::GE);
+    auto bitset2 = index->Range(test_min, milvus::OpType::GreaterEqual);
     ASSERT_EQ(arr.size(), bitset2->size());
     ASSERT_TRUE(bitset2->any());
 
-    auto bitset4 = index->Range(test_max, milvus::scalar::OperatorType::LE);
+    auto bitset4 = index->Range(test_max, milvus::OpType::LessEqual);
     ASSERT_EQ(arr.size(), bitset4->size());
     ASSERT_TRUE(bitset4->any());
 

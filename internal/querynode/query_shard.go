@@ -18,9 +18,7 @@ package querynode
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"math"
 
 	"go.uber.org/zap"
 
@@ -28,8 +26,6 @@ import (
 	"github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/storage"
 	"github.com/milvus-io/milvus/internal/util/funcutil"
-	"github.com/milvus-io/milvus/internal/util/tsoutil"
-	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 
 type queryShard struct {
@@ -45,8 +41,7 @@ type queryShard struct {
 	clusterService *ShardClusterService
 
 	tSafeReplica TSafeReplicaInterface
-	historical   ReplicaInterface
-	streaming    ReplicaInterface
+	metaReplica  ReplicaInterface
 
 	vectorChunkManager *storage.VectorChunkManager
 	localCacheEnabled  bool
@@ -59,15 +54,14 @@ func newQueryShard(
 	channel Channel,
 	replicaID int64,
 	clusterService *ShardClusterService,
-	historical ReplicaInterface,
-	streaming ReplicaInterface,
+	metaReplica ReplicaInterface,
 	tSafeReplica TSafeReplicaInterface,
 	localChunkManager storage.ChunkManager,
 	remoteChunkManager storage.ChunkManager,
 	localCacheEnabled bool,
 ) (*queryShard, error) {
 
-	collection, err := streaming.getCollectionByID(collectionID)
+	collection, err := metaReplica.getCollectionByID(collectionID)
 	if err != nil {
 		return nil, err
 	}
@@ -95,8 +89,7 @@ func newQueryShard(
 		channel:            channel,
 		replicaID:          replicaID,
 		clusterService:     clusterService,
-		historical:         historical,
-		streaming:          streaming,
+		metaReplica:        metaReplica,
 		vectorChunkManager: vectorChunkManager,
 		tSafeReplica:       tSafeReplica,
 	}
@@ -131,44 +124,10 @@ func (tp tsType) String() string {
 	return ""
 }
 
-func (q *queryShard) getNewTSafe(tp tsType) (Timestamp, error) {
-	var channel string
-	switch tp {
-	case tsTypeDML:
-		channel = q.channel
-	case tsTypeDelta:
-		channel = q.deltaChannel
-	default:
-		return 0, errors.New("invalid ts type")
-	}
-	t := Timestamp(math.MaxInt64)
+func (q *queryShard) getServiceableTime(channel Channel) (Timestamp, error) {
 	ts, err := q.tSafeReplica.getTSafe(channel)
 	if err != nil {
 		return 0, err
 	}
-	if ts <= t {
-		t = ts
-	}
-	return t, nil
-}
-
-func (q *queryShard) getServiceableTime(tp tsType) (Timestamp, error) {
-	var channel string
-	switch tp {
-	case tsTypeDML:
-		channel = q.channel
-	case tsTypeDelta:
-		channel = q.deltaChannel
-	}
-
-	ts, err := q.tSafeReplica.getTSafe(channel)
-	if err != nil {
-		return 0, err
-	}
-	gracefulTimeInMilliSecond := Params.QueryNodeCfg.GracefulTime
-	gracefulTime := typeutil.ZeroTimestamp
-	if gracefulTimeInMilliSecond > 0 {
-		gracefulTime = tsoutil.ComposeTS(gracefulTimeInMilliSecond, 0)
-	}
-	return (ts + gracefulTime), nil
+	return ts, nil
 }

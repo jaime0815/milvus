@@ -56,6 +56,9 @@ func TestComponentParam(t *testing.T) {
 		assert.Equal(t, Params.IndexSliceSize, int64(DefaultIndexSliceSize))
 		t.Logf("knowhere index slice size = %d", Params.IndexSliceSize)
 
+		assert.Equal(t, Params.GracefulTime, int64(DefaultGracefulTime))
+		t.Logf("default grafeful time = %d", Params.GracefulTime)
+
 		// -- proxy --
 		assert.Equal(t, Params.ProxySubName, "by-dev-proxy")
 		t.Logf("ProxySubName: %s", Params.ProxySubName)
@@ -221,15 +224,6 @@ func TestComponentParam(t *testing.T) {
 
 		interval := Params.StatsPublishInterval
 		assert.Equal(t, 1000, interval)
-
-		bufSize := Params.SearchReceiveBufSize
-		assert.Equal(t, int64(512), bufSize)
-
-		bufSize = Params.SearchResultReceiveBufSize
-		assert.Equal(t, int64(64), bufSize)
-
-		bufSize = Params.SearchPulsarBufSize
-		assert.Equal(t, int64(512), bufSize)
 
 		length := Params.FlowGraphMaxQueueLength
 		assert.Equal(t, int32(1024), length)

@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/milvus-io/milvus/internal/parser/planparserv2"
 
@@ -220,29 +219,33 @@ func (t *searchTask) PreExecute(ctx context.Context) error {
 
 		t.SearchRequest.DslType = commonpb.DslType_BoolExprV1
 		t.SearchRequest.SerializedExprPlan, err = proto.Marshal(plan)
+		if err != nil {
+			return err
+		}
+
 		t.SearchRequest.Topk = int64(topK)
+		err = validateTopK(int64(topK))
 		if err != nil {
 			return err
 		}
 		log.Debug("Proxy::searchTask::PreExecute", zap.Any("plan.OutputFieldIds", plan.OutputFieldIds),
 			zap.Any("plan", plan.String()))
 	}
+
 	travelTimestamp := t.request.TravelTimestamp
 	if travelTimestamp == 0 {
 		travelTimestamp = typeutil.MaxTimestamp
-	} else {
-		durationSeconds := tsoutil.CalculateDuration(t.BeginTs(), travelTimestamp) / 1000
-		if durationSeconds > Params.CommonCfg.RetentionDuration {
-			duration := time.Second * time.Duration(durationSeconds)
-			return fmt.Errorf("only support to travel back to %s so far", duration.String())
-		}
 	}
-	guaranteeTimestamp := t.request.GuaranteeTimestamp
-	if guaranteeTimestamp == 0 {
-		guaranteeTimestamp = t.BeginTs()
+	err = validateTravelTimestamp(travelTimestamp, t.BeginTs())
+	if err != nil {
+		return err
 	}
 	t.SearchRequest.TravelTimestamp = travelTimestamp
-	t.SearchRequest.GuaranteeTimestamp = guaranteeTimestamp
+
+	guaranteeTs := t.request.GetGuaranteeTimestamp()
+	guaranteeTs = parseGuaranteeTs(guaranteeTs, t.BeginTs())
+	t.SearchRequest.GuaranteeTimestamp = guaranteeTs
+
 	deadline, ok := t.TraceCtx().Deadline()
 	if ok {
 		t.SearchRequest.TimeoutTimestamp = tsoutil.ComposeTSByTime(deadline, 0)
@@ -251,6 +254,16 @@ func (t *searchTask) PreExecute(ctx context.Context) error {
 	t.DbID = 0 // todo
 	t.SearchRequest.Dsl = t.request.Dsl
 	t.SearchRequest.PlaceholderGroup = t.request.PlaceholderGroup
+	if t.request.GetNq() == 0 {
+		x := &commonpb.PlaceholderGroup{}
+		err := proto.Unmarshal(t.request.GetPlaceholderGroup(), x)
+		if err != nil {
+			return err
+		}
+		for _, h := range x.GetPlaceholders() {
+			t.request.Nq += int64(len(h.Values))
+		}
+	}
 	t.SearchRequest.Nq = t.request.GetNq()
 	log.Info("search PreExecute done.",
 		zap.Any("requestID", t.Base.MsgID), zap.Any("requestType", "search"))
@@ -347,7 +360,8 @@ func (t *searchTask) PostExecute(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	metrics.ProxyDecodeSearchResultLatency.WithLabelValues(strconv.FormatInt(Params.ProxyCfg.GetNodeID(), 10), metrics.SearchLabel).Observe(float64(tr.RecordSpan().Milliseconds()))
+	metrics.ProxyDecodeResultLatency.WithLabelValues(strconv.FormatInt(Params.ProxyCfg.GetNodeID(), 10),
+		metrics.SearchLabel).Observe(float64(tr.RecordSpan().Milliseconds()))
 	log.Debug("proxy search post execute stage 2", zap.Any("len(validSearchResults)", len(validSearchResults)))
 	if len(validSearchResults) <= 0 {
 		log.Warn("search result is empty", zap.Any("requestID", t.Base.MsgID), zap.String("requestType", "search"))
@@ -379,7 +393,7 @@ func (t *searchTask) PostExecute(ctx context.Context) error {
 		return err
 	}
 
-	metrics.ProxyReduceSearchResultLatency.WithLabelValues(strconv.FormatInt(Params.ProxyCfg.GetNodeID(), 10), metrics.SuccessLabel).Observe(float64(tr.RecordSpan().Milliseconds()))
+	metrics.ProxyReduceResultLatency.WithLabelValues(strconv.FormatInt(Params.ProxyCfg.GetNodeID(), 10), metrics.SearchLabel).Observe(float64(tr.RecordSpan().Milliseconds()))
 	t.result.CollectionName = t.collectionName
 
 	schema, err := globalMetaCache.GetCollectionSchema(ctx, t.request.CollectionName)

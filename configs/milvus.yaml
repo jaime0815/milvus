@@ -153,7 +153,6 @@ queryCoord:
 # Related configuration of queryNode, used to run hybrid search between vector and scalar data.
 queryNode:
   cacheSize: 32 # GB, default 32 GB, `cacheSize` is the memory used for caching data for faster query. The `cacheSize` must be less than system memory size.
-  gracefulTime: 0 # Minimum time before the newly inserted data can be searched (in ms)
   port: 21123
 
   stats:
@@ -162,12 +161,6 @@ queryNode:
     flowGraph:
       maxQueueLength: 1024 # Maximum length of task queue in flowgraph
       maxParallelism: 1024 # Maximum number of tasks executed in parallel in the flowgraph
-  msgStream:
-    search:
-      recvBufSize: 512 # msgPack channel buffer size
-      pulsarBufSize: 512 # pulsar channel buffer size
-    searchResult:
-      recvBufSize: 64 # msgPack channel buffer size
   # Segcore will divide a segment into multiple chunks to enbale small index
   segcore:
     chunkRows: 32768 # The number of vectors in a chunk.
@@ -204,7 +197,7 @@ dataCoord:
 
   segment:
     maxSize: 512 # Maximum size of a segment in MB
-    sealProportion: 0.75 # It's the minimum proportion for a segment which can be sealed
+    sealProportion: 0.25 # It's the minimum proportion for a segment which can be sealed
     assignmentExpiration: 2000 # The time of the assignment expiration in ms
     maxLife: 86400 # The max lifetime of segment in seconds, 24*60*60
 
@@ -291,6 +284,7 @@ common:
   retentionDuration: 432000 # 5 days in seconds
   entityExpiration:  -1     # Entity expiration in seconds, CAUTION make sure entityExpiration >= retentionDuration and -1 means never expire
 
+  gracefulTime: 5000 # milliseconds. it represents the interval (in ms) by which the request arrival time needs to be subtracted in the case of Bounded Consistency.
 
   # Default value: auto
   # Valid values: [auto, avx512, avx2, avx, sse4_2]

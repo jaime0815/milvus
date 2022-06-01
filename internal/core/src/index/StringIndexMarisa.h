@@ -50,13 +50,16 @@ class StringIndexMarisa : public StringIndex {
     NotIn(size_t n, const std::string* values) override;
 
     const TargetBitmapPtr
-    Range(std::string value, OperatorType op) override;
+    Range(std::string value, OpType op) override;
 
     const TargetBitmapPtr
     Range(std::string lower_bound_value, bool lb_inclusive, std::string upper_bound_value, bool ub_inclusive) override;
 
     const TargetBitmapPtr
     PrefixMatch(std::string prefix) override;
+
+    std::string
+    Reverse_Lookup(size_t offset) const override;
 
  private:
     void

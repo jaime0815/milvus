@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/milvus-io/milvus/internal/parser/planparserv2"
 
@@ -16,6 +16,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/milvus-io/milvus/internal/log"
+	"github.com/milvus-io/milvus/internal/metrics"
 	"github.com/milvus-io/milvus/internal/types"
 	"github.com/milvus-io/milvus/internal/util/timerecord"
 	"github.com/milvus-io/milvus/internal/util/tsoutil"
@@ -212,19 +213,16 @@ func (t *queryTask) PreExecute(ctx context.Context) error {
 	if t.request.TravelTimestamp == 0 {
 		t.TravelTimestamp = t.BeginTs()
 	} else {
-		durationSeconds := tsoutil.CalculateDuration(t.BeginTs(), t.request.TravelTimestamp) / 1000
-		if durationSeconds > Params.CommonCfg.RetentionDuration {
-			duration := time.Second * time.Duration(durationSeconds)
-			return fmt.Errorf("only support to travel back to %s so far", duration.String())
-		}
 		t.TravelTimestamp = t.request.TravelTimestamp
 	}
 
-	if t.request.GuaranteeTimestamp == 0 {
-		t.GuaranteeTimestamp = t.BeginTs()
-	} else {
-		t.GuaranteeTimestamp = t.request.GuaranteeTimestamp
+	err = validateTravelTimestamp(t.TravelTimestamp, t.BeginTs())
+	if err != nil {
+		return err
 	}
+
+	guaranteeTs := t.request.GetGuaranteeTimestamp()
+	t.GuaranteeTimestamp = parseGuaranteeTs(guaranteeTs, t.BeginTs())
 
 	deadline, ok := t.TraceCtx().Deadline()
 	if ok {
@@ -315,10 +313,14 @@ func (t *queryTask) PostExecute(ctx context.Context) error {
 	}()
 
 	wg.Wait()
+
+	metrics.ProxyDecodeResultLatency.WithLabelValues(strconv.FormatInt(Params.ProxyCfg.GetNodeID(), 10), metrics.QueryLabel).Observe(0.0)
+	tr.Record("reduceResultStart")
 	t.result, err = mergeRetrieveResults(t.toReduceResults)
 	if err != nil {
 		return err
 	}
+	metrics.ProxyReduceResultLatency.WithLabelValues(strconv.FormatInt(Params.ProxyCfg.GetNodeID(), 10), metrics.QueryLabel).Observe(float64(tr.RecordSpan().Milliseconds()))
 	t.result.CollectionName = t.collectionName
 
 	if len(t.result.FieldsData) > 0 {
