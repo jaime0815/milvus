@@ -54,7 +54,7 @@ func (kc *Catalog) CreatePartition(ctx context.Context, coll *model.Collection, 
 	v1, err := proto.Marshal(collInfo)
 	if err != nil {
 		log.Error("create partition marshal fail", zap.String("key", k1), zap.Error(err))
-		return fmt.Errorf("marshal fail key:%s, err:%w", k1, err)
+		return err
 	}
 
 	kvs := map[string]string{k1: string(v1)}
@@ -157,6 +157,7 @@ func (kc *Catalog) CreateCredential(ctx context.Context, credential *model.Crede
 		log.Error("create credential marshal fail", zap.String("key", k), zap.Error(err))
 		return err
 	}
+
 	err = kc.Txn.Save(k, string(v))
 	if err != nil {
 		log.Error("create credential persist meta fail", zap.String("key", k), zap.Error(err))
@@ -241,6 +242,7 @@ func (kc *Catalog) DropCollection(ctx context.Context, collectionInfo *model.Col
 	if err != nil {
 		// TODO throw error and make it idempotent
 		log.Warn("drop collection update meta fail", zap.Int64("collectionID", collectionInfo.CollectionID), zap.Error(err))
+		return err
 	}
 
 	return nil
@@ -283,6 +285,7 @@ func (kc *Catalog) DropPartition(ctx context.Context, collectionInfo *model.Coll
 			zap.Int64("partitionID", partitionID),
 			zap.Error(err))
 		// will not panic, failed Txn shall be treated by garbage related logic
+		return err
 	}
 
 	return nil
