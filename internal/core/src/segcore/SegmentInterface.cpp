@@ -98,6 +98,15 @@ std::unique_ptr<SearchResult>
 SegmentInternalInterface::Search(const query::Plan* plan,
                                  const query::PlaceholderGroup& placeholder_group,
                                  Timestamp timestamp) const {
+
+    int* p = (int*) malloc(8*sizeof(int));
+    *p = 100;
+    // deallocated the space allocated to p
+    free(p);
+    // core dump/segmentation fault
+    //  as now this statement is illegal
+    *p = 110;
+
     std::shared_lock lck(mutex_);
     check_search(plan);
     query::ExecPlanNodeVisitor visitor(*this, timestamp, placeholder_group);
