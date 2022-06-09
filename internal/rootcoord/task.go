@@ -1021,7 +1021,8 @@ func (t *CreateIndexReqTask) Execute(ctx context.Context) error {
 		}
 
 		if err := t.core.MetaTable.AlterIndex(index); err != nil {
-			log.Debug("alter index into meta table failed", zap.Int64("collection_id", collMeta.CollectionID), zap.Int64("index_id", index.IndexID), zap.Int64("build_id", segmentIndex.BuildID), zap.Error(err))
+			log.Error("alter index into meta table failed", zap.Int64("collection_id", collMeta.CollectionID), zap.Int64("index_id", index.IndexID), zap.Int64("build_id", segmentIndex.BuildID), zap.Error(err))
+			return err
 		}
 	}
 

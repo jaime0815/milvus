@@ -527,7 +527,7 @@ func (mt *MetaTable) DeletePartition(collID typeutil.UniqueID, partitionName str
 	return partID, nil
 }
 
-func (mt *MetaTable) updateSegmentIndexMetaCache(index *model.Index) {
+func (mt *MetaTable) updateSegmentIndexMetaCache(oldIndex *model.Index, index *model.Index) error {
 	for _, segIdxInfo := range index.SegmentIndexes {
 		if _, ok := mt.partID2SegID[segIdxInfo.PartitionID]; !ok {
 			segIDMap := map[typeutil.UniqueID]bool{segIdxInfo.SegmentID: true}
@@ -544,6 +544,24 @@ func (mt *MetaTable) updateSegmentIndexMetaCache(index *model.Index) {
 			mt.segID2IndexMeta[segIdxInfo.SegmentID][index.IndexID] = *index
 		}
 	}
+
+	for segID, segmentIdx := range index.SegmentIndexes {
+		oldSegIdx, ok := oldIndex.SegmentIndexes[segID]
+		if !ok {
+			log.Error("Can not find segment within index meta cache",
+				zap.Int64("segID", segID),
+				zap.Int64("IndexID", oldIndex.IndexID),
+				zap.Int64("CollectionID", oldIndex.CollectionID),
+				zap.Any("indexID2Meta", mt.indexID2Meta))
+			return fmt.Errorf("segment id = %d within index id = %d not found", segID, oldIndex.IndexID)
+		}
+
+		oldSegIdx.PartitionID = segmentIdx.PartitionID
+		oldSegIdx.EnableIndex = segmentIdx.EnableIndex
+		oldSegIdx.BuildID = segmentIdx.BuildID
+	}
+
+	return nil
 }
 
 // AlterIndex alter index
@@ -561,8 +579,12 @@ func (mt *MetaTable) AlterIndex(newIndex *model.Index) error {
 		return fmt.Errorf("index id = %d not found", newIndex.IndexID)
 	}
 
-	mt.updateSegmentIndexMetaCache(newIndex)
-	return mt.catalog.AlterIndex(mt.ctx, &oldIndex, newIndex)
+	if err := mt.catalog.AlterIndex(mt.ctx, &oldIndex, newIndex); err != nil {
+		return err
+	}
+
+	err := mt.updateSegmentIndexMetaCache(&oldIndex, newIndex)
+	return err
 }
 
 // DropIndex drop index
