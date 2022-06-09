@@ -3126,7 +3126,6 @@ func TestCheckFlushedSegments(t *testing.T) {
 		var segID int64 = 1001
 		var fieldID int64 = 101
 		var indexID int64 = 6001
-		core.MetaTable.segID2IndexMeta[segID] = make(map[int64]model.Index)
 		core.MetaTable.partID2SegID[partID] = make(map[int64]bool)
 		core.MetaTable.collID2Meta[collID] = model.Collection{CollectionID: collID}
 		// do nothing, since collection has 0 index
@@ -3357,29 +3356,23 @@ func TestCore_DescribeSegments(t *testing.T) {
 
 	// success.
 	c.MetaTable = &MetaTable{
-		segID2IndexMeta: map[typeutil.UniqueID]map[typeutil.UniqueID]model.Index{
-			segID: {
-				indexID: {
-					CollectionID: collID,
-					FieldID:      fieldID,
-					IndexID:      indexID,
-					SegmentIndexes: map[int64]model.SegmentIndex{
-						segID: {
-							Segment: model.Segment{
-								PartitionID: partID,
-								SegmentID:   segID,
-							},
-							BuildID:     buildID,
-							EnableIndex: true},
-					},
-				},
-			},
-		},
+		segID2IndexID: map[typeutil.UniqueID]typeutil.UniqueID{segID: indexID},
 		indexID2Meta: map[typeutil.UniqueID]model.Index{
 			indexID: {
-				IndexName:   indexName,
-				IndexID:     indexID,
-				IndexParams: nil,
+				IndexName:    indexName,
+				IndexID:      indexID,
+				IndexParams:  nil,
+				CollectionID: collID,
+				FieldID:      fieldID,
+				SegmentIndexes: map[int64]model.SegmentIndex{
+					segID: {
+						Segment: model.Segment{
+							PartitionID: partID,
+							SegmentID:   segID,
+						},
+						BuildID:     buildID,
+						EnableIndex: true},
+				},
 			},
 		},
 	}

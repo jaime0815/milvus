@@ -64,27 +64,26 @@ func TestDescribeSegmentsReqTask_Execute(t *testing.T) {
 		return []typeutil.UniqueID{segID}, nil
 	}
 	c.MetaTable = &MetaTable{
-		segID2IndexMeta: map[typeutil.UniqueID]map[typeutil.UniqueID]model.Index{},
+		segID2IndexID: make(map[typeutil.UniqueID]typeutil.UniqueID, 1),
 	}
 	assert.NoError(t, tsk.Execute(context.Background()))
 
 	// index not found in meta.
 	c.MetaTable = &MetaTable{
-		segID2IndexMeta: map[typeutil.UniqueID]map[typeutil.UniqueID]model.Index{
-			segID: {
-				indexID: {
-					CollectionID: collID,
-					FieldID:      fieldID,
-					IndexID:      indexID,
-					SegmentIndexes: map[int64]model.SegmentIndex{
-						segID: {
-							Segment: model.Segment{
-								SegmentID:   segID,
-								PartitionID: partID,
-							},
-							BuildID:     buildID,
-							EnableIndex: true,
+		segID2IndexID: map[typeutil.UniqueID]typeutil.UniqueID{segID: indexID},
+		indexID2Meta: map[typeutil.UniqueID]model.Index{
+			indexID: {
+				CollectionID: collID,
+				FieldID:      fieldID,
+				IndexID:      indexID,
+				SegmentIndexes: map[int64]model.SegmentIndex{
+					segID + 1: {
+						Segment: model.Segment{
+							SegmentID:   segID,
+							PartitionID: partID,
 						},
+						BuildID:     buildID,
+						EnableIndex: true,
 					},
 				},
 			},
@@ -94,30 +93,24 @@ func TestDescribeSegmentsReqTask_Execute(t *testing.T) {
 
 	// success.
 	c.MetaTable = &MetaTable{
-		segID2IndexMeta: map[typeutil.UniqueID]map[typeutil.UniqueID]model.Index{
-			segID: {
-				indexID: {
-					CollectionID: collID,
-					FieldID:      fieldID,
-					IndexID:      indexID,
-					SegmentIndexes: map[int64]model.SegmentIndex{
-						segID: {
-							Segment: model.Segment{
-								SegmentID:   segID,
-								PartitionID: partID,
-							},
-							BuildID:     buildID,
-							EnableIndex: true,
-						},
-					},
-				},
-			},
-		},
+		segID2IndexID: map[typeutil.UniqueID]typeutil.UniqueID{segID: indexID},
 		indexID2Meta: map[typeutil.UniqueID]model.Index{
 			indexID: {
-				IndexName:   indexName,
-				IndexID:     indexID,
-				IndexParams: nil,
+				CollectionID: collID,
+				FieldID:      fieldID,
+				IndexID:      indexID,
+				IndexName:    indexName,
+				IndexParams:  nil,
+				SegmentIndexes: map[int64]model.SegmentIndex{
+					segID: {
+						Segment: model.Segment{
+							SegmentID:   segID,
+							PartitionID: partID,
+						},
+						BuildID:     buildID,
+						EnableIndex: true,
+					},
+				},
 			},
 		},
 	}

@@ -904,32 +904,27 @@ func (t *DescribeSegmentsReqTask) Execute(ctx context.Context) error {
 			continue
 		}
 
-		for indexID, indexInfo := range index {
-			for _, segmentIndex := range indexInfo.SegmentIndexes {
-				t.Rsp.SegmentInfos[segID].IndexInfos =
-					append(t.Rsp.SegmentInfos[segID].IndexInfos,
-						&etcdpb.SegmentIndexInfo{
-							CollectionID: indexInfo.CollectionID,
-							PartitionID:  segmentIndex.Segment.PartitionID,
-							SegmentID:    segmentIndex.Segment.SegmentID,
-							FieldID:      indexInfo.FieldID,
-							IndexID:      indexInfo.IndexID,
-							BuildID:      segmentIndex.BuildID,
-							EnableIndex:  segmentIndex.EnableIndex,
-						})
-			}
-
-			extraIndexInfo, err := t.core.MetaTable.GetIndexByID(indexID)
-			if err != nil {
-				log.Error("index not found in meta table",
-					zap.Error(err),
-					zap.Int64("indexID", indexID),
-					zap.Int64("collection", collectionID),
-					zap.Int64("segment", segID))
-				return err
-			}
-			t.Rsp.SegmentInfos[segID].ExtraIndexInfos[indexID] = model.ConvertToIndexPB(extraIndexInfo)
+		segIdxMeta, ok := index.SegmentIndexes[segID]
+		if !ok {
+			log.Error("requested segment index not found",
+				zap.Int64("collection", collectionID),
+				zap.Int64("segment", segID))
+			return fmt.Errorf("segment index not found, collection: %d, segment: %d", collectionID, segID)
 		}
+
+		t.Rsp.SegmentInfos[segID].IndexInfos = append(
+			t.Rsp.SegmentInfos[segID].IndexInfos,
+			&etcdpb.SegmentIndexInfo{
+				CollectionID: index.CollectionID,
+				PartitionID:  segIdxMeta.Segment.PartitionID,
+				SegmentID:    segIdxMeta.Segment.SegmentID,
+				FieldID:      index.FieldID,
+				IndexID:      index.IndexID,
+				BuildID:      segIdxMeta.BuildID,
+				EnableIndex:  segIdxMeta.EnableIndex,
+			})
+
+		t.Rsp.SegmentInfos[segID].ExtraIndexInfos[index.IndexID] = model.ConvertToIndexPB(&index)
 	}
 
 	return nil

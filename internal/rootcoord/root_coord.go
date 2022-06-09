@@ -358,7 +358,7 @@ func (c *Core) checkFlushedSegmentsLoop() {
 }
 
 func (c *Core) checkFlushedSegments(ctx context.Context) {
-	collID2Meta, segID2IndexMeta, indexID2Meta := c.MetaTable.dupMeta()
+	collID2Meta, segID2IndexID, indexID2Meta := c.MetaTable.dupMeta()
 	for _, collMeta := range collID2Meta {
 		if len(collMeta.FieldIndexes) == 0 {
 			continue
@@ -377,12 +377,12 @@ func (c *Core) checkFlushedSegments(ctx context.Context) {
 			for _, segBinlog := range segBinlogs {
 				segID := segBinlog.SegmentID
 				var indexInfos []*model.Index
-				indexMeta, ok := segID2IndexMeta[segID]
+				_, ok := segID2IndexID[segID]
 				if !ok {
 					indexInfos = append(indexInfos, collMeta.FieldIndexes...)
 				} else {
 					for _, idx := range collMeta.FieldIndexes {
-						if _, ok := indexMeta[idx.IndexID]; !ok {
+						if _, ok := indexID2Meta[idx.IndexID]; !ok {
 							indexInfos = append(indexInfos, idx)
 						}
 					}
