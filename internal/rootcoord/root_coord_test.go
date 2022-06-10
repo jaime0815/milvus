@@ -3188,7 +3188,7 @@ func TestCheckFlushedSegments(t *testing.T) {
 			assert.Equal(t, partID, pid)
 			return []int64{segID}, nil
 		}
-		core.MetaTable.indexID2Meta[indexID] = model.Index{
+		core.MetaTable.indexID2Meta[indexID] = &model.Index{
 			IndexID: indexID,
 		}
 		core.CallBuildIndexService = func(_ context.Context, segID UniqueID, binlog []string, field *model.Field, idx *model.Index, numRows int64) (int64, error) {
@@ -3357,7 +3357,7 @@ func TestCore_DescribeSegments(t *testing.T) {
 	// success.
 	c.MetaTable = &MetaTable{
 		segID2IndexID: map[typeutil.UniqueID]typeutil.UniqueID{segID: indexID},
-		indexID2Meta: map[typeutil.UniqueID]model.Index{
+		indexID2Meta: map[typeutil.UniqueID]*model.Index{
 			indexID: {
 				IndexName:    indexName,
 				IndexID:      indexID,

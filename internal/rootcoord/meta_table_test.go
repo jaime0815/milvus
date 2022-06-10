@@ -752,7 +752,7 @@ func TestMetaTable(t *testing.T) {
 		err = mt.AddCollection(collInfo, ts, "")
 		assert.Nil(t, err)
 
-		segIdxInfo := model.Index{
+		segIdxInfo := &model.Index{
 			CollectionID: collID,
 			FieldID:      fieldID,
 			IndexID:      indexID2,
@@ -766,12 +766,12 @@ func TestMetaTable(t *testing.T) {
 				},
 			},
 		}
-		err = mt.AlterIndex(&segIdxInfo)
+		err = mt.AlterIndex(segIdxInfo)
 		assert.NotNil(t, err)
 		assert.EqualError(t, err, fmt.Sprintf("index id = %d not found", segIdxInfo.IndexID))
 
 		mt.collID2Meta = make(map[int64]model.Collection)
-		err = mt.AlterIndex(&segIdxInfo)
+		err = mt.AlterIndex(segIdxInfo)
 		assert.NotNil(t, err)
 		assert.EqualError(t, err, fmt.Sprintf("collection id = %d not found", collInfo.CollectionID))
 
@@ -788,7 +788,7 @@ func TestMetaTable(t *testing.T) {
 		mockTxnKV.multiSave = func(kvs map[string]string) error {
 			return fmt.Errorf("save error")
 		}
-		assert.Error(t, mt.AlterIndex(&segIdxInfo))
+		assert.Error(t, mt.AlterIndex(segIdxInfo))
 	})
 
 	wg.Add(1)
@@ -810,7 +810,7 @@ func TestMetaTable(t *testing.T) {
 		ts := ftso()
 		err = mt.AddCollection(collInfo, ts, "")
 		assert.Nil(t, err)
-		mt.indexID2Meta[indexID] = *idxInfo[0]
+		mt.indexID2Meta[indexID] = idxInfo[0]
 
 		_, _, err = mt.DropIndex("abc", "abc", "abc")
 		assert.NotNil(t, err)
@@ -837,7 +837,7 @@ func TestMetaTable(t *testing.T) {
 			},
 		}
 		mt.collID2Meta[coll.CollectionID] = coll
-		mt.indexID2Meta = make(map[int64]model.Index)
+		mt.indexID2Meta = make(map[int64]*model.Index)
 		idxID, isDroped, err := mt.DropIndex(collInfo.Name, collInfo.Fields[0].Name, idxInfo[0].IndexName)
 		assert.Zero(t, idxID)
 		assert.False(t, isDroped)
@@ -848,7 +848,7 @@ func TestMetaTable(t *testing.T) {
 		collInfo.Partitions = []*model.Partition{}
 		ts = ftso()
 		err = mt.AddCollection(collInfo, ts, "")
-		mt.indexID2Meta[indexID] = *idxInfo[0]
+		mt.indexID2Meta[indexID] = idxInfo[0]
 
 		assert.Nil(t, err)
 		mockTxnKV.multiSaveAndRemoveWithPrefix = func(saves map[string]string, removals []string) error {
@@ -1007,7 +1007,7 @@ func TestMetaTable(t *testing.T) {
 		assert.NotNil(t, err)
 		assert.EqualError(t, err, fmt.Sprintf("collection %s doesn't have filed no-field", collInfo.Name))
 
-		mt.indexID2Meta = make(map[int64]model.Index)
+		mt.indexID2Meta = make(map[int64]*model.Index)
 		_, _, err = mt.GetNotIndexedSegments(collInfo.Name, collInfo.Fields[0].Name, idx, nil)
 		assert.Nil(t, err)
 	})
@@ -1039,7 +1039,7 @@ func TestMetaTable(t *testing.T) {
 		ts := ftso()
 		err = mt.AddCollection(collInfo, ts, "")
 		assert.Nil(t, err)
-		mt.indexID2Meta = make(map[int64]model.Index)
+		mt.indexID2Meta = make(map[int64]*model.Index)
 		_, _, err = mt.GetIndexByName(collInfo.Name, idxInfo[0].IndexName)
 		assert.NotNil(t, err)
 		assert.EqualError(t, err, fmt.Sprintf("index id = %d not found", idxInfo[0].IndexID))
@@ -1270,7 +1270,7 @@ func TestFixIssue10540(t *testing.T) {
 func TestMetaTable_GetSegmentIndexInfos(t *testing.T) {
 	meta := &MetaTable{
 		segID2IndexID: make(map[typeutil.UniqueID]typeutil.UniqueID, 1),
-		indexID2Meta:  make(map[typeutil.UniqueID]model.Index, 1),
+		indexID2Meta:  make(map[typeutil.UniqueID]*model.Index, 1),
 	}
 
 	segID := typeutil.UniqueID(100)
@@ -1278,7 +1278,7 @@ func TestMetaTable_GetSegmentIndexInfos(t *testing.T) {
 	assert.Error(t, err)
 
 	meta.segID2IndexID[segID] = 5
-	meta.indexID2Meta[5] = model.Index{
+	meta.indexID2Meta[5] = &model.Index{
 		CollectionID: 1,
 		FieldID:      4,
 		IndexID:      5,
@@ -1365,7 +1365,7 @@ func TestMetaTable_checkFieldCanBeIndexed(t *testing.T) {
 
 	t.Run("field already indexed", func(t *testing.T) {
 		mt := &MetaTable{
-			indexID2Meta: map[typeutil.UniqueID]model.Index{
+			indexID2Meta: map[typeutil.UniqueID]*model.Index{
 				200: {IndexID: 200, IndexName: "test"},
 			},
 		}
@@ -1382,7 +1382,7 @@ func TestMetaTable_checkFieldCanBeIndexed(t *testing.T) {
 	t.Run("unexpected", func(t *testing.T) {
 		mt := &MetaTable{
 			// index meta incomplete.
-			indexID2Meta: map[typeutil.UniqueID]model.Index{},
+			indexID2Meta: map[typeutil.UniqueID]*model.Index{},
 		}
 		collMeta := model.Collection{
 			Name:         "test",
@@ -1399,7 +1399,7 @@ func TestMetaTable_checkFieldCanBeIndexed(t *testing.T) {
 func TestMetaTable_checkFieldIndexDuplicate(t *testing.T) {
 	t.Run("index already exists", func(t *testing.T) {
 		mt := &MetaTable{
-			indexID2Meta: map[typeutil.UniqueID]model.Index{
+			indexID2Meta: map[typeutil.UniqueID]*model.Index{
 				200: {IndexID: 200, IndexName: "test"},
 			},
 		}
@@ -1415,7 +1415,7 @@ func TestMetaTable_checkFieldIndexDuplicate(t *testing.T) {
 
 	t.Run("index parameters mismatch", func(t *testing.T) {
 		mt := &MetaTable{
-			indexID2Meta: map[typeutil.UniqueID]model.Index{
+			indexID2Meta: map[typeutil.UniqueID]*model.Index{
 				200: {IndexID: 200, IndexName: "test",
 					IndexParams: []*commonpb.KeyValuePair{{Key: "Key", Value: "Value"}}},
 			},
@@ -1432,7 +1432,7 @@ func TestMetaTable_checkFieldIndexDuplicate(t *testing.T) {
 
 	t.Run("index parameters match", func(t *testing.T) {
 		mt := &MetaTable{
-			indexID2Meta: map[typeutil.UniqueID]model.Index{
+			indexID2Meta: map[typeutil.UniqueID]*model.Index{
 				200: {IndexID: 200, IndexName: "test",
 					IndexParams: []*commonpb.KeyValuePair{{Key: "Key", Value: "Value"}}},
 			},

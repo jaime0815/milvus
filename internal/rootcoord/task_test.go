@@ -71,7 +71,7 @@ func TestDescribeSegmentsReqTask_Execute(t *testing.T) {
 	// index not found in meta.
 	c.MetaTable = &MetaTable{
 		segID2IndexID: map[typeutil.UniqueID]typeutil.UniqueID{segID: indexID},
-		indexID2Meta: map[typeutil.UniqueID]model.Index{
+		indexID2Meta: map[typeutil.UniqueID]*model.Index{
 			indexID: {
 				CollectionID: collID,
 				FieldID:      fieldID,
@@ -94,7 +94,7 @@ func TestDescribeSegmentsReqTask_Execute(t *testing.T) {
 	// success.
 	c.MetaTable = &MetaTable{
 		segID2IndexID: map[typeutil.UniqueID]typeutil.UniqueID{segID: indexID},
-		indexID2Meta: map[typeutil.UniqueID]model.Index{
+		indexID2Meta: map[typeutil.UniqueID]*model.Index{
 			indexID: {
 				CollectionID: collID,
 				FieldID:      fieldID,
