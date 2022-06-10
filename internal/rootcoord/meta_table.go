@@ -77,7 +77,7 @@ type MetaTable struct {
 	collAlias2ID  map[string]typeutil.UniqueID                     // collection alias to collection id
 	partID2SegID  map[typeutil.UniqueID]map[typeutil.UniqueID]bool // partition id -> segment_id -> bool
 	segID2IndexID map[typeutil.UniqueID]typeutil.UniqueID          // segment_id -> index_id
-	indexID2Meta  map[typeutil.UniqueID]model.Index                // collection id/index_id -> meta
+	indexID2Meta  map[typeutil.UniqueID]*model.Index               // collection id/index_id -> meta
 
 	proxyLock sync.RWMutex
 	ddLock    sync.RWMutex
@@ -110,7 +110,7 @@ func (mt *MetaTable) reloadFromKV() error {
 	mt.collAlias2ID = make(map[string]typeutil.UniqueID)
 	mt.partID2SegID = make(map[typeutil.UniqueID]map[typeutil.UniqueID]bool)
 	mt.segID2IndexID = make(map[typeutil.UniqueID]typeutil.UniqueID)
-	mt.indexID2Meta = make(map[typeutil.UniqueID]model.Index)
+	mt.indexID2Meta = make(map[typeutil.UniqueID]*model.Index)
 
 	collMap, err := mt.catalog.ListCollections(mt.ctx, 0)
 	if err != nil {
@@ -141,7 +141,7 @@ func (mt *MetaTable) reloadFromKV() error {
 			mt.segID2IndexID[segIndexInfo.Segment.SegmentID] = index.IndexID
 		}
 
-		mt.indexID2Meta[index.IndexID] = *index
+		mt.indexID2Meta[index.IndexID] = index
 	}
 
 	collAliases, err := mt.catalog.ListAliases(mt.ctx)
@@ -501,7 +501,19 @@ func (mt *MetaTable) DeletePartition(collID typeutil.UniqueID, partitionName str
 	// update segID2IndexID and partID2SegID
 	if segIDMap, ok := mt.partID2SegID[partID]; ok {
 		for segID := range segIDMap {
+			indexID, ok := mt.segID2IndexID[segID]
+			if !ok {
+				return 0, fmt.Errorf("index id does not exist, segment id: %d", segID)
+			}
+
 			delete(mt.segID2IndexID, segID)
+
+			indexMeta, ok := mt.indexID2Meta[indexID]
+			if !ok {
+				return 0, fmt.Errorf("index meta does not exist, indexID id: %d", indexID)
+			}
+
+			delete(indexMeta.SegmentIndexes, segID)
 		}
 	}
 	delete(mt.partID2SegID, partID)
@@ -533,20 +545,7 @@ func (mt *MetaTable) updateSegmentIndexMetaCache(oldIndex *model.Index, index *m
 	}
 
 	for segID, segmentIdx := range index.SegmentIndexes {
-		updatedSegIdx, ok := oldIndex.SegmentIndexes[segID]
-		if !ok {
-			log.Error("Can not find segment within index meta cache",
-				zap.Int64("segID", segID),
-				zap.Int64("IndexID", oldIndex.IndexID),
-				zap.Int64("CollectionID", oldIndex.CollectionID),
-				zap.Any("indexID2Meta", mt.indexID2Meta))
-			return fmt.Errorf("segment id = %d within index id = %d not found", segID, oldIndex.IndexID)
-		}
-
-		updatedSegIdx.PartitionID = segmentIdx.PartitionID
-		updatedSegIdx.EnableIndex = segmentIdx.EnableIndex
-		updatedSegIdx.BuildID = segmentIdx.BuildID
-		oldIndex.SegmentIndexes[segID] = updatedSegIdx
+		oldIndex.SegmentIndexes[segID] = segmentIdx
 	}
 
 	return nil
@@ -567,11 +566,11 @@ func (mt *MetaTable) AlterIndex(newIndex *model.Index) error {
 		return fmt.Errorf("index id = %d not found", newIndex.IndexID)
 	}
 
-	if err := mt.catalog.AlterIndex(mt.ctx, &oldIndex, newIndex); err != nil {
+	if err := mt.catalog.AlterIndex(mt.ctx, oldIndex, newIndex); err != nil {
 		return err
 	}
 
-	err := mt.updateSegmentIndexMetaCache(&oldIndex, newIndex)
+	err := mt.updateSegmentIndexMetaCache(oldIndex, newIndex)
 	return err
 }
 
@@ -873,7 +872,7 @@ func (mt *MetaTable) AddIndex(colName string, fieldName string, idxInfo *model.I
 	mt.catalog.CreateIndex(mt.ctx, &collMeta, idxInfo)
 
 	mt.collID2Meta[collMeta.CollectionID] = collMeta
-	mt.indexID2Meta[idxInfo.IndexID] = *idxInfo
+	mt.indexID2Meta[idxInfo.IndexID] = idxInfo
 	return nil
 }
 
@@ -901,7 +900,7 @@ func (mt *MetaTable) GetIndexByName(collName, indexName string) (model.Collectio
 			return model.Collection{}, nil, fmt.Errorf("index id = %d not found", idx.IndexID)
 		}
 		if indexName == "" || idxInfo.IndexName == indexName {
-			rstIndex = append(rstIndex, idxInfo)
+			rstIndex = append(rstIndex, *idxInfo)
 		}
 	}
 	return col, rstIndex, nil
@@ -916,7 +915,7 @@ func (mt *MetaTable) GetIndexByID(indexID typeutil.UniqueID) (*model.Index, erro
 	if !ok {
 		return nil, fmt.Errorf("cannot find index, id = %d", indexID)
 	}
-	return &indexInfo, nil
+	return indexInfo, nil
 }
 
 func (mt *MetaTable) dupMeta() (
@@ -937,7 +936,7 @@ func (mt *MetaTable) dupMeta() (
 		segID2IndexID[k] = v
 	}
 	for k, v := range mt.indexID2Meta {
-		indexID2Meta[k] = v
+		indexID2Meta[k] = *v
 	}
 	return collID2Meta, segID2IndexID, indexID2Meta
 }
@@ -1053,5 +1052,5 @@ func (mt *MetaTable) getIdxMetaBySegID(segID int64) (model.Index, error) {
 		return model.Index{}, fmt.Errorf("segment id: %d not has any index, request index id: %d", segID, indexID)
 	}
 
-	return idxMeta, nil
+	return *idxMeta, nil
 }
