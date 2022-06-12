@@ -137,7 +137,6 @@ func (mt *MetaTable) reloadFromKV() error {
 				mt.partID2SegID[segIndexInfo.Segment.PartitionID] = idMap
 			}
 
-			// update segID2IndexID
 			mt.segID2IndexID[segIndexInfo.Segment.SegmentID] = index.IndexID
 		}
 
@@ -165,9 +164,6 @@ func (mt *MetaTable) AddCollection(coll *model.Collection, ts typeutil.Timestamp
 		return fmt.Errorf("collection %s exist", coll.Name)
 	}
 
-	mt.collID2Meta[coll.CollectionID] = *coll
-	mt.collName2ID[coll.Name] = coll.CollectionID
-
 	coll.CreateTime = ts
 	for _, partition := range coll.Partitions {
 		partition.PartitionCreatedTimestamp = ts
@@ -177,7 +173,13 @@ func (mt *MetaTable) AddCollection(coll *model.Collection, ts typeutil.Timestamp
 	meta[DDMsgSendPrefix] = "false"
 	meta[DDOperationPrefix] = ddOpStr
 	coll.Extra = meta
-	return mt.catalog.CreateCollection(mt.ctx, coll, ts)
+	if err := mt.catalog.CreateCollection(mt.ctx, coll, ts); err != nil {
+		return err
+	}
+
+	mt.collID2Meta[coll.CollectionID] = *coll
+	mt.collName2ID[coll.Name] = coll.CollectionID
+	return nil
 }
 
 // DeleteCollection delete collection
@@ -190,34 +192,11 @@ func (mt *MetaTable) DeleteCollection(collID typeutil.UniqueID, ts typeutil.Time
 		return fmt.Errorf("can't find collection. id = %d", collID)
 	}
 
-	delete(mt.collID2Meta, collID)
-	delete(mt.collName2ID, col.Name)
-
-	// update segID2IndexID
-	for _, partition := range col.Partitions {
-		partID := partition.PartitionID
-		if segIDMap, ok := mt.partID2SegID[typeutil.UniqueID(partID)]; ok {
-			for segID := range segIDMap {
-				delete(mt.segID2IndexID, segID)
-			}
-		}
-		delete(mt.partID2SegID, typeutil.UniqueID(partID))
-	}
-
-	for _, idxInfo := range col.FieldIndexes {
-		_, ok := mt.indexID2Meta[idxInfo.IndexID]
-		if !ok {
-			log.Warn("index id not exist", zap.Int64("index id", idxInfo.IndexID))
-			continue
-		}
-		delete(mt.indexID2Meta, idxInfo.IndexID)
-	}
 	var aliases []string
 	// delete collection aliases
 	for alias, cid := range mt.collAlias2ID {
 		if cid == collID {
 			aliases = append(aliases, alias)
-			delete(mt.collAlias2ID, alias)
 		}
 	}
 
@@ -233,7 +212,34 @@ func (mt *MetaTable) DeleteCollection(collID typeutil.UniqueID, ts typeutil.Time
 		Extra:        meta,
 	}
 
-	return mt.catalog.DropCollection(mt.ctx, collection, ts)
+	if err := mt.catalog.DropCollection(mt.ctx, collection, ts); err != nil {
+		return err
+	}
+
+	// update segID2IndexID
+	for _, partition := range col.Partitions {
+		partID := partition.PartitionID
+		if segIDMap, ok := mt.partID2SegID[partID]; ok {
+			for segID := range segIDMap {
+				delete(mt.segID2IndexID, segID)
+			}
+		}
+		delete(mt.partID2SegID, partID)
+	}
+
+	for _, idxInfo := range col.FieldIndexes {
+		delete(mt.indexID2Meta, idxInfo.IndexID)
+	}
+
+	// delete collection aliases
+	for _, alias := range aliases {
+		delete(mt.collAlias2ID, alias)
+	}
+
+	delete(mt.collID2Meta, collID)
+	delete(mt.collName2ID, col.Name)
+
+	return nil
 }
 
 // HasCollection return collection existence
@@ -859,8 +865,9 @@ func (mt *MetaTable) AddIndex(colName string, fieldName string, idxInfo *model.I
 	}
 
 	collMeta.FieldIndexes = append(collMeta.FieldIndexes, idx)
-
-	mt.catalog.CreateIndex(mt.ctx, &collMeta, idxInfo)
+	if err := mt.catalog.CreateIndex(mt.ctx, &collMeta, idxInfo); err != nil {
+		return nil
+	}
 
 	mt.collID2Meta[collMeta.CollectionID] = collMeta
 	mt.indexID2Meta[idxInfo.IndexID] = idxInfo
