@@ -768,6 +768,7 @@ func (mt *MetaTable) checkFieldIndexDuplicate(collMeta model.Collection, fieldSc
 					return false, fmt.Errorf("index already exists, collection: %s, field: %s, index: %s", collMeta.Name, fieldSchema.Name, idxInfo.IndexName)
 				}
 
+				log.Info("==checkFieldIndexDuplicate==", zap.Any("field", f), zap.Any("idxInfo", info))
 				// same index name, index params, and fieldId
 				return true, nil
 			}
@@ -871,6 +872,8 @@ func (mt *MetaTable) AddIndex(colName string, fieldName string, idxInfo *model.I
 
 	mt.collID2Meta[collMeta.CollectionID] = collMeta
 	mt.indexID2Meta[idxInfo.IndexID] = idxInfo
+
+	log.Info("=== addIndex ===", zap.Any("idxInfo", idxInfo), zap.Any("indexID2Meta", mt.indexID2Meta))
 	return nil
 }
 
