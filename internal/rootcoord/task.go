@@ -980,9 +980,14 @@ func (t *CreateIndexReqTask) Execute(ctx context.Context) error {
 		return err
 	}
 
-	if err := t.core.MetaTable.AddIndex(t.Req.CollectionName, t.Req.FieldName, idxInfo, flushedSegs); err != nil {
+	alreadyExists, err := t.core.MetaTable.AddIndex(t.Req.CollectionName, t.Req.FieldName, idxInfo, flushedSegs)
+	if err != nil {
 		log.Debug("add index into metastore failed", zap.Int64("collection_id", collMeta.CollectionID), zap.Int64("index_id", idxInfo.IndexID), zap.Error(err))
 		return err
+	}
+	// backward compatible with support create the same index
+	if alreadyExists {
+		return nil
 	}
 
 	segIDs, field, err := t.core.MetaTable.GetNotIndexedSegments(t.Req.CollectionName, t.Req.FieldName, idxInfo, flushedSegs)

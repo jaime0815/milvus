@@ -354,8 +354,9 @@ func TestMetaTable(t *testing.T) {
 	wg.Add(1)
 	t.Run("add segment index", func(t *testing.T) {
 		defer wg.Done()
-		err = mt.AddIndex(collName, "field110", idxInfo[0], []typeutil.UniqueID{segID})
+		alreadyExists, err := mt.AddIndex(collName, "field110", idxInfo[0], []typeutil.UniqueID{segID})
 		assert.Nil(t, err)
+		assert.False(t, alreadyExists)
 
 		index := model.Index{
 			CollectionID: collID,
@@ -407,8 +408,9 @@ func TestMetaTable(t *testing.T) {
 			IndexParams: params,
 		}
 
-		err := mt.AddIndex("collTest", "field110", idxInfo, []typeutil.UniqueID{segID})
+		alreadyExists, err := mt.AddIndex("collTest", "field110", idxInfo, []typeutil.UniqueID{segID})
 		assert.NotNil(t, err)
+		assert.False(t, alreadyExists)
 	})
 
 	wg.Add(1)
@@ -879,7 +881,10 @@ func TestMetaTable(t *testing.T) {
 		err = mt.AddCollection(collInfo, ts, "")
 		assert.Nil(t, err)
 
-		err = mt.AddIndex(collName, "field110", idxInfo[0], []typeutil.UniqueID{segID})
+		alreadyExists, err := mt.AddIndex(collName, "field110", idxInfo[0], []typeutil.UniqueID{segID})
+		assert.Nil(t, err)
+		assert.False(t, alreadyExists)
+
 		segIdxInfo := model.Index{
 			CollectionID: collID,
 			SegmentIndexes: map[int64]model.SegmentIndex{

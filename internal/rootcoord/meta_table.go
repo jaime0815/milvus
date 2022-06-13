@@ -797,19 +797,19 @@ func (mt *MetaTable) GetNotIndexedSegments(collName string, fieldName string, id
 }
 
 // AddIndex add index
-func (mt *MetaTable) AddIndex(colName string, fieldName string, idxInfo *model.Index, segIDs []typeutil.UniqueID) error {
+func (mt *MetaTable) AddIndex(colName string, fieldName string, idxInfo *model.Index, segIDs []typeutil.UniqueID) (bool, error) {
 	mt.ddLock.Lock()
 	defer mt.ddLock.Unlock()
 
 	fieldSchema, err := mt.unlockGetFieldSchema(colName, fieldName)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	collMeta, err := mt.unlockGetCollectionInfo(colName)
 	if err != nil {
 		// error here if collection not found.
-		return err
+		return false, err
 	}
 
 	//TODO:: check index params for sclar field
@@ -823,24 +823,24 @@ func (mt *MetaTable) AddIndex(colName string, fieldName string, idxInfo *model.I
 	}
 
 	if idxInfo.IndexParams == nil {
-		return fmt.Errorf("index param is nil")
+		return false, fmt.Errorf("index param is nil")
 	}
 
 	if err := mt.checkFieldCanBeIndexed(collMeta, fieldSchema, idxInfo); err != nil {
-		return err
+		return false, err
 	}
 
 	dupIdx, err := mt.checkFieldIndexDuplicate(collMeta, fieldSchema, idxInfo)
 	if err != nil {
 		// error here if index already exists.
-		return err
+		return dupIdx, err
 	}
 
 	if dupIdx {
 		log.Warn("due to index already exists, skip add index to metastore", zap.Int64("collectionID", collMeta.CollectionID),
 			zap.Int64("indexID", idxInfo.IndexID), zap.String("indexName", idxInfo.IndexName))
 		// skip already exist index
-		return nil
+		return dupIdx, nil
 	}
 
 	segmentIndexes := make(map[int64]model.SegmentIndex, len(segIDs))
@@ -867,14 +867,14 @@ func (mt *MetaTable) AddIndex(colName string, fieldName string, idxInfo *model.I
 
 	collMeta.FieldIndexes = append(collMeta.FieldIndexes, idx)
 	if err := mt.catalog.CreateIndex(mt.ctx, &collMeta, idxInfo); err != nil {
-		return nil
+		return false, nil
 	}
 
 	mt.collID2Meta[collMeta.CollectionID] = collMeta
 	mt.indexID2Meta[idxInfo.IndexID] = idxInfo
 
 	log.Info("=== addIndex ===", zap.Any("idxInfo", idxInfo), zap.Any("indexID2Meta", mt.indexID2Meta))
-	return nil
+	return false, nil
 }
 
 // GetIndexByName return index info by index name
