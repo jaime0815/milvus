@@ -508,9 +508,18 @@ func (mt *MetaTable) DeletePartition(collID typeutil.UniqueID, partitionName str
 	if segIDMap, ok := mt.partID2SegID[partID]; ok {
 		for segID := range segIDMap {
 			indexID, ok := mt.segID2IndexID[segID]
-			if ok {
-				return 0, fmt.Errorf("must drop index: %d before drop parition, segment id: %d", indexID, segID)
+			if !ok {
+				return 0, fmt.Errorf("index id does not exist, segment id: %d", segID)
 			}
+
+			delete(mt.segID2IndexID, segID)
+
+			indexMeta, ok := mt.indexID2Meta[indexID]
+			if !ok {
+				return 0, fmt.Errorf("index meta does not exist, indexID id: %d", indexID)
+			}
+
+			delete(indexMeta.SegmentIndexes, segID)
 		}
 	}
 	delete(mt.partID2SegID, partID)
