@@ -116,7 +116,8 @@ func (s *Server) AssignSegmentID(ctx context.Context, req *datapb.AssignSegmentI
 			zap.Int64("collectionID", r.GetCollectionID()),
 			zap.Int64("partitionID", r.GetPartitionID()),
 			zap.String("channelName", r.GetChannelName()),
-			zap.Uint32("count", r.GetCount()))
+			zap.Uint32("count", r.GetCount()),
+			zap.Bool("isImport", r.GetIsImport()))
 
 		// Load the collection info from Root Coordinator, if it is not found in server meta.
 		if s.meta.GetCollection(r.GetCollectionID()) == nil {
@@ -130,16 +131,30 @@ func (s *Server) AssignSegmentID(ctx context.Context, req *datapb.AssignSegmentI
 		// Add the channel to cluster for watching.
 		s.cluster.Watch(r.ChannelName, r.CollectionID)
 
-		// Have segment manager allocate and return the segment allocation info.
-		segAlloc, err := s.segmentManager.AllocSegment(ctx,
-			r.CollectionID, r.PartitionID, r.ChannelName, int64(r.Count))
-		if err != nil {
-			log.Warn("failed to alloc segment", zap.Any("request", r), zap.Error(err))
-			continue
+		segmentAllocations := make([]*Allocation, 0)
+		if r.GetIsImport() {
+			// Have segment manager allocate and return the segment allocation info.
+			segAlloc, err := s.segmentManager.AllocSegmentForImport(ctx,
+				r.CollectionID, r.PartitionID, r.ChannelName, int64(r.Count))
+			if err != nil {
+				log.Warn("failed to alloc segment for import", zap.Any("request", r), zap.Error(err))
+				continue
+			}
+			segmentAllocations = append(segmentAllocations, segAlloc)
+		} else {
+			// Have segment manager allocate and return the segment allocation info.
+			segAlloc, err := s.segmentManager.AllocSegment(ctx,
+				r.CollectionID, r.PartitionID, r.ChannelName, int64(r.Count))
+			if err != nil {
+				log.Warn("failed to alloc segment", zap.Any("request", r), zap.Error(err))
+				continue
+			}
+			segmentAllocations = append(segmentAllocations, segAlloc...)
 		}
-		log.Info("success to assign segments", zap.Int64("collectionID", r.GetCollectionID()), zap.Any("assignments", segAlloc))
 
-		for _, allocation := range segAlloc {
+		log.Info("success to assign segments", zap.Int64("collectionID", r.GetCollectionID()), zap.Any("assignments", segmentAllocations))
+
+		for _, allocation := range segmentAllocations {
 			result := &datapb.SegmentIDAssignment{
 				SegID:        allocation.SegmentID,
 				ChannelName:  r.ChannelName,
@@ -289,12 +304,20 @@ func (s *Server) GetSegmentInfo(ctx context.Context, req *datapb.GetSegmentInfoR
 	}
 	infos := make([]*datapb.SegmentInfo, 0, len(req.SegmentIDs))
 	for _, id := range req.SegmentIDs {
-		info := s.meta.GetSegment(id)
-		if info == nil {
-			resp.Status.Reason = fmt.Sprintf("failed to get segment %d", id)
-			return resp, nil
+		var info *SegmentInfo
+		if req.IncludeUnHealthy {
+			info = s.meta.GetAllSegment(id)
+			if info != nil {
+				infos = append(infos, info.SegmentInfo)
+			}
+		} else {
+			info = s.meta.GetSegment(id)
+			if info == nil {
+				resp.Status.Reason = fmt.Sprintf("failed to get segment %d", id)
+				return resp, nil
+			}
+			infos = append(infos, info.SegmentInfo)
 		}
-		infos = append(infos, info.SegmentInfo)
 	}
 	resp.Status.ErrorCode = commonpb.ErrorCode_Success
 	resp.Infos = infos
@@ -376,10 +399,10 @@ func (s *Server) SaveBinlogPaths(ctx context.Context, req *datapb.SaveBinlogPath
 			cctx, cancel := context.WithTimeout(s.ctx, 5*time.Second)
 			defer cancel()
 
-			tt, err := getTimetravelReverseTime(cctx, s.allocator)
+			ct, err := getCompactTime(cctx, s.allocator)
 			if err == nil {
 				err = s.compactionTrigger.triggerSingleCompaction(segment.GetCollectionID(),
-					segment.GetPartitionID(), segmentID, segment.GetInsertChannel(), tt)
+					segment.GetPartitionID(), segmentID, segment.GetInsertChannel(), ct)
 				if err != nil {
 					log.Warn("failed to trigger single compaction", zap.Int64("segment ID", segmentID))
 				} else {
@@ -813,14 +836,14 @@ func (s *Server) ManualCompaction(ctx context.Context, req *milvuspb.ManualCompa
 		return resp, nil
 	}
 
-	tt, err := getTimetravelReverseTime(ctx, s.allocator)
+	ct, err := getCompactTime(ctx, s.allocator)
 	if err != nil {
 		log.Warn("failed to get timetravel reverse time", zap.Int64("collectionID", req.GetCollectionID()), zap.Error(err))
 		resp.Status.Reason = err.Error()
 		return resp, nil
 	}
 
-	id, err := s.compactionTrigger.forceTriggerCompaction(req.CollectionID, tt)
+	id, err := s.compactionTrigger.forceTriggerCompaction(req.CollectionID, ct)
 	if err != nil {
 		log.Error("failed to trigger manual compaction", zap.Int64("collectionID", req.GetCollectionID()), zap.Error(err))
 		resp.Status.Reason = err.Error()
@@ -1097,7 +1120,7 @@ func (s *Server) AcquireSegmentLock(ctx context.Context, req *datapb.AcquireSegm
 		return resp, nil
 	}
 
-	err = s.segReferManager.AddSegmentsLock(req.SegmentIDs, req.NodeID)
+	err = s.segReferManager.AddSegmentsLock(req.TaskID, req.SegmentIDs, req.NodeID)
 	if err != nil {
 		log.Warn("Add reference lock on segments failed", zap.Int64s("segIDs", req.SegmentIDs), zap.Error(err))
 		resp.Reason = err.Error()
@@ -1107,7 +1130,7 @@ func (s *Server) AcquireSegmentLock(ctx context.Context, req *datapb.AcquireSegm
 	if !hasSegments || err != nil {
 		log.Error("AcquireSegmentLock failed, try to release reference lock", zap.Error(err))
 		if err2 := retry.Do(ctx, func() error {
-			return s.segReferManager.ReleaseSegmentsLock(req.SegmentIDs, req.NodeID)
+			return s.segReferManager.ReleaseSegmentsLock(req.TaskID, req.NodeID)
 		}, retry.Attempts(100)); err2 != nil {
 			panic(err)
 		}
@@ -1130,9 +1153,9 @@ func (s *Server) ReleaseSegmentLock(ctx context.Context, req *datapb.ReleaseSegm
 		return resp, nil
 	}
 
-	err := s.segReferManager.ReleaseSegmentsLock(req.SegmentIDs, req.NodeID)
+	err := s.segReferManager.ReleaseSegmentsLock(req.TaskID, req.NodeID)
 	if err != nil {
-		log.Error("DataCoord ReleaseSegmentLock failed", zap.Int64s("segmentIDs", req.SegmentIDs), zap.Int64("nodeID", req.NodeID),
+		log.Error("DataCoord ReleaseSegmentLock failed", zap.Int64("taskID", req.TaskID), zap.Int64("nodeID", req.NodeID),
 			zap.Error(err))
 		resp.Reason = err.Error()
 		return resp, nil

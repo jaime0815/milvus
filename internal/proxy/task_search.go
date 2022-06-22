@@ -20,6 +20,7 @@ import (
 
 	"github.com/milvus-io/milvus/internal/util/distance"
 	"github.com/milvus-io/milvus/internal/util/funcutil"
+	"github.com/milvus-io/milvus/internal/util/grpcclient"
 	"github.com/milvus-io/milvus/internal/util/timerecord"
 	"github.com/milvus-io/milvus/internal/util/trace"
 	"github.com/milvus-io/milvus/internal/util/tsoutil"
@@ -151,6 +152,7 @@ func (t *searchTask) PreExecute(ctx context.Context) error {
 		if err != nil {
 			return errors.New(MetricTypeKey + " not found in search_params")
 		}
+		t.SearchRequest.MetricType = metricType
 
 		searchParams, err := funcutil.GetAttrByKeyFromRepeatedKV(SearchParamsKey, t.request.SearchParams)
 		if err != nil {
@@ -302,7 +304,7 @@ func (t *searchTask) Execute(ctx context.Context) error {
 	}
 
 	err := executeSearch(WithCache)
-	if err == errInvalidShardLeaders || funcutil.IsGrpcErr(err) {
+	if errors.Is(err, errInvalidShardLeaders) || funcutil.IsGrpcErr(err) || errors.Is(err, grpcclient.ErrConnect) {
 		log.Warn("first search failed, updating shardleader caches and retry search", zap.Error(err))
 		return executeSearch(WithoutCache)
 	}
@@ -415,11 +417,12 @@ func (t *searchTask) searchShard(ctx context.Context, leaders []nodeInfo, channe
 		}
 		result, err := qn.Search(ctx, req)
 		if err != nil {
+			log.Warn("QueryNode search return error", zap.Int64("nodeID", nodeID), zap.String("channel", channelID),
+				zap.Error(err))
 			return err
 		}
 		if result.GetStatus().GetErrorCode() == commonpb.ErrorCode_NotShardLeader {
-			log.Warn("QueryNode search returns error", zap.Int64("nodeID", nodeID),
-				zap.Error(err))
+			log.Warn("QueryNode is not shardLeader", zap.Int64("nodeID", nodeID), zap.String("channel", channelID))
 			return errInvalidShardLeaders
 		}
 		if result.GetStatus().GetErrorCode() != commonpb.ErrorCode_Success {

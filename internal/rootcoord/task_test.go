@@ -5,6 +5,11 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
+	"github.com/milvus-io/milvus/internal/proto/etcdpb"
+	"github.com/milvus-io/milvus/internal/util/typeutil"
+
 	"github.com/milvus-io/milvus/internal/metastore/model"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
 	"github.com/milvus-io/milvus/internal/proto/rootcoordpb"
@@ -68,7 +73,7 @@ func TestDescribeSegmentsReqTask_Execute(t *testing.T) {
 	}
 	assert.NoError(t, tsk.Execute(context.Background()))
 
-	// index not found in meta.
+	// index not found in meta. no return error
 	c.MetaTable = &MetaTable{
 		segID2IndexID: map[typeutil.UniqueID]typeutil.UniqueID{segID: indexID},
 		indexID2Meta: map[typeutil.UniqueID]*model.Index{
@@ -89,7 +94,7 @@ func TestDescribeSegmentsReqTask_Execute(t *testing.T) {
 			},
 		},
 	}
-	assert.Error(t, tsk.Execute(context.Background()))
+	assert.NoError(t, tsk.Execute(context.Background()))
 
 	// success.
 	c.MetaTable = &MetaTable{
@@ -115,4 +120,36 @@ func TestDescribeSegmentsReqTask_Execute(t *testing.T) {
 		},
 	}
 	assert.NoError(t, tsk.Execute(context.Background()))
+}
+
+func Test_hasSystemFields(t *testing.T) {
+	t.Run("no system fields", func(t *testing.T) {
+		schema := &schemapb.CollectionSchema{Fields: []*schemapb.FieldSchema{{Name: "not_system_field"}}}
+		assert.False(t, hasSystemFields(schema, []string{RowIDFieldName, TimeStampFieldName}))
+	})
+
+	t.Run("has row id field", func(t *testing.T) {
+		schema := &schemapb.CollectionSchema{Fields: []*schemapb.FieldSchema{{Name: RowIDFieldName}}}
+		assert.True(t, hasSystemFields(schema, []string{RowIDFieldName, TimeStampFieldName}))
+	})
+
+	t.Run("has timestamp field", func(t *testing.T) {
+		schema := &schemapb.CollectionSchema{Fields: []*schemapb.FieldSchema{{Name: TimeStampFieldName}}}
+		assert.True(t, hasSystemFields(schema, []string{RowIDFieldName, TimeStampFieldName}))
+	})
+}
+
+func TestCreateCollectionReqTask_Execute_hasSystemFields(t *testing.T) {
+	schema := &schemapb.CollectionSchema{Name: "test", Fields: []*schemapb.FieldSchema{{Name: TimeStampFieldName}}}
+	marshaledSchema, err := proto.Marshal(schema)
+	assert.NoError(t, err)
+	task := &CreateCollectionReqTask{
+		Req: &milvuspb.CreateCollectionRequest{
+			Base:           &commonpb.MsgBase{MsgType: commonpb.MsgType_CreateCollection},
+			CollectionName: "test",
+			Schema:         marshaledSchema,
+		},
+	}
+	err = task.Execute(context.Background())
+	assert.Error(t, err)
 }

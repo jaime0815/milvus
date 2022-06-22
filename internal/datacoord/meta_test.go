@@ -459,6 +459,7 @@ func Test_meta_CompleteMergeCompaction(t *testing.T) {
 					assert.EqualValues(t, tt.args.result.GetInsertLogs(), segment.GetBinlogs())
 					assert.EqualValues(t, tt.args.result.GetField2StatslogPaths(), segment.GetStatslogs())
 					assert.EqualValues(t, tt.args.result.GetDeltalogs(), segment.GetDeltalogs())
+					assert.NotZero(t, segment.lastFlushTime)
 				}
 			}
 		})
@@ -720,4 +721,34 @@ func TestMeta_HasSegments(t *testing.T) {
 	has, err = m.HasSegments([]UniqueID{2})
 	assert.Equal(t, false, has)
 	assert.Error(t, err)
+}
+
+func TestMeta_GetAllSegments(t *testing.T) {
+	m := &meta{
+		segments: &SegmentsInfo{
+			segments: map[UniqueID]*SegmentInfo{
+				1: {
+					SegmentInfo: &datapb.SegmentInfo{
+						ID:    1,
+						State: commonpb.SegmentState_Growing,
+					},
+				},
+				2: {
+					SegmentInfo: &datapb.SegmentInfo{
+						ID:    2,
+						State: commonpb.SegmentState_Dropped,
+					},
+				},
+			},
+		},
+	}
+
+	seg1 := m.GetSegment(1)
+	seg1All := m.GetAllSegment(1)
+	seg2 := m.GetSegment(2)
+	seg2All := m.GetAllSegment(2)
+	assert.NotNil(t, seg1)
+	assert.NotNil(t, seg1All)
+	assert.Nil(t, seg2)
+	assert.NotNil(t, seg2All)
 }

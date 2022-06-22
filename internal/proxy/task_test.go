@@ -123,7 +123,7 @@ func constructCollectionSchemaByDataType(collectionName string, fieldName2DataTy
 		if dataType == schemapb.DataType_VarChar {
 			fieldSchema.TypeParams = []*commonpb.KeyValuePair{
 				{
-					Key:   "max_length_per_row",
+					Key:   "max_length",
 					Value: strconv.Itoa(testMaxVarCharLength),
 				},
 			}
@@ -1716,7 +1716,7 @@ func TestTask_Int64PrimaryKey(t *testing.T) {
 	chMgr := newChannelsMgrImpl(dmlChannelsFunc, nil, factory)
 	defer chMgr.removeAllDMLStream()
 
-	err = chMgr.createDMLMsgStream(collectionID)
+	_, err = chMgr.getOrCreateDmlStream(collectionID)
 	assert.NoError(t, err)
 	pchans, err := chMgr.getChannels(collectionID)
 	assert.NoError(t, err)
@@ -1971,7 +1971,7 @@ func TestTask_VarCharPrimaryKey(t *testing.T) {
 	chMgr := newChannelsMgrImpl(dmlChannelsFunc, nil, factory)
 	defer chMgr.removeAllDMLStream()
 
-	err = chMgr.createDMLMsgStream(collectionID)
+	_, err = chMgr.getOrCreateDmlStream(collectionID)
 	assert.NoError(t, err)
 	pchans, err := chMgr.getChannels(collectionID)
 	assert.NoError(t, err)

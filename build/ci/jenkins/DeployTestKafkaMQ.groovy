@@ -4,7 +4,7 @@ pipeline {
     }
     agent {
         kubernetes {
-            label "milvus-chaos-test"
+            label "milvus-test"
             defaultContainer 'main'
             yamlFile "build/ci/jenkins/pod/chaos-test.yaml"
             customWorkspace '/home/jenkins/agent/workspace'
@@ -51,18 +51,33 @@ pipeline {
         string(
             description: 'Etcd Image Repository',
             name: 'etcd_image_repository',
-            defaultValue: "bitnami/etcd"
+            defaultValue: "milvusdb/etcd"
         )
         string(
             description: 'Etcd Image Tag',
             name: 'etcd_image_tag',
-            defaultValue: "3.5.0-debian-10-r24"
+            defaultValue: "3.5.0-r1"
         )
         string(
             description: 'Querynode Nums',
             name: 'querynode_nums',
             defaultValue: '3'
-        )        
+        )
+        string(
+            description: 'DataNode Nums',
+            name: 'datanode_nums',
+            defaultValue: '2'
+        )
+        string(
+            description: 'IndexNode Nums',
+            name: 'indexnode_nums',
+            defaultValue: '1'
+        )
+        string(
+            description: 'Proxy Nums',
+            name: 'proxy_nums',
+            defaultValue: '1'
+        )
         string(
             description: 'Data Size',
             name: 'data_size',
@@ -113,6 +128,12 @@ pipeline {
                         } else if ("${params.mq_type}" == "kafka") {
                             sh "yq -i '.kafka.enabled = true' cluster-values.yaml"
                         }
+                        sh"""
+                        yq -i '.queryNode.replicas = "${params.querynode_nums}"' cluster-values.yaml
+                        yq -i '.dataNode.replicas = "${params.datanode_nums}"' cluster-values.yaml
+                        yq -i '.indexNode.replicas = "${params.indexnode_nums}"' cluster-values.yaml
+                        yq -i '.proxy.replicas = "${params.proxy_nums}"' cluster-values.yaml
+                        """
                         sh "cat cluster-values.yaml"
                         }
                         }
@@ -185,6 +206,9 @@ pipeline {
                 }
         }
         stage ('Run first test') {
+            options {
+              timeout(time: 20, unit: 'MINUTES')   // timeout on this stage
+            }            
             steps {
                 container('main') {
                     dir ('tests/python_client/deploy/scripts') {
@@ -293,6 +317,9 @@ pipeline {
         }
 
         stage ('Run Second Test') {
+            options {
+              timeout(time: 20, unit: 'MINUTES')   // timeout on this stage
+            }
             steps {
                 container('main') {
                     dir ('tests/python_client/deploy/scripts') {

@@ -95,9 +95,10 @@ SegmentSealedImpl::LoadVecIndex(const LoadIndexInfo& info) {
     AssertInfo(!get_bit(index_ready_bitset_, field_id),
                "vector index has been exist at " + std::to_string(field_id.get()));
     if (row_count_opt_.has_value()) {
-        AssertInfo(row_count_opt_.value() == row_count, "load data has different row count from other columns");
-    } else {
-        row_count_opt_ = row_count;
+        AssertInfo(row_count_opt_.value() == row_count,
+                   "field (" + std::to_string(field_id.get()) + ") data has different row count (" +
+                       std::to_string(row_count) + ") than other column's row count (" +
+                       std::to_string(row_count_opt_.value()) + ")");
     }
     AssertInfo(!vector_indexings_.is_ready(field_id), "vec index is not ready");
     vector_indexings_.append_field_indexing(field_id, GetMetricType(metric_type_str), index);
@@ -124,28 +125,29 @@ SegmentSealedImpl::LoadScalarIndex(const LoadIndexInfo& info) {
     AssertInfo(!get_bit(index_ready_bitset_, field_id),
                "scalar index has been exist at " + std::to_string(field_id.get()));
     if (row_count_opt_.has_value()) {
-        AssertInfo(row_count_opt_.value() == row_count, "load data has different row count from other columns");
-    } else {
-        row_count_opt_ = row_count;
+        AssertInfo(row_count_opt_.value() == row_count,
+                   "field (" + std::to_string(field_id.get()) + ") data has different row count (" +
+                       std::to_string(row_count) + ") than other column's row count (" +
+                       std::to_string(row_count_opt_.value()) + ")");
     }
 
     scalar_indexings_[field_id] = index;
     // reverse pk from scalar index and set pks to offset
     if (schema_->get_primary_field_id() == field_id) {
         AssertInfo(field_id.get() != -1, "Primary key is -1");
-        AssertInfo(pk2offset_.empty(), "already exists");
+        AssertInfo(insert_record_.empty_pks(), "already exists");
         switch (field_meta.get_data_type()) {
             case DataType::INT64: {
                 auto int64_index = std::dynamic_pointer_cast<scalar::ScalarIndex<int64_t>>(info.index);
                 for (int i = 0; i < row_count; ++i) {
-                    pk2offset_.insert(std::make_pair(int64_index->Reverse_Lookup(i), i));
+                    insert_record_.insert_pk(int64_index->Reverse_Lookup(i), i);
                 }
                 break;
             }
             case DataType::VARCHAR: {
                 auto string_index = std::dynamic_pointer_cast<scalar::ScalarIndex<std::string>>(info.index);
                 for (int i = 0; i < row_count; ++i) {
-                    pk2offset_.insert(std::make_pair(string_index->Reverse_Lookup(i), i));
+                    insert_record_.insert_pk(string_index->Reverse_Lookup(i), i);
                 }
                 break;
             }
@@ -168,6 +170,12 @@ SegmentSealedImpl::LoadFieldData(const LoadFieldDataInfo& info) {
     auto field_id = FieldId(info.field_id);
     AssertInfo(info.field_data != nullptr, "Field info blob is null");
     auto size = info.row_count;
+    if (row_count_opt_.has_value()) {
+        AssertInfo(row_count_opt_.value() == size, "field (" + std::to_string(field_id.get()) +
+                                                       ") data has different row count (" + std::to_string(size) +
+                                                       ") than other column's row count (" +
+                                                       std::to_string(row_count_opt_.value()) + ")");
+    }
 
     if (SystemProperty::Instance().IsSystem(field_id)) {
         auto system_field_type = SystemProperty::Instance().GetSystemFieldType(field_id);
@@ -218,11 +226,11 @@ SegmentSealedImpl::LoadFieldData(const LoadFieldDataInfo& info) {
         // set pks to offset
         if (schema_->get_primary_field_id() == field_id) {
             AssertInfo(field_id.get() != -1, "Primary key is -1");
-            AssertInfo(pk2offset_.empty(), "already exists");
+            AssertInfo(insert_record_.empty_pks(), "already exists");
             std::vector<PkType> pks(size);
             ParsePksFromFieldData(pks, *info.field_data);
             for (int i = 0; i < size; ++i) {
-                pk2offset_.insert(std::make_pair(pks[i], i));
+                insert_record_.insert_pk(pks[i], i);
             }
         }
 
@@ -325,8 +333,7 @@ SegmentSealedImpl::mask_with_delete(BitsetType& bitset, int64_t ins_barrier, Tim
     if (del_barrier == 0) {
         return;
     }
-    auto bitmap_holder =
-        get_deleted_bitmap(del_barrier, ins_barrier, deleted_record_, insert_record_, pk2offset_, timestamp);
+    auto bitmap_holder = get_deleted_bitmap(del_barrier, ins_barrier, deleted_record_, insert_record_, timestamp);
     if (!bitmap_holder || !bitmap_holder->bitmap_ptr) {
         return;
     }
@@ -660,25 +667,22 @@ SegmentSealedImpl::search_ids(const IdArray& id_array, Timestamp timestamp) cons
     auto res_id_arr = std::make_unique<IdArray>();
     std::vector<SegOffset> res_offsets;
     for (auto pk : pks) {
-        auto [iter_b, iter_e] = pk2offset_.equal_range(pk);
-        for (auto iter = iter_b; iter != iter_e; ++iter) {
-            auto offset = SegOffset(iter->second);
-            if (insert_record_.timestamps_[offset.get()] <= timestamp) {
-                switch (data_type) {
-                    case DataType::INT64: {
-                        res_id_arr->mutable_int_id()->add_data(std::get<int64_t>(pk));
-                        break;
-                    }
-                    case DataType::VARCHAR: {
-                        res_id_arr->mutable_str_id()->add_data(std::get<std::string>(pk));
-                        break;
-                    }
-                    default: {
-                        PanicInfo("unsupported type");
-                    }
+        auto segOffsets = insert_record_.search_pk(pk, timestamp);
+        for (auto offset : segOffsets) {
+            switch (data_type) {
+                case DataType::INT64: {
+                    res_id_arr->mutable_int_id()->add_data(std::get<int64_t>(pk));
+                    break;
                 }
-                res_offsets.push_back(offset);
+                case DataType::VARCHAR: {
+                    res_id_arr->mutable_str_id()->add_data(std::get<std::string>(pk));
+                    break;
+                }
+                default: {
+                    PanicInfo("unsupported type");
+                }
             }
+            res_offsets.push_back(offset);
         }
     }
     return {std::move(res_id_arr), std::move(res_offsets)};

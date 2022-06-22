@@ -10,7 +10,6 @@ require (
 	github.com/antonmedv/expr v1.8.9
 	github.com/apache/arrow/go/v8 v8.0.0-20220322092137-778b1772fd20
 	github.com/apache/pulsar-client-go v0.6.1-0.20210728062540-29414db801a7
-	github.com/apache/pulsar-client-go/oauth2 v0.0.0-20201120111947-b8bd55bc02bd // indirect
 	github.com/apache/thrift v0.15.0
 	github.com/bits-and-blooms/bloom/v3 v3.0.1
 	github.com/confluentinc/confluent-kafka-go v1.8.2
@@ -36,11 +35,13 @@ require (
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.11.0
+	github.com/quasilyte/go-ruleguard/dsl v0.3.21 // indirect
 	github.com/sbinet/npyio v0.6.0
 	github.com/shirou/gopsutil v3.21.8+incompatible
 	github.com/spaolacci/murmur3 v1.1.0
 	github.com/spf13/cast v1.3.1
 	github.com/spf13/viper v1.8.1
+	github.com/streamnative/pulsarctl v0.5.0
 	github.com/stretchr/testify v1.7.0
 	github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c
 	github.com/tklauser/go-sysconf v0.3.9 // indirect
@@ -61,9 +62,10 @@ require (
 )
 
 replace (
-	github.com/apache/pulsar-client-go => github.com/milvus-io/pulsar-client-go v0.6.1-0.20220310065106-1ef6d309ead7
+	github.com/apache/pulsar-client-go => github.com/milvus-io/pulsar-client-go v0.6.8
 	github.com/bketelsen/crypt => github.com/bketelsen/crypt v0.0.4 // Fix security alert for core-os/etcd
 	github.com/dgrijalva/jwt-go => github.com/golang-jwt/jwt v3.2.2+incompatible // Fix security alert for jwt-go 3.2.0
 	github.com/go-kit/kit => github.com/go-kit/kit v0.1.0
+	github.com/streamnative/pulsarctl => github.com/xiaofan-luan/pulsarctl v0.0.2
 	google.golang.org/grpc => google.golang.org/grpc v1.38.0
 )

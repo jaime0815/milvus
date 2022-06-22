@@ -362,6 +362,11 @@ func TestIndexCoord_NotHealthy(t *testing.T) {
 	resp4, err := ic.GetIndexFilePaths(context.Background(), req4)
 	assert.Nil(t, err)
 	assert.Equal(t, commonpb.ErrorCode_UnexpectedError, resp4.Status.ErrorCode)
+
+	req5 := &indexpb.RemoveIndexRequest{}
+	resp5, err := ic.RemoveIndex(context.Background(), req5)
+	assert.Nil(t, err)
+	assert.Equal(t, commonpb.ErrorCode_UnexpectedError, resp5.GetErrorCode())
 }
 
 func TestIndexCoord_GetIndexFilePaths(t *testing.T) {
@@ -427,7 +432,7 @@ func Test_tryAcquireSegmentReferLock(t *testing.T) {
 	ic.chunkManager = cmm
 
 	t.Run("success", func(t *testing.T) {
-		err := ic.tryAcquireSegmentReferLock(context.Background(), []UniqueID{1})
+		err := ic.tryAcquireSegmentReferLock(context.Background(), 1, []UniqueID{1})
 		assert.Nil(t, err)
 	})
 
@@ -437,7 +442,7 @@ func Test_tryAcquireSegmentReferLock(t *testing.T) {
 			Fail: false,
 		}
 		ic.dataCoordClient = dcmE
-		err := ic.tryAcquireSegmentReferLock(context.Background(), []UniqueID{1})
+		err := ic.tryAcquireSegmentReferLock(context.Background(), 1, []UniqueID{1})
 		assert.Error(t, err)
 	})
 
@@ -447,7 +452,7 @@ func Test_tryAcquireSegmentReferLock(t *testing.T) {
 			Fail: true,
 		}
 		ic.dataCoordClient = dcmF
-		err := ic.tryAcquireSegmentReferLock(context.Background(), []UniqueID{1})
+		err := ic.tryAcquireSegmentReferLock(context.Background(), 1, []UniqueID{1})
 		assert.Error(t, err)
 	})
 }
@@ -466,7 +471,17 @@ func Test_tryReleaseSegmentReferLock(t *testing.T) {
 	ic.dataCoordClient = dcm
 
 	t.Run("success", func(t *testing.T) {
-		err := ic.tryReleaseSegmentReferLock(context.Background(), []UniqueID{1})
+		err := ic.tryReleaseSegmentReferLock(context.Background(), 1, []UniqueID{1})
 		assert.NoError(t, err)
 	})
+}
+
+func TestIndexCoord_RemoveIndex(t *testing.T) {
+	ic := &IndexCoord{
+		metaTable: &metaTable{},
+	}
+	ic.stateCode.Store(internalpb.StateCode_Healthy)
+	status, err := ic.RemoveIndex(context.Background(), &indexpb.RemoveIndexRequest{BuildIDs: []UniqueID{0}})
+	assert.Nil(t, err)
+	assert.Equal(t, commonpb.ErrorCode_Success, status.GetErrorCode())
 }

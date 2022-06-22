@@ -15,6 +15,7 @@ message IndexInfo {
   string index_name = 1;
   int64 indexID = 2;
   repeated common.KeyValuePair index_params = 3;
+  bool deleted = 4;
 }
 
 message FieldIndexInfo{
@@ -45,6 +46,7 @@ message SegmentIndexInfo {
   int64 indexID = 5;
   int64 buildID = 6;
   bool enable_index = 7;
+  bool by_auto_flush = 8;
 }
 
 message CollectionMeta {

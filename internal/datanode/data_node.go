@@ -119,6 +119,7 @@ type DataNode struct {
 	session      *sessionutil.Session
 	watchKv      kv.MetaKv
 	chunkManager storage.ChunkManager
+	idAllocator  *allocator2.IDAllocator
 
 	closer io.Closer
 
@@ -216,6 +217,15 @@ func (node *DataNode) Init() error {
 		return err
 	}
 
+	idAllocator, err := allocator2.NewIDAllocator(node.ctx, node.rootCoord, Params.DataNodeCfg.GetNodeID())
+	if err != nil {
+		log.Error("failed to create id allocator",
+			zap.Error(err),
+			zap.String("role", typeutil.DataNodeRole), zap.Int64("DataNodeID", Params.DataNodeCfg.GetNodeID()))
+		return err
+	}
+	node.idAllocator = idAllocator
+
 	node.factory.Init(&Params)
 	log.Info("DataNode Init successfully",
 		zap.String("MsgChannelSubName", Params.CommonCfg.DataNodeSubName))
@@ -259,7 +269,8 @@ func (node *DataNode) StartWatchChannels(ctx context.Context) {
 				return
 			}
 			for _, evt := range event.Events {
-				go node.handleChannelEvt(evt)
+				// We need to stay in order until events enqueued
+				node.handleChannelEvt(evt)
 			}
 		}
 	}
@@ -432,6 +443,11 @@ var FilterThreshold Timestamp
 
 // Start will update DataNode state to HEALTHY
 func (node *DataNode) Start() error {
+	if err := node.idAllocator.Start(); err != nil {
+		log.Error("failed to start id allocator", zap.Error(err), zap.String("role", typeutil.DataNodeRole))
+		return err
+	}
+	log.Debug("start id allocator done", zap.String("role", typeutil.DataNodeRole))
 
 	rep, err := node.rootCoord.AllocTimestamp(node.ctx, &rootcoordpb.AllocTimestampRequest{
 		Base: &commonpb.MsgBase{
@@ -655,6 +671,11 @@ func (node *DataNode) Stop() error {
 	node.cancel()
 	node.flowgraphManager.dropAll()
 
+	if node.idAllocator != nil {
+		log.Info("close id allocator", zap.String("role", typeutil.DataNodeRole))
+		node.idAllocator.Close()
+	}
+
 	if node.closer != nil {
 		err := node.closer.Close()
 		if err != nil {
@@ -839,6 +860,8 @@ func (node *DataNode) Import(ctx context.Context, req *datapb.ImportTaskRequest)
 			Reason:    msg,
 		}, nil
 	}
+
+	// get a timestamp for all the rows
 	rep, err := node.rootCoord.AllocTimestamp(ctx, &rootcoordpb.AllocTimestampRequest{
 		Base: &commonpb.MsgBase{
 			MsgType:   commonpb.MsgType_RequestTSO,
@@ -865,6 +888,7 @@ func (node *DataNode) Import(ctx context.Context, req *datapb.ImportTaskRequest)
 
 	ts := rep.GetTimestamp()
 
+	// get collection schema and shard number
 	metaService := newMetaService(node.rootCoord, req.GetImportTask().GetCollectionId())
 	colInfo, err := metaService.getCollectionInfo(ctx, req.GetImportTask().GetCollectionId(), 0)
 	if err != nil {
@@ -877,13 +901,9 @@ func (node *DataNode) Import(ctx context.Context, req *datapb.ImportTaskRequest)
 		}, nil
 	}
 
-	// temp id allocator service
-	idAllocator, err := allocator2.NewIDAllocator(node.ctx, node.rootCoord, Params.DataNodeCfg.GetNodeID())
-	_ = idAllocator.Start()
-	defer idAllocator.Close()
-
+	// parse files and generate segments
 	segmentSize := int64(Params.DataCoordCfg.SegmentMaxSize) * 1024 * 1024
-	importWrapper := importutil.NewImportWrapper(ctx, colInfo.GetSchema(), colInfo.GetShardsNum(), segmentSize, idAllocator, node.chunkManager,
+	importWrapper := importutil.NewImportWrapper(ctx, colInfo.GetSchema(), colInfo.GetShardsNum(), segmentSize, node.idAllocator, node.chunkManager,
 		importFlushReqFunc(node, req, importResult, colInfo.GetSchema(), ts), importResult, reportFunc)
 	err = importWrapper.Import(req.GetImportTask().GetFiles(), req.GetImportTask().GetRowBased(), false)
 	if err != nil {
@@ -964,13 +984,23 @@ func importFlushReqFunc(node *DataNode, req *datapb.ImportTaskRequest, res *root
 		tr := timerecord.NewTimeRecorder("import callback function")
 		defer tr.Elapse("finished")
 
+		// use the first field's row count as segment row count
+		// all the fileds row count are same, checked by ImportWrapper
+		var rowNum int
+		for _, field := range fields {
+			rowNum = field.RowNum()
+			break
+		}
+
+		// ask DataCoord to alloc a new segment
 		log.Info("import task flush segment", zap.Any("ChannelNames", req.ImportTask.ChannelNames), zap.Int("shardNum", shardNum))
 		segReqs := []*datapb.SegmentIDRequest{
 			{
 				ChannelName:  req.ImportTask.ChannelNames[shardNum],
-				Count:        1,
+				Count:        uint32(rowNum),
 				CollectionID: req.GetImportTask().GetCollectionId(),
 				PartitionID:  req.GetImportTask().GetPartitionId(),
+				IsImport:     true,
 			},
 		}
 		segmentIDReq := &datapb.AssignSegmentIDRequest{
@@ -990,11 +1020,6 @@ func importFlushReqFunc(node *DataNode, req *datapb.ImportTaskRequest, res *root
 		segmentID := resp.SegIDAssignments[0].SegID
 
 		// TODO: this code block is long and tedious, maybe split it into separate functions.
-		var rowNum int
-		for _, field := range fields {
-			rowNum = field.RowNum()
-			break
-		}
 		tsFieldData := make([]int64, rowNum)
 		for i := range tsFieldData {
 			tsFieldData[i] = int64(ts)
@@ -1100,6 +1125,26 @@ func importFlushReqFunc(node *DataNode, req *datapb.ImportTaskRequest, res *root
 		}
 		for k, v := range field2Stats {
 			fieldStats = append(fieldStats, &datapb.FieldBinlog{FieldID: k, Binlogs: []*datapb.Binlog{v}})
+		}
+
+		// ReportImport with the new segment so RootCoord can add segment ref lock onto it.
+		// Fail-open.
+		status, err := node.rootCoord.ReportImport(context.Background(), &rootcoordpb.ImportResult{
+			Status: &commonpb.Status{
+				ErrorCode: commonpb.ErrorCode_Success,
+			},
+			TaskId:     req.GetImportTask().TaskId,
+			DatanodeId: Params.DataNodeCfg.GetNodeID(),
+			State:      commonpb.ImportState_ImportAllocSegment,
+			Segments:   []int64{segmentID},
+		})
+		if err != nil {
+			log.Error("failed to report import on new segment", zap.Error(err))
+			return err
+		}
+		if status.GetErrorCode() != commonpb.ErrorCode_Success {
+			log.Error("failed to report import on new segment", zap.String("reason", status.GetReason()))
+			return fmt.Errorf("failed to report import on new segment: %s", status.GetReason())
 		}
 
 		log.Info("now adding segment to the correct DataNode flow graph")

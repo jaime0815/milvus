@@ -76,6 +76,7 @@ minio:
 pulsar:
   address: localhost # Address of pulsar
   port: 6650 # Port of pulsar
+  webport: 80 # Web port of pulsar, if you connect direcly without proxy, should use 8080
   maxMessageSize: 5242880 # 5 * 1024 * 1024 Bytes, Maximum size of each message in pulsar.
 
 # If you want to enable kafka, needs to comment the pulsar configs
@@ -90,6 +91,7 @@ rocksmq:
   rocksmqPageSize: 2147483648 # 2 GB, 2 * 1024 * 1024 * 1024 bytes, The size of each page of messages in rocksmq
   retentionTimeInMinutes: 10080 # 7 days, 7 * 24 * 60 minutes, The retention time of the message in rocksmq.
   retentionSizeInMB: 8192 # 8 GB, 8 * 1024 MB, The retention size of the message in rocksmq.
+  lrucacheratio:  0.06 # rocksdb cache memory ratio
 
 # Related configuration of rootCoord, used to handle data definition language (DDL) and data control language (DCL) requests
 rootCoord:
@@ -100,9 +102,9 @@ rootCoord:
   maxPartitionNum: 4096 # Maximum number of partitions in a collection
   minSegmentSizeToEnableIndex: 1024 # It's a threshold. When the segment size is less than this value, the segment will not be indexed
 
-  # (in seconds) Duration after which an import task will expire (be killed). Default 3600 seconds (1 hour).
+  # (in seconds) Duration after which an import task will expire (be killed). Default 900 seconds (15 minutes).
   # Note: If default value is to be changed, change also the default in: internal/util/paramtable/component_param.go
-  importTaskExpiration: 3600
+  importTaskExpiration: 900
   # (in seconds) Milvus will keep the record of import tasks for at least `importTaskRetention` seconds. Default 86400
   # seconds (24 hours).
   # Note: If default value is to be changed, change also the default in: internal/util/paramtable/component_param.go
@@ -116,13 +118,13 @@ rootCoord:
   # Note: If default value is to be changed, change also the default in: internal/util/paramtable/component_param.go
   importSegmentStateWaitLimit: 60
   # (in seconds) Check the building status of a task's segments' indices every `importIndexCheckInterval` seconds.
-  # Default 300 seconds (5 minutes).
+  # Default 10 seconds.
   # Note: If default value is to be changed, change also the default in: internal/util/paramtable/component_param.go
-  importIndexCheckInterval: 300
+  importIndexCheckInterval: 10
   # (in seconds) Maximum time to wait for indices to be built on a single import task's segments.
-  # Default 1200 seconds (20 minutes).
+  # Default 600 seconds (10 minutes).
   # Note: If default value is to be changed, change also the default in: internal/util/paramtable/component_param.go
-  importIndexWaitLimit: 1200
+  importIndexWaitLimit: 600
 
 # Related configuration of proxy, used to validate client requests and reduce the returned results.
 proxy:
@@ -162,6 +164,7 @@ queryCoord:
 queryNode:
   cacheSize: 32 # GB, default 32 GB, `cacheSize` is the memory used for caching data for faster query. The `cacheSize` must be less than system memory size.
   port: 21123
+  loadMemoryUsageFactor: 3 # The multiply factor of calculating the memory usage while loading segments
 
   stats:
     publishInterval: 1000 # Interval for querynode to report node information (milliseconds)
@@ -252,7 +255,7 @@ grpc:
   client:
     dialTimeout:      5000
     keepAliveTime:    10000
-    keepAliveTimeout: 3000
+    keepAliveTimeout: 20000
 
 # Configure the proxy tls enable.
 tls:
@@ -303,9 +306,10 @@ common:
   # please adjust in embedded Milvus: local
   storageType: minio
 
-
   security:
     authorizationEnabled: false
     # tls mode values [0, 1, 2]
     # 0 is close, 1 is one-way authentication, 2 is two-way authentication.
     tlsMode: 0
+
+  mem_purge_ratio: 0.2 # in Linux os, if memory-fragmentation-size >= used-memory * ${mem_purge_ratio}, then do `malloc_trim`

@@ -521,6 +521,10 @@ func (scheduler *TaskScheduler) processTask(t task) error {
 		t.postExecute(ctx)
 	}()
 
+	// bind schedular context with task context
+	// cancel cannot be deferred here, since child task may rely on the parent context
+	ctx, _ = scheduler.BindContext(ctx)
+
 	// task preExecute
 	span.LogFields(oplog.Int64("processTask: scheduler process PreExecute", t.getTaskID()))
 	err = t.preExecute(ctx)
@@ -672,7 +676,8 @@ func (scheduler *TaskScheduler) scheduleLoop() {
 					rollBackTasks := triggerTask.rollBack(scheduler.ctx)
 					log.Info("scheduleLoop: start rollBack after triggerTask failed",
 						zap.Int64("triggerTaskID", triggerTask.getTaskID()),
-						zap.Any("rollBackTasks", rollBackTasks))
+						zap.Any("rollBackTasks", rollBackTasks),
+						zap.String("error", resultInfo.Reason))
 					// there is no need to save rollBacked internal task to etcd
 					// After queryCoord recover, it will retry failed childTask
 					// if childTask still execute failed, then reProduce rollBacked tasks
@@ -709,6 +714,8 @@ func (scheduler *TaskScheduler) scheduleLoop() {
 					triggerTask.notify(nil)
 				}
 			}
+			// calling context cancel so that bind context goroutine may quit
+			triggerTask.finishContext()
 		}
 	}
 }
@@ -884,6 +891,26 @@ func (scheduler *TaskScheduler) Close() {
 		scheduler.cancel()
 	}
 	scheduler.wg.Wait()
+}
+
+// BindContext binds input context with shceduler context.
+// the result context will be canceled when either context is done.
+func (scheduler *TaskScheduler) BindContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	// use input context as parent
+	nCtx, cancel := context.WithCancel(ctx)
+	go func() {
+		select {
+		case <-scheduler.ctx.Done():
+			// scheduler done
+			cancel()
+		case <-ctx.Done():
+			// input ctx done
+			cancel()
+		case <-nCtx.Done():
+			// result context done, cancel called to make goroutine quit
+		}
+	}()
+	return nCtx, cancel
 }
 
 func updateSegmentInfoFromTask(ctx context.Context, triggerTask task, meta Meta) error {

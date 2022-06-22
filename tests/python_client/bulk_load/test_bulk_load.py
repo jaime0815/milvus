@@ -1,6 +1,5 @@
 import logging
 import time
-from time import sleep
 import pytest
 import random
 from base.client_base import TestcaseBase
@@ -76,7 +75,7 @@ class TestBulkLoad(TestcaseBase):
 
         # verify imported data is available for search
         self.collection_wrap.load()
-        # log.info(f"query seg info: {self.utility_wrap.get_query_segment_info(c_name)[0]}")
+        log.info(f"query seg info: {self.utility_wrap.get_query_segment_info(c_name)[0]}")
         nq = 2
         topk = 2
         search_data = cf.gen_vectors(nq, dim)
@@ -196,7 +195,7 @@ class TestBulkLoad(TestcaseBase):
         logging.info(f"bulk load task ids:{task_ids}")
         success, state = self.utility_wrap.\
             wait_for_bulk_load_tasks_completed(task_ids=task_ids,
-                                               target_state=BulkLoadStates.BulkLoadPersisted,
+                                               target_state=BulkLoadStates.BulkLoadDataQueryable,
                                                timeout=30)
         tt = time.time() - t0
         log.info(f"bulk load state:{success} in {tt}")
@@ -205,8 +204,6 @@ class TestBulkLoad(TestcaseBase):
         assert m_partition.num_entities == entities
         assert self.collection_wrap.num_entities == entities
 
-        # TODO: remove sleep when indexed state ready
-        sleep(5)
         res, _ = self.utility_wrap.index_building_progress(c_name)
         exp_res = {'total_rows': entities, 'indexed_rows': entities}
         assert res == exp_res
@@ -230,7 +227,7 @@ class TestBulkLoad(TestcaseBase):
     @pytest.mark.parametrize("row_based", [True, False])
     @pytest.mark.parametrize("auto_id", [True, False])
     @pytest.mark.parametrize("dim", [16])
-    @pytest.mark.parametrize("entities", [200])
+    @pytest.mark.parametrize("entities", [2000])
     @pytest.mark.xfail(reason="issue #16890")
     def test_binary_vector_only(self, row_based, auto_id, dim, entities):
         """
@@ -269,20 +266,18 @@ class TestBulkLoad(TestcaseBase):
         # TODO: Update to BulkLoadDataIndexed when issue #16889 fixed
         success, _ = self.utility_wrap.wait_for_bulk_load_tasks_completed(
                                     task_ids=task_ids,
-                                    target_state=BulkLoadStates.BulkLoadPersisted,
+                                    target_state=BulkLoadStates.BulkLoadDataIndexed,
                                     timeout=30)
         tt = time.time() - t0
         log.info(f"bulk load state:{success} in {tt}")
         assert success
 
-        # # verify build index status
-        # sleep(10)
-        # # TODO: verify build index after issue #16890 fixed
+        # TODO: verify build index after #16890 fixed
         # res, _ = self.utility_wrap.index_building_progress(c_name)
         # exp_res = {'total_rows': entities, 'indexed_rows': entities}
         # assert res == exp_res
 
-        # TODO: verify num entities
+        # verify num entities
         assert self.collection_wrap.num_entities == entities
 
         # load collection
@@ -307,7 +302,6 @@ class TestBulkLoad(TestcaseBase):
     @pytest.mark.parametrize("fields_num_in_file", ["equal", "more", "less"])   # "equal", "more", "less"
     @pytest.mark.parametrize("dim", [16])
     @pytest.mark.parametrize("entities", [500])
-    # it occasionally fails due to issue #16947
     def test_float_vector_multi_scalars(self, row_based, auto_id, fields_num_in_file, dim, entities):
         """
         collection schema: [pk, float_vector,
@@ -326,7 +320,7 @@ class TestBulkLoad(TestcaseBase):
         """
         files = prepare_bulk_load_json_files(row_based=row_based, rows=entities,
                                              dim=dim, auto_id=auto_id,
-                                             data_fields=default_multi_fields)
+                                             data_fields=default_multi_fields, force=True)
         additional_field = "int_scalar_add"
         self._connect()
         c_name = cf.gen_unique_str()
@@ -375,17 +369,23 @@ class TestBulkLoad(TestcaseBase):
             res, _ = self.collection_wrap.has_index()
             assert res is False
             # verify search and query
-            search_data = cf.gen_vectors(1, dim)
+            nq = 3
+            topk = 10
+            search_data = cf.gen_vectors(nq, dim)
             search_params = {"metric_type": "L2", "params": {"nprobe": 2}}
             res, _ = self.collection_wrap.search(search_data, df.vec_field,
-                                                 param=search_params, limit=1,
+                                                 param=search_params, limit=topk,
                                                  check_task=CheckTasks.check_search_results,
-                                                 check_items={"nq": 1,
-                                                              "limit": 1})
+                                                 check_items={"nq": nq,
+                                                              "limit": topk})
             for hits in res:
                 ids = hits.ids
-                results, _ = self.collection_wrap.query(expr=f"{df.pk_field} in {ids}")
+                results, _ = self.collection_wrap.query(expr=f"{df.pk_field} in {ids}",
+                                                        output_fields=[df.pk_field, df.int_field])
                 assert len(results) == len(ids)
+                if not auto_id:
+                    for i in range(len(results)):
+                        assert results[i].get(df.int_field, 0) == results[i].get(df.pk_field, 1)
 
             # build index
             index_params = {"index_type": "HNSW", "params": {"M": 8, "efConstruction": 100}, "metric_type": "IP"}
@@ -402,14 +402,18 @@ class TestBulkLoad(TestcaseBase):
             # search and query
             search_params = {"params": {"ef": 64}, "metric_type": "IP"}
             res, _ = self.collection_wrap.search(search_data, df.vec_field,
-                                                 param=search_params, limit=1,
+                                                 param=search_params, limit=topk,
                                                  check_task=CheckTasks.check_search_results,
-                                                 check_items={"nq": 1,
-                                                              "limit": 1})
+                                                 check_items={"nq": nq,
+                                                              "limit": topk})
             for hits in res:
                 ids = hits.ids
-                results, _ = self.collection_wrap.query(expr=f"{df.pk_field} in {ids}")
+                results, _ = self.collection_wrap.query(expr=f"{df.pk_field} in {ids}",
+                                                        output_fields=[df.pk_field, df.int_field])
                 assert len(results) == len(ids)
+                if not auto_id:
+                    for i in range(len(results)):
+                        assert results[i].get(df.int_field, 0) == results[i].get(df.pk_field, 1)
 
     @pytest.mark.tags(CaseLabel.L3)
     @pytest.mark.parametrize("row_based", [True, False])
@@ -530,8 +534,9 @@ class TestBulkLoad(TestcaseBase):
     @pytest.mark.parametrize("auto_id", [True, False])        # True, False
     @pytest.mark.parametrize("dim", [16])    # 16
     @pytest.mark.parametrize("entities", [100])    # 3000
-    @pytest.mark.parametrize("file_nums", [3])    # 10  # TODO: more after issue #17152 fixed
+    @pytest.mark.parametrize("file_nums", [32])    # 10
     @pytest.mark.parametrize("multi_folder", [True, False])    # True, False
+    @pytest.mark.xfail(reason="issue #17600")
     # TODO: reason="BulkloadIndexed cannot be reached for issue #16889")
     def test_float_vector_from_multi_files(self, row_based, auto_id, dim, entities, file_nums, multi_folder):
         """
@@ -550,7 +555,7 @@ class TestBulkLoad(TestcaseBase):
         files = prepare_bulk_load_json_files(row_based=row_based, rows=entities,
                                              dim=dim, auto_id=auto_id,
                                              data_fields=default_multi_fields,
-                                             file_nums=file_nums, multi_folder=multi_folder)
+                                             file_nums=file_nums, multi_folder=multi_folder, force=True)
         self._connect()
         c_name = cf.gen_unique_str()
         fields = [cf.gen_int64_field(name=df.pk_field, is_primary=True),
@@ -818,6 +823,7 @@ class TestBulkLoad(TestcaseBase):
     @pytest.mark.parametrize("dim", [128])  # 128
     @pytest.mark.parametrize("entities", [1000])  # 1000
     @pytest.mark.parametrize("with_int_field", [True, False])
+    @pytest.mark.xfail(reason="issue #17600")
     def test_with_uid_n_int_numpy(self, auto_id, dim, entities, with_int_field):
         """
         collection schema 1: [pk, float_vector]
@@ -872,8 +878,9 @@ class TestBulkLoad(TestcaseBase):
     @pytest.mark.tags(CaseLabel.L3)
     @pytest.mark.parametrize("auto_id", [True, False])
     @pytest.mark.parametrize("dim", [6])
-    @pytest.mark.parametrize("entities", [1000])
+    @pytest.mark.parametrize("entities", [2000])
     @pytest.mark.parametrize("file_nums", [10])
+    @pytest.mark.xfail(reason="issue #17597")
     def test_multi_numpy_files_from_diff_folders(self, auto_id, dim, entities, file_nums):
         """
         collection schema 1: [pk, float_vector]
@@ -900,16 +907,18 @@ class TestBulkLoad(TestcaseBase):
         data_fields = [df.vec_field]
         if not auto_id:
             data_fields.append(df.pk_field)
+        task_ids = []
         for i in range(file_nums):
             files = prepare_bulk_load_numpy_files(rows=entities, dim=dim,
                                                   data_fields=data_fields,
                                                   file_nums=1, force=True)
-            task_ids, _ = self.utility_wrap.bulk_load(collection_name=c_name,
+            task_id, _ = self.utility_wrap.bulk_load(collection_name=c_name,
                                                       row_based=row_based,
                                                       files=files)
+            task_ids.append(task_id[0])
         success, states = self.utility_wrap.\
             wait_for_bulk_load_tasks_completed(task_ids=task_ids,
-                                               target_state=BulkLoadStates.BulkLoadPersisted,
+                                               target_state=BulkLoadStates.BulkLoadDataQueryable,
                                                timeout=30)
         log.info(f"bulk load state:{success}")
 
@@ -918,7 +927,6 @@ class TestBulkLoad(TestcaseBase):
         assert self.collection_wrap.num_entities == entities * file_nums
 
         # verify search and query
-        # sleep(10)
         search_data = cf.gen_vectors(1, dim)
         search_params = ct.default_search_params
         res, _ = self.collection_wrap.search(search_data, df.vec_field,

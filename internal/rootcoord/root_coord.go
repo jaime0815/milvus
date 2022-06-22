@@ -135,6 +135,7 @@ type Core struct {
 	//call index builder's client to build index, return build id or get index state.
 	CallBuildIndexService     func(ctx context.Context, segID UniqueID, binlog []string, field *model.Field, idxInfo *model.Index, numRows int64) (typeutil.UniqueID, error)
 	CallDropIndexService      func(ctx context.Context, indexID typeutil.UniqueID) error
+	CallRemoveIndexService    func(ctx context.Context, buildIDs []UniqueID) error
 	CallGetIndexStatesService func(ctx context.Context, IndexBuildIDs []int64) ([]*indexpb.IndexInfo, error)
 
 	NewProxyClient func(sess *sessionutil.Session) (types.Proxy, error)
@@ -153,6 +154,12 @@ type Core struct {
 
 	// Seals segments in collection cID, so they can get flushed later.
 	CallFlushOnCollection func(ctx context.Context, cID int64, segIDs []int64) error
+
+	// CallAddSegRefLock triggers AcquireSegmentLock method on DataCoord.
+	CallAddSegRefLock func(ctx context.Context, taskID int64, segIDs []int64) (retErr error)
+
+	// CallReleaseSegRefLock triggers ReleaseSegmentLock method on DataCoord.
+	CallReleaseSegRefLock func(ctx context.Context, taskID int64, segIDs []int64) (retErr error)
 
 	//Proxy manager
 	proxyManager *proxyManager
@@ -275,6 +282,9 @@ func (c *Core) checkInit() error {
 	if c.CallDropIndexService == nil {
 		return fmt.Errorf("callDropIndexService is nil")
 	}
+	if c.CallRemoveIndexService == nil {
+		return fmt.Errorf("callDropIndexService is nil")
+	}
 	if c.CallWatchChannels == nil {
 		return fmt.Errorf("callWatchChannels is nil")
 	}
@@ -289,6 +299,12 @@ func (c *Core) checkInit() error {
 	}
 	if c.CallImportService == nil {
 		return fmt.Errorf("callImportService is nil")
+	}
+	if c.CallAddSegRefLock == nil {
+		return fmt.Errorf("callAddSegRefLock is nil")
+	}
+	if c.CallReleaseSegRefLock == nil {
+		return fmt.Errorf("callReleaseSegRefLock is nil")
 	}
 
 	return nil
@@ -357,90 +373,153 @@ func (c *Core) checkFlushedSegmentsLoop() {
 	}
 }
 
+func (c *Core) recycleDroppedIndex() {
+	defer c.wg.Done()
+	ticker := time.NewTicker(3 * time.Second)
+
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case <-ticker.C:
+			droppedIndex := c.MetaTable.GetDroppedIndex()
+			for collID, fieldIndexes := range droppedIndex {
+				for _, fieldIndex := range fieldIndexes {
+					indexID := fieldIndex.GetIndexID()
+					fieldID := fieldIndex.GetFiledID()
+					if err := c.CallDropIndexService(c.ctx, indexID); err != nil {
+						log.Warn("Notify IndexCoord to drop index failed, wait to retry", zap.Int64("collID", collID),
+							zap.Int64("fieldID", fieldID), zap.Int64("indexID", indexID))
+					}
+				}
+			}
+			err := c.MetaTable.RecycleDroppedIndex()
+			if err != nil {
+				log.Warn("Remove index meta failed, wait to retry", zap.Error(err))
+			}
+		}
+	}
+}
+
+func (c *Core) createIndexForSegment(ctx context.Context, collID, partID, segID UniqueID, numRows int64, binlogs []*datapb.FieldBinlog) error {
+	collID2Meta, _, indexID2Meta := c.MetaTable.dupMeta()
+	collMeta, ok := collID2Meta[collID]
+	if !ok {
+		log.Error("collection meta is not exist", zap.Int64("collID", collID))
+		return fmt.Errorf("collection meta is not exist with ID = %d", collID)
+	}
+	if len(collMeta.FieldIndexes) == 0 {
+		log.Info("collection has no index, no need to build index on segment", zap.Int64("collID", collID),
+			zap.Int64("segID", segID))
+		return nil
+	}
+	for _, fieldIndex := range collMeta.FieldIndexes {
+		indexMeta, ok := indexID2Meta[fieldIndex.IndexID]
+		if !ok {
+			log.Warn("index has no meta", zap.Int64("collID", collID), zap.Int64("indexID", fieldIndex.IndexID))
+			return fmt.Errorf("index has no meta with ID = %d in collection %d", fieldIndex.IndexID, collID)
+		}
+		if indexMeta.Deleted {
+			log.Info("index has been deleted, no need to build index on segment")
+			continue
+		}
+
+		field, err := GetFieldSchemaByID(&collMeta, fieldIndex.FiledID)
+		if err != nil {
+			log.Debug("GetFieldSchemaByID failed",
+				zap.Int64("collectionID", collID),
+				zap.Int64("fieldID", fieldIndex.FiledID))
+			return err
+		}
+		if c.MetaTable.IsSegmentIndexed(segID, field, indexMeta.IndexParams) {
+			continue
+		}
+
+		indexInfo := model.Index{
+			CollectionID: collMeta.CollectionID,
+			FieldID:      fieldIndex.FiledID,
+			IndexID:      fieldIndex.IndexID,
+			SegmentIndexes: map[int64]model.SegmentIndex{
+				segID: {
+					Segment: model.Segment{
+						PartitionID:  partID,
+						SegmentID:    segID,
+					},
+					EnableIndex:  false,
+					ByAutoFlush:  true,
+				},
+			},
+		}
+
+		segIndexInfo := indexInfo.SegmentIndexes[segID]
+		buildID, err := c.BuildIndex(ctx, segID, numRows, binlogs, field, &indexMeta, false)
+		if err != nil {
+			log.Debug("build index failed",
+				zap.Int64("segmentID", segID),
+				zap.Int64("fieldID", field.FieldID),
+				zap.Int64("indexID", indexMeta.IndexID))
+			return err
+		}
+		// if buildID == 0, means it's no need to build index.
+		if buildID != 0 {
+			segIndexInfo.BuildID = buildID
+			segIndexInfo.EnableIndex = true
+		}
+
+		if err := c.MetaTable.AlterIndex(&segIndexInfo); err != nil {
+			log.Error("alter index into meta table failed, need remove index with buildID",
+				zap.Int64("collectionID", collID), zap.Int64("indexID", fieldIndex.IndexID),
+				zap.Int64("buildID", buildID), zap.Error(err))
+			if err = retry.Do(ctx, func() error {
+				return c.CallRemoveIndexService(ctx, []UniqueID{buildID})
+			}); err != nil {
+				log.Error("remove index failed, need to be resolved manually", zap.Int64("collectionID", collID),
+					zap.Int64("indexID", fieldIndex.IndexID), zap.Int64("buildID", buildID), zap.Error(err))
+				return err
+			}
+			return err
+		}
+	}
+	return nil
+}
+
 func (c *Core) checkFlushedSegments(ctx context.Context) {
-	collID2Meta, segID2IndexID, indexID2Meta := c.MetaTable.dupMeta()
-	for _, collMeta := range collID2Meta {
+	collID2Meta := c.MetaTable.dupCollectionMeta()
+	for collID, collMeta := range collID2Meta {
 		if len(collMeta.FieldIDToIndexID) == 0 {
 			continue
 		}
 		for _, part := range collMeta.Partitions {
-			ctx2, cancel2 := context.WithTimeout(ctx, 3*time.Minute)
-			segBinlogs, err := c.CallGetRecoveryInfoService(ctx2, collMeta.CollectionID, part.PartitionID)
+			segBinlogs, err := c.CallGetRecoveryInfoService(ctx, collMeta.CollectionID, part.PartitionID)
 			if err != nil {
 				log.Debug("failed to get flushed segments from dataCoord",
 					zap.Int64("collection ID", collMeta.CollectionID),
 					zap.Int64("partition ID", part.PartitionID),
 					zap.Error(err))
-				cancel2()
 				continue
 			}
+			segIDs := make(map[UniqueID]struct{})
 			for _, segBinlog := range segBinlogs {
-				segID := segBinlog.SegmentID
-				var fieldIDToIndexIDs []common.Int64Tuple
-				_, ok := segID2IndexID[segID]
-				if !ok {
-					fieldIDToIndexIDs = append(fieldIDToIndexIDs, collMeta.FieldIDToIndexID...)
-				} else {
-					for _, t := range collMeta.FieldIDToIndexID {
-						if _, ok := indexID2Meta[t.Value]; !ok {
-							fieldIDToIndexIDs = append(fieldIDToIndexIDs, t)
-						}
-					}
-				}
-				for _, t := range fieldIDToIndexIDs {
-					/* #nosec G601 */
-					field, err := GetFieldSchemaByID(&collMeta, t.Key)
-					if err != nil {
-						log.Debug("GetFieldSchemaByID",
-							zap.Any("collection_meta", collMeta),
-							zap.Int64("field id", t.Key))
-						continue
-					}
-					indexMeta, ok := indexID2Meta[t.Value]
-					if !ok {
-						log.Debug("index meta does not exist", zap.Int64("index_id", t.Value))
-						continue
-					}
-					info := model.Index{
-						CollectionID: collMeta.CollectionID,
-						FieldID:      t.Key,
-						IndexID:      t.Value,
-						SegmentIndexes: map[int64]model.SegmentIndex{
-							segID: {
-								Segment: model.Segment{
-									SegmentID:   segID,
-									PartitionID: part.PartitionID,
-								},
-								EnableIndex: false,
-							},
-						},
-					}
-					log.Debug("building index by background checker",
-						zap.Int64("segment_id", segID),
-						zap.Int64("index_id", indexMeta.IndexID),
-						zap.Int64("collection_id", collMeta.CollectionID))
-					segmentIndex := info.SegmentIndexes[segID]
-					segmentIndex.BuildID, err = c.BuildIndex(ctx2, segID, segBinlog.GetNumOfRows(), segBinlog.GetFieldBinlogs(), field, &indexMeta, false)
-					if err != nil {
-						log.Debug("build index failed",
-							zap.Int64("segment_id", segID),
-							zap.Int64("field_id", field.FieldID),
-							zap.Int64("index_id", indexMeta.IndexID))
-						continue
-					}
-					if segmentIndex.BuildID != 0 {
-						segmentIndex.EnableIndex = true
-					}
-					if err := c.MetaTable.AlterIndex(&info); err != nil {
-						log.Debug("Add index into meta table failed",
-							zap.Int64("collection_id", collMeta.CollectionID),
-							zap.Int64("index_id", info.IndexID),
-							zap.Int64("build_id", segmentIndex.BuildID),
-							zap.Error(err))
-					}
+				segIDs[segBinlog.GetSegmentID()] = struct{}{}
+				err = c.createIndexForSegment(ctx, collID, part.PartitionID, segBinlog.GetSegmentID(), segBinlog.GetNumOfRows(), segBinlog.GetFieldBinlogs())
+				if err != nil {
+					log.Error("createIndexForSegment failed, wait to retry", zap.Int64("collID", collID),
+						zap.Int64("partID", part.PartitionID), zap.Int64("segID", segBinlog.GetSegmentID()), zap.Error(err))
+					continue
 				}
 			}
-			cancel2()
+			recycledSegIDs, recycledBuildIDs := c.MetaTable.AlignSegmentsMeta(collID, part.PartitionID, segIDs)
+			log.Info("there buildIDs should be remove index", zap.Int64s("buildIDs", recycledBuildIDs))
+			if err := c.CallRemoveIndexService(ctx, recycledBuildIDs); err != nil {
+				log.Error("CallRemoveIndexService remove indexes on segments failed",
+					zap.Int64s("need dropped buildIDs", recycledBuildIDs), zap.Error(err))
+				continue
+			}
+			if err := c.MetaTable.RemoveSegments(collID, part.PartitionID, recycledSegIDs); err != nil {
+				log.Warn("remove segments failed, wait to retry", zap.Int64("collID", collID), zap.Int64("partID", part.PartitionID),
+					zap.Int64s("segIDs", recycledSegIDs), zap.Error(err))
+				continue
+			}
 		}
 	}
 }
@@ -692,10 +771,58 @@ func (c *Core) SetDataCoord(ctx context.Context, s types.DataCoord) error {
 		return nil
 	}
 
+	c.CallAddSegRefLock = func(ctx context.Context, taskID int64, segIDs []int64) (retErr error) {
+		defer func() {
+			if err := recover(); err != nil {
+				retErr = fmt.Errorf("add seg ref lock panic, msg = %v", err)
+			}
+		}()
+		<-initCh
+		log.Info("acquiring seg lock",
+			zap.Int64s("segment IDs", segIDs),
+			zap.Int64("node ID", c.session.ServerID))
+		resp, _ := s.AcquireSegmentLock(ctx, &datapb.AcquireSegmentLockRequest{
+			SegmentIDs: segIDs,
+			NodeID:     c.session.ServerID,
+			TaskID:     taskID,
+		})
+		if resp.GetErrorCode() != commonpb.ErrorCode_Success {
+			return fmt.Errorf("failed to acquire segment lock %s", resp.GetReason())
+		}
+		log.Info("acquire seg lock succeed",
+			zap.Int64s("segment IDs", segIDs),
+			zap.Int64("node ID", c.session.ServerID))
+		return nil
+	}
+
+	c.CallReleaseSegRefLock = func(ctx context.Context, taskID int64, segIDs []int64) (retErr error) {
+		defer func() {
+			if err := recover(); err != nil {
+				retErr = fmt.Errorf("release seg ref lock panic, msg = %v", err)
+			}
+		}()
+		<-initCh
+		log.Info("releasing seg lock",
+			zap.Int64s("segment IDs", segIDs),
+			zap.Int64("node ID", c.session.ServerID))
+		resp, _ := s.ReleaseSegmentLock(ctx, &datapb.ReleaseSegmentLockRequest{
+			SegmentIDs: segIDs,
+			NodeID:     c.session.ServerID,
+			TaskID:     taskID,
+		})
+		if resp.GetErrorCode() != commonpb.ErrorCode_Success {
+			return fmt.Errorf("failed to release segment lock %s", resp.GetReason())
+		}
+		log.Info("release seg lock succeed",
+			zap.Int64s("segment IDs", segIDs),
+			zap.Int64("node ID", c.session.ServerID))
+		return nil
+	}
+
 	return nil
 }
 
-// SetIndexCoord set indexcoord
+// SetIndexCoord sets IndexCoord.
 func (c *Core) SetIndexCoord(s types.IndexCoord) error {
 	initCh := make(chan struct{})
 	go func() {
@@ -778,6 +905,27 @@ func (c *Core) SetIndexCoord(s types.IndexCoord) error {
 			return nil, fmt.Errorf(res.GetStatus().GetErrorCode().String())
 		}
 		return res.GetStates(), nil
+	}
+
+	c.CallRemoveIndexService = func(ctx context.Context, buildIDs []UniqueID) (retErr error) {
+		defer func() {
+			if err := recover(); err != nil {
+				retErr = fmt.Errorf("remove index from index service panic, msg = %v", err)
+			}
+		}()
+		<-initCh
+		status, err := s.RemoveIndex(ctx, &indexpb.RemoveIndexRequest{
+			BuildIDs: buildIDs,
+		})
+		if err != nil {
+			return err
+		}
+
+		if status.GetErrorCode() != commonpb.ErrorCode_Success {
+			return fmt.Errorf(status.Reason)
+		}
+
+		return nil
 	}
 	return nil
 }
@@ -1097,6 +1245,7 @@ func (c *Core) Init() error {
 			c.impTaskKv,
 			c.IDAllocator,
 			c.CallImportService,
+			c.getCollectionName,
 		)
 		c.importManager.init(c.ctx)
 
@@ -1250,6 +1399,22 @@ func (c *Core) reSendDdMsg(ctx context.Context, force bool) error {
 	return c.MetaTable.txn.Save(DDMsgSendPrefix, strconv.FormatBool(true))
 }
 
+func (c *Core) getCollectionName(collID, partitionID typeutil.UniqueID) (string, string, error) {
+	colName, err := c.MetaTable.GetCollectionNameByID(collID)
+	if err != nil {
+		log.Error("RootCoord failed to get collection name by id", zap.Int64("ID", collID), zap.Error(err))
+		return "", "", err
+	}
+
+	partName, err := c.MetaTable.GetPartitionNameByID(collID, partitionID, 0)
+	if err != nil {
+		log.Error("RootCoord failed to get partition name by id", zap.Int64("ID", partitionID), zap.Error(err))
+		return colName, "", err
+	}
+
+	return colName, partName, nil
+}
+
 // Start starts RootCoord.
 func (c *Core) Start() error {
 	if err := c.checkInit(); err != nil {
@@ -1257,7 +1422,9 @@ func (c *Core) Start() error {
 		return err
 	}
 
-	log.Debug(typeutil.RootCoordRole, zap.Int64("node id", c.session.ServerID))
+	log.Debug("starting service",
+		zap.String("service role", typeutil.RootCoordRole),
+		zap.Int64("node id", c.session.ServerID))
 
 	c.startOnce.Do(func() {
 		if err := c.proxyManager.WatchProxy(); err != nil {
@@ -1269,13 +1436,14 @@ func (c *Core) Start() error {
 			log.Fatal("RootCoord Start reSendDdMsg failed", zap.Error(err))
 			panic(err)
 		}
-		c.wg.Add(6)
+		c.wg.Add(7)
 		go c.startTimeTickLoop()
 		go c.tsLoop()
 		go c.chanTimeTick.startWatch(&c.wg)
 		go c.checkFlushedSegmentsLoop()
-		go c.importManager.expireOldTasksLoop(&c.wg)
+		go c.importManager.expireOldTasksLoop(&c.wg, c.CallReleaseSegRefLock)
 		go c.importManager.sendOutTasksLoop(&c.wg)
+		go c.recycleDroppedIndex()
 		Params.RootCoordCfg.CreatedTime = time.Now()
 		Params.RootCoordCfg.UpdatedTime = time.Now()
 	})
@@ -1468,7 +1636,7 @@ func (c *Core) DescribeCollection(ctx context.Context, in *milvuspb.DescribeColl
 	tr := timerecord.NewTimeRecorder("DescribeCollection")
 
 	log.Debug("DescribeCollection", zap.String("role", typeutil.RootCoordRole),
-		zap.String("collection name", in.CollectionName), zap.Int64("msgID", in.Base.MsgID))
+		zap.String("collection name", in.CollectionName), zap.Int64("id", in.CollectionID), zap.Int64("msgID", in.Base.MsgID))
 	t := &DescribeCollectionReqTask{
 		baseReqTask: baseReqTask{
 			ctx:  ctx,
@@ -1480,14 +1648,14 @@ func (c *Core) DescribeCollection(ctx context.Context, in *milvuspb.DescribeColl
 	err := executeTask(t)
 	if err != nil {
 		log.Error("DescribeCollection failed", zap.String("role", typeutil.RootCoordRole),
-			zap.String("collection name", in.CollectionName), zap.Int64("msgID", in.Base.MsgID), zap.Error(err))
+			zap.String("collection name", in.CollectionName), zap.Int64("id", in.CollectionID), zap.Int64("msgID", in.Base.MsgID), zap.Error(err))
 		metrics.RootCoordDDLReqCounter.WithLabelValues("DescribeCollection", metrics.FailLabel).Inc()
 		return &milvuspb.DescribeCollectionResponse{
 			Status: failStatus(commonpb.ErrorCode_UnexpectedError, "DescribeCollection failed: "+err.Error()),
 		}, nil
 	}
 	log.Debug("DescribeCollection success", zap.String("role", typeutil.RootCoordRole),
-		zap.String("collection name", in.CollectionName), zap.Int64("msgID", in.Base.MsgID))
+		zap.String("collection name", in.CollectionName), zap.Int64("id", in.CollectionID), zap.Int64("msgID", in.Base.MsgID))
 
 	metrics.RootCoordDDLReqCounter.WithLabelValues("DescribeCollection", metrics.SuccessLabel).Inc()
 	metrics.RootCoordDDLReqLatency.WithLabelValues("DescribeCollection").Observe(float64(tr.ElapseSpan().Milliseconds()))
@@ -1770,6 +1938,50 @@ func (c *Core) DescribeIndex(ctx context.Context, in *milvuspb.DescribeIndexRequ
 	return t.Rsp, nil
 }
 
+func (c *Core) GetIndexState(ctx context.Context, in *milvuspb.GetIndexStateRequest) (*indexpb.GetIndexStatesResponse, error) {
+	if code, ok := c.checkHealthy(); !ok {
+		log.Error("RootCoord GetIndexState failed, RootCoord is not healthy")
+		return &indexpb.GetIndexStatesResponse{
+			Status: failStatus(commonpb.ErrorCode_UnexpectedError, "StateCode="+internalpb.StateCode_name[int32(code)]),
+		}, nil
+	}
+	log.Info("RootCoord GetIndexState", zap.String("collName", in.GetCollectionName()),
+		zap.String("fieldName", in.GetFieldName()), zap.String("indexName", in.GetIndexName()))
+
+	// initBuildIDs are the buildIDs generated when CreateIndex is called.
+	initBuildIDs, err := c.MetaTable.GetInitBuildIDs(in.GetCollectionName(), in.GetIndexName())
+	if err != nil {
+		log.Error("RootCoord GetIndexState failed", zap.String("collName", in.GetCollectionName()),
+			zap.String("fieldName", in.GetFieldName()), zap.String("indexName", in.GetIndexName()), zap.Error(err))
+		return &indexpb.GetIndexStatesResponse{
+			Status: failStatus(commonpb.ErrorCode_UnexpectedError, err.Error()),
+		}, nil
+	}
+
+	ret := &indexpb.GetIndexStatesResponse{
+		Status: succStatus(),
+	}
+	if len(initBuildIDs) == 0 {
+		log.Warn("RootCoord GetIndexState successful, all segments generated when CreateIndex is called have been compacted")
+		return ret, nil
+	}
+
+	states, err := c.CallGetIndexStatesService(ctx, initBuildIDs)
+	if err != nil {
+		log.Error("RootCoord GetIndexState CallGetIndexStatesService failed", zap.String("collName", in.GetCollectionName()),
+			zap.String("fieldName", in.GetFieldName()), zap.String("indexName", in.GetIndexName()), zap.Error(err))
+		ret.Status = failStatus(commonpb.ErrorCode_UnexpectedError, err.Error())
+		return ret, err
+	}
+
+	log.Info("RootCoord GetIndexState successful", zap.String("collName", in.GetCollectionName()),
+		zap.String("fieldName", in.GetFieldName()), zap.String("indexName", in.GetIndexName()))
+	return &indexpb.GetIndexStatesResponse{
+		Status: succStatus(),
+		States: states,
+	}, nil
+}
+
 // DropIndex drop index
 func (c *Core) DropIndex(ctx context.Context, in *milvuspb.DropIndexRequest) (*commonpb.Status, error) {
 	metrics.RootCoordDDLReqCounter.WithLabelValues("DropIndex", metrics.TotalLabel).Inc()
@@ -2039,87 +2251,59 @@ func (c *Core) InvalidateCollectionMetaCache(ctx context.Context, in *proxypb.In
 }
 
 // SegmentFlushCompleted check whether segment flush has completed
-func (c *Core) SegmentFlushCompleted(ctx context.Context, in *datapb.SegmentFlushCompletedMsg) (*commonpb.Status, error) {
+func (c *Core) SegmentFlushCompleted(ctx context.Context, in *datapb.SegmentFlushCompletedMsg) (status *commonpb.Status, err error) {
 	if code, ok := c.checkHealthy(); !ok {
 		return failStatus(commonpb.ErrorCode_UnexpectedError, "StateCode="+internalpb.StateCode_name[int32(code)]), nil
 	}
 	if in.Base.MsgType != commonpb.MsgType_SegmentFlushDone {
 		return failStatus(commonpb.ErrorCode_UnexpectedError, "invalid msg type "+commonpb.MsgType_name[int32(in.Base.MsgType)]), nil
 	}
-	segID := in.Segment.GetID()
-	log.Debug("SegmentFlushCompleted", zap.String("role", typeutil.RootCoordRole),
-		zap.Int64("collection id", in.Segment.CollectionID), zap.Int64("partition id", in.Segment.PartitionID),
-		zap.Int64("segment id", segID), zap.Int64("msgID", in.Base.MsgID))
 
-	coll, err := c.MetaTable.GetCollectionByID(in.Segment.CollectionID, 0)
+	log.Info("SegmentFlushCompleted received", zap.Int64("msgID", in.Base.MsgID), zap.Int64("collID", in.Segment.CollectionID),
+		zap.Int64("partID", in.Segment.PartitionID), zap.Int64("segID", in.Segment.ID), zap.Int64s("compactFrom", in.Segment.CompactionFrom))
+	// acquire reference lock before building index
+	if in.Segment.CreatedByCompaction {
+		log.Debug("try to acquire segment reference lock", zap.Int64("task id", in.Base.MsgID), zap.Int64s("segmentIDs", in.Segment.CompactionFrom))
+		if err := c.CallAddSegRefLock(ctx, in.Base.MsgID, in.Segment.CompactionFrom); err != nil {
+			log.Warn("acquire segment reference lock failed", zap.Int64("task id", in.Base.MsgID), zap.Int64s("segmentIDs", in.Segment.CompactionFrom))
+			return failStatus(commonpb.ErrorCode_UnexpectedError, "AcquireSegRefLock failed: "+err.Error()), nil
+		}
+		defer func() {
+			if err := c.CallReleaseSegRefLock(ctx, in.Base.MsgID, in.Segment.CompactionFrom); err != nil {
+				log.Warn("release segment reference lock failed", zap.Int64("task id", in.Base.MsgID), zap.Int64s("segmentIDs", in.Segment.CompactionFrom))
+				// panic to let ref manager detect release failure
+				panic(err)
+			}
+		}()
+	}
+
+	err = c.createIndexForSegment(ctx, in.Segment.CollectionID, in.Segment.PartitionID, in.Segment.ID, in.Segment.NumOfRows, in.Segment.Binlogs)
 	if err != nil {
-		log.Error("GetCollectionByID failed", zap.String("role", typeutil.RootCoordRole),
-			zap.Int64("msgID", in.Base.MsgID), zap.Error(err))
-		return failStatus(commonpb.ErrorCode_UnexpectedError, "GetCollectionByID failed: "+err.Error()), nil
+		log.Error("createIndexForSegment", zap.Int64("msgID", in.Base.MsgID), zap.Int64("collID", in.Segment.CollectionID),
+			zap.Int64("partID", in.Segment.PartitionID), zap.Int64("segID", in.Segment.ID), zap.Error(err))
+		return failStatus(commonpb.ErrorCode_UnexpectedError, err.Error()), nil
 	}
 
-	if len(coll.FieldIDToIndexID) == 0 {
-		log.Debug("no index params on collection", zap.String("role", typeutil.RootCoordRole),
-			zap.String("collection_name", coll.Name), zap.Int64("msgID", in.Base.MsgID))
+	buildIDs := c.MetaTable.GetBuildIDsBySegIDs(in.Segment.CompactionFrom)
+	if len(buildIDs) != 0 {
+		if err = c.CallRemoveIndexService(ctx, buildIDs); err != nil {
+			log.Error("CallRemoveIndexService failed", zap.Int64("msgID", in.Base.MsgID), zap.Int64("collID", in.Segment.CollectionID),
+				zap.Int64("partID", in.Segment.PartitionID), zap.Int64("segID", in.Segment.ID),
+				zap.Int64s("compactFrom", in.Segment.CompactionFrom), zap.Int64s("buildIDs", buildIDs), zap.Error(err))
+			return failStatus(commonpb.ErrorCode_UnexpectedError, err.Error()), nil
+		}
 	}
 
-	for _, t := range coll.FieldIDToIndexID {
-		fieldID := t.Key
-		indexID := t.Value
-		fieldSch, err := GetFieldSchemaByID(coll, fieldID)
-		if err != nil {
-			log.Warn("field schema not found", zap.String("role", typeutil.RootCoordRole),
-				zap.String("collection_name", coll.Name), zap.Int64("field id", fieldID),
-				zap.Int64("msgID", in.Base.MsgID), zap.Error(err))
-			continue
-		}
-
-		idxInfo, err := c.MetaTable.GetIndexByID(indexID)
-		if err != nil {
-			log.Warn("index not found", zap.String("role", typeutil.RootCoordRole),
-				zap.String("collection_name", coll.Name), zap.Int64("field id", fieldID),
-				zap.Int64("index id", indexID), zap.Int64("msgID", in.Base.MsgID), zap.Error(err))
-			continue
-		}
-
-		info := model.Index{
-			CollectionID: in.Segment.CollectionID,
-			FieldID:      fieldSch.FieldID,
-			IndexID:      idxInfo.IndexID,
-			SegmentIndexes: map[int64]model.SegmentIndex{
-				segID: {
-					Segment: model.Segment{
-						SegmentID:   segID,
-						PartitionID: in.Segment.PartitionID,
-					},
-					EnableIndex: false,
-				},
-			},
-		}
-
-		segmentIndex := info.SegmentIndexes[segID]
-		segmentIndex.BuildID, err = c.BuildIndex(ctx, segID, in.Segment.GetNumOfRows(), in.Segment.GetBinlogs(), fieldSch, idxInfo, true)
-		if err == nil && segmentIndex.BuildID != 0 {
-			segmentIndex.EnableIndex = true
-		} else {
-			log.Error("BuildIndex failed", zap.String("role", typeutil.RootCoordRole),
-				zap.String("collection_name", coll.Name), zap.Int64("field id", fieldID),
-				zap.Int64("index id", indexID), zap.Int64("build id", segmentIndex.BuildID),
-				zap.Int64("msgID", in.Base.MsgID), zap.Error(err))
-			continue
-		}
-		err = c.MetaTable.AlterIndex(&info)
-		if err != nil {
-			log.Error("AlterIndex failed", zap.String("role", typeutil.RootCoordRole),
-				zap.String("collection_name", coll.Name), zap.Int64("field id", fieldID),
-				zap.Int64("index id", indexID), zap.Int64("msgID", in.Base.MsgID), zap.Error(err))
-			continue
-		}
+	if err = c.MetaTable.RemoveSegments(in.Segment.CollectionID, in.Segment.PartitionID, in.Segment.CompactionFrom); err != nil {
+		log.Error("RemoveSegments failed", zap.Int64("msgID", in.Base.MsgID), zap.Int64("collID", in.Segment.CollectionID),
+			zap.Int64("partID", in.Segment.PartitionID), zap.Int64("segID", in.Segment.ID),
+			zap.Int64s("compactFrom", in.Segment.CompactionFrom), zap.Error(err))
+		return failStatus(commonpb.ErrorCode_UnexpectedError, err.Error()), nil
 	}
 
 	log.Debug("SegmentFlushCompleted success", zap.String("role", typeutil.RootCoordRole),
 		zap.Int64("collection id", in.Segment.CollectionID), zap.Int64("partition id", in.Segment.PartitionID),
-		zap.Int64("segment id", segID), zap.Int64("msgID", in.Base.MsgID))
+		zap.Int64("segment id", in.Segment.ID), zap.Int64("msgID", in.Base.MsgID))
 	return succStatus(), nil
 }
 
@@ -2344,6 +2528,25 @@ func (c *Core) ReportImport(ctx context.Context, ir *rootcoordpb.ImportResult) (
 	if code, ok := c.checkHealthy(); !ok {
 		return failStatus(commonpb.ErrorCode_UnexpectedError, "StateCode="+internalpb.StateCode_name[int32(code)]), nil
 	}
+	// Special case for ImportState_ImportAllocSegment state, where we shall only add segment ref lock and do no other
+	// operations.
+	// TODO: This is inelegant and must get re-structured.
+	if ir.GetState() == commonpb.ImportState_ImportAllocSegment {
+		// Lock the segments, so we don't lose track of them when compaction happens.
+		// Note that these locks will be unlocked in c.postImportPersistLoop() -> checkSegmentLoadedLoop().
+		if err := c.CallAddSegRefLock(ctx, ir.GetTaskId(), ir.GetSegments()); err != nil {
+			log.Error("failed to acquire segment ref lock", zap.Error(err))
+			return &commonpb.Status{
+				ErrorCode: commonpb.ErrorCode_UnexpectedError,
+				Reason:    fmt.Sprintf("failed to acquire segment ref lock %s", err.Error()),
+			}, nil
+		}
+		// Update task store with new segments.
+		c.importManager.appendTaskSegments(ir.GetTaskId(), ir.GetSegments())
+		return &commonpb.Status{
+			ErrorCode: commonpb.ErrorCode_Success,
+		}, nil
+	}
 	// Upon receiving ReportImport request, update the related task's state in task store.
 	ti, err := c.importManager.updateTaskState(ir)
 	if err != nil {
@@ -2369,6 +2572,15 @@ func (c *Core) ReportImport(ctx context.Context, ir *rootcoordpb.ImportResult) (
 
 	// If task failed, send task to idle datanode
 	if ir.GetState() == commonpb.ImportState_ImportFailed {
+		// Release segments when task fails.
+		log.Info("task failed, release segment ref locks")
+		err := retry.Do(ctx, func() error {
+			return c.CallReleaseSegRefLock(ctx, ir.GetTaskId(), ir.GetSegments())
+		}, retry.Attempts(100))
+		if err != nil {
+			log.Error("failed to release lock, about to panic!")
+			panic(err)
+		}
 		resendTaskFunc()
 	}
 
@@ -2389,6 +2601,9 @@ func (c *Core) ReportImport(ctx context.Context, ir *rootcoordpb.ImportResult) (
 		log.Error("failed to get collection name",
 			zap.Int64("collection ID", ti.GetCollectionId()),
 			zap.Error(err))
+		// In some unexpected cases, user drop collection when bulkload task still in pending list, the datanode become idle.
+		// If we directly return, the pending tasks will remain in pending list. So we call resendTaskFunc() to push next pending task to idle datanode.
+		resendTaskFunc()
 		return &commonpb.Status{
 			ErrorCode: commonpb.ErrorCode_CollectionNameNotFound,
 			Reason:    "failed to get collection name for collection ID" + strconv.FormatInt(ti.GetCollectionId(), 10),
@@ -2409,10 +2624,12 @@ func (c *Core) ReportImport(ctx context.Context, ir *rootcoordpb.ImportResult) (
 	}, nil
 }
 
-// CountCompleteIndex checks indexing status of the given segments, and returns the # of segments that has complete index.
+// CountCompleteIndex checks indexing status of the given segments.
+// It returns an error if error occurs. It also returns a boolean indicating whether indexing is done (or if no index
+// is needed).
 func (c *Core) CountCompleteIndex(ctx context.Context, collectionName string, collectionID UniqueID,
-	allSegmentIDs []UniqueID) (int, error) {
-	// Note: Index name is always Params.CommonCfg.DefaultIndexName in current Milvus design as of today.
+	allSegmentIDs []UniqueID) (bool, error) {
+	// Note: Index name is always Params.CommonCfg.DefaultIndexName in current Milvus designs as of today.
 	indexName := Params.CommonCfg.DefaultIndexName
 
 	// Retrieve index status and detailed index information.
@@ -2425,30 +2642,38 @@ func (c *Core) CountCompleteIndex(ctx context.Context, collectionName string, co
 	}
 	indexDescriptionResp, err := c.DescribeIndex(ctx, describeIndexReq)
 	if err != nil {
-		return 0, err
+		return false, err
 	}
-	log.Debug("got index description", zap.String("index_description", indexDescriptionResp.String()))
+	if len(indexDescriptionResp.GetIndexDescriptions()) == 0 {
+		log.Info("no index needed for collection, consider indexing done",
+			zap.Int64("collection ID", collectionID))
+		return true, nil
+	}
+	log.Debug("got index description",
+		zap.Any("index description", indexDescriptionResp))
 
 	// Check if the target index name exists.
 	matchIndexID := int64(-1)
 	foundIndexID := false
-	for _, desc := range indexDescriptionResp.IndexDescriptions {
-		if desc.IndexName == indexName {
-			matchIndexID = desc.IndexID
+	for _, desc := range indexDescriptionResp.GetIndexDescriptions() {
+		if desc.GetIndexName() == indexName {
+			matchIndexID = desc.GetIndexID()
 			foundIndexID = true
 			break
 		}
 	}
 	if !foundIndexID {
-		return 0, fmt.Errorf("no index is created")
+		return false, fmt.Errorf("no index is created")
 	}
-	log.Debug("found match index ID", zap.Int64("match index ID", matchIndexID))
+	log.Debug("found match index ID",
+		zap.Int64("match index ID", matchIndexID))
 
 	getIndexStatesRequest := &indexpb.GetIndexStatesRequest{
 		IndexBuildIDs: make([]UniqueID, 0),
 	}
 
 	// Fetch index build IDs from segments.
+	var seg2Check []UniqueID
 	for _, segmentID := range allSegmentIDs {
 		describeSegmentRequest := &milvuspb.DescribeSegmentRequest{
 			Base: &commonpb.MsgBase{
@@ -2457,31 +2682,35 @@ func (c *Core) CountCompleteIndex(ctx context.Context, collectionName string, co
 			CollectionID: collectionID,
 			SegmentID:    segmentID,
 		}
-		segmentDesc, err := c.DescribeSegment(ctx, describeSegmentRequest)
-		if err != nil {
-			log.Error("Failed to describe segment",
+		segmentDesc, _ := c.DescribeSegment(ctx, describeSegmentRequest)
+		if segmentDesc.GetStatus().GetErrorCode() != commonpb.ErrorCode_Success {
+			// Describe failed, since the segment could get compacted, simply log and ignore the error.
+			log.Error("failed to describe segment",
 				zap.Int64("collection ID", collectionID),
-				zap.Int64("segment ID", segmentID))
-			return 0, err
+				zap.Int64("segment ID", segmentID),
+				zap.String("error", segmentDesc.GetStatus().GetReason()))
 		}
-		if segmentDesc.IndexID == matchIndexID {
-			if segmentDesc.EnableIndex {
-				getIndexStatesRequest.IndexBuildIDs = append(getIndexStatesRequest.IndexBuildIDs, segmentDesc.BuildID)
+		if segmentDesc.GetIndexID() == matchIndexID {
+			if segmentDesc.GetEnableIndex() {
+				seg2Check = append(seg2Check, segmentID)
+				getIndexStatesRequest.IndexBuildIDs = append(getIndexStatesRequest.GetIndexBuildIDs(), segmentDesc.GetBuildID())
 			}
 		}
 	}
-	log.Debug("proxy GetIndexState", zap.Int("# of IndexBuildIDs", len(getIndexStatesRequest.IndexBuildIDs)), zap.Error(err))
-
-	if len(getIndexStatesRequest.IndexBuildIDs) == 0 {
-		log.Info("empty index build IDs returned",
+	if len(getIndexStatesRequest.GetIndexBuildIDs()) == 0 {
+		log.Info("none index build IDs returned, perhaps no index is needed",
 			zap.String("collection name", collectionName),
 			zap.Int64("collection ID", collectionID))
-		return 0, nil
+		return true, nil
 	}
+
+	log.Debug("working on GetIndexState",
+		zap.Int("# of IndexBuildIDs", len(getIndexStatesRequest.GetIndexBuildIDs())))
+
 	states, err := c.CallGetIndexStatesService(ctx, getIndexStatesRequest.GetIndexBuildIDs())
 	if err != nil {
 		log.Error("failed to get index state in checkSegmentIndexStates", zap.Error(err))
-		return 0, err
+		return false, err
 	}
 
 	// Count the # of segments with finished index.
@@ -2492,25 +2721,30 @@ func (c *Core) CountCompleteIndex(ctx context.Context, collectionName string, co
 		}
 	}
 	log.Info("segment indexing state checked",
-		zap.Int("# of checked segment", len(states)),
+		zap.Int64s("segments checked", seg2Check),
+		zap.Int("# of checked segment", len(seg2Check)),
 		zap.Int("# of segments with complete index", ct),
 		zap.String("collection name", collectionName),
 		zap.Int64("collection ID", collectionID),
 	)
-	return ct, nil
+	return len(seg2Check) == ct, nil
 }
 
 func (c *Core) postImportPersistLoop(ctx context.Context, taskID int64, colID int64, colName string, segIDs []UniqueID) {
 	// Loop and check if segments are loaded in queryNodes.
 	c.wg.Add(1)
-	c.checkSegmentLoadedLoop(ctx, taskID, colID, segIDs)
+	go c.checkSegmentLoadedLoop(ctx, taskID, colID, segIDs)
 	// Check if collection has any indexed fields. If so, start a loop to check segments' index states.
 	if colMeta, err := c.MetaTable.GetCollectionByID(colID, 0); err != nil {
 		log.Error("failed to find meta for collection",
-			zap.Int64("collection ID", colID))
-	} else if len(colMeta.FieldIDToIndexID) != 0 {
+			zap.Int64("collection ID", colID),
+			zap.Error(err))
+	} else if len(colMeta.FieldIDToIndexID) == 0 {
+		log.Info("no index field found for collection", zap.Int64("collection ID", colID))
+	} else {
+		log.Info("start checking index state", zap.Int64("collection ID", colID))
 		c.wg.Add(1)
-		c.checkCompleteIndexLoop(ctx, taskID, colID, colName, segIDs)
+		go c.checkCompleteIndexLoop(ctx, taskID, colID, colName, segIDs)
 	}
 }
 
@@ -2521,6 +2755,16 @@ func (c *Core) checkSegmentLoadedLoop(ctx context.Context, taskID int64, colID i
 	defer ticker.Stop()
 	expireTicker := time.NewTicker(time.Duration(Params.RootCoordCfg.ImportSegmentStateWaitLimit*1000) * time.Millisecond)
 	defer expireTicker.Stop()
+	defer func() {
+		log.Info("we are done checking segment loading state, release segment ref locks")
+		err := retry.Do(ctx, func() error {
+			return c.CallReleaseSegRefLock(ctx, taskID, segIDs)
+		}, retry.Attempts(100))
+		if err != nil {
+			log.Error("failed to release lock, about to panic!")
+			panic(err)
+		}
+	}()
 	for {
 		select {
 		case <-c.ctx.Done():
@@ -2528,12 +2772,17 @@ func (c *Core) checkSegmentLoadedLoop(ctx context.Context, taskID int64, colID i
 			return
 		case <-ticker.C:
 			resp, err := c.CallGetSegmentInfoService(ctx, colID, segIDs)
+			log.Debug("(in check segment loaded loop)",
+				zap.Int64("task ID", taskID),
+				zap.Int64("collection ID", colID),
+				zap.Int64s("segment IDs expected", segIDs),
+				zap.Int("# of segments found", len(resp.GetInfos())))
 			if err != nil {
 				log.Warn("(in check segment loaded loop) failed to call get segment info on queryCoord",
 					zap.Int64("task ID", taskID),
 					zap.Int64("collection ID", colID),
 					zap.Int64s("segment IDs", segIDs))
-			} else if heuristicSegmentsReady(len(resp.GetInfos()), len(segIDs)) {
+			} else if len(resp.GetInfos()) == len(segIDs) {
 				// Check if all segment info are loaded in queryNodes.
 				log.Info("(in check segment loaded loop) all import data segments loaded in queryNodes",
 					zap.Int64("task ID", taskID),
@@ -2565,11 +2814,14 @@ func (c *Core) checkCompleteIndexLoop(ctx context.Context, taskID int64, colID i
 			log.Info("(in check complete index loop) context done, exiting checkCompleteIndexLoop")
 			return
 		case <-ticker.C:
-			if ct, err := c.CountCompleteIndex(ctx, colName, colID, segIDs); err == nil && heuristicSegmentsReady(ct, len(segIDs)) {
-				log.Info("(in check complete index loop) all segment indices are ready!",
+			if done, err := c.CountCompleteIndex(ctx, colName, colID, segIDs); err == nil && done {
+				log.Info("(in check complete index loop) indices are built or no index needed",
 					zap.Int64("task ID", taskID))
 				c.importManager.setTaskDataIndexed(taskID)
 				return
+			} else if err != nil {
+				log.Error("(in check complete index loop) an error occurs",
+					zap.Error(err))
 			}
 		case <-expireTicker.C:
 			log.Warn("(in check complete index loop) indexing is taken too long",
@@ -2769,11 +3021,4 @@ func (c *Core) ListCredUsers(ctx context.Context, in *milvuspb.ListCredUsersRequ
 		Status:    succStatus(),
 		Usernames: credInfo.Usernames,
 	}, nil
-}
-
-// heuristicSegmentsReady checks and returns if segments are ready based on count in a heuristic way.
-// We do this to avoid accidentally compacted segments.
-// This is just a temporary solution.
-func heuristicSegmentsReady(currCount int, expectedCount int) bool {
-	return currCount >= expectedCount-2 || float64(currCount)/float64(expectedCount) >= 0.8
 }

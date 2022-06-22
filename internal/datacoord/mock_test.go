@@ -22,6 +22,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/milvus-io/milvus/internal/proto/indexpb"
+
 	"github.com/milvus-io/milvus/internal/kv"
 	memkv "github.com/milvus-io/milvus/internal/kv/mem"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
@@ -60,13 +62,22 @@ func (m *MockAllocator) allocID(ctx context.Context) (UniqueID, error) {
 var _ allocator = (*FailsAllocator)(nil)
 
 // FailsAllocator allocator that fails
-type FailsAllocator struct{}
+type FailsAllocator struct {
+	allocTsSucceed bool
+	allocIDSucceed bool
+}
 
 func (a *FailsAllocator) allocTimestamp(_ context.Context) (Timestamp, error) {
+	if a.allocTsSucceed {
+		return 0, nil
+	}
 	return 0, errors.New("always fail")
 }
 
 func (a *FailsAllocator) allocID(_ context.Context) (UniqueID, error) {
+	if a.allocIDSucceed {
+		return 0, nil
+	}
 	return 0, errors.New("always fail")
 }
 
@@ -100,7 +111,7 @@ func newTestSchema() *schemapb.CollectionSchema {
 		Description: "schema for test used",
 		AutoID:      false,
 		Fields: []*schemapb.FieldSchema{
-			{FieldID: 1, Name: "field1", IsPrimaryKey: false, Description: "field no.1", DataType: schemapb.DataType_VarChar, TypeParams: []*commonpb.KeyValuePair{{Key: "max_length_per_row", Value: "100"}}},
+			{FieldID: 1, Name: "field1", IsPrimaryKey: false, Description: "field no.1", DataType: schemapb.DataType_VarChar, TypeParams: []*commonpb.KeyValuePair{{Key: "max_length", Value: "100"}}},
 			{FieldID: 2, Name: "field2", IsPrimaryKey: false, Description: "field no.2", DataType: schemapb.DataType_FloatVector},
 		},
 	}
@@ -349,6 +360,10 @@ func (m *mockRootCoordService) DescribeIndex(ctx context.Context, req *milvuspb.
 	panic("not implemented") // TODO: Implement
 }
 
+func (m *mockRootCoordService) GetIndexState(ctx context.Context, req *milvuspb.GetIndexStateRequest) (*indexpb.GetIndexStatesResponse, error) {
+	panic("not implemented") // TODO: Implement
+}
+
 func (m *mockRootCoordService) DropIndex(ctx context.Context, req *milvuspb.DropIndexRequest) (*commonpb.Status, error) {
 	panic("not implemented") // TODO: Implement
 }
@@ -577,30 +592,30 @@ type mockCompactionTrigger struct {
 }
 
 // triggerCompaction trigger a compaction if any compaction condition satisfy.
-func (t *mockCompactionTrigger) triggerCompaction(tt *timetravel) error {
+func (t *mockCompactionTrigger) triggerCompaction(ct *compactTime) error {
 	if f, ok := t.methods["triggerCompaction"]; ok {
-		if ff, ok := f.(func(tt *timetravel) error); ok {
-			return ff(tt)
+		if ff, ok := f.(func(ct *compactTime) error); ok {
+			return ff(ct)
 		}
 	}
 	panic("not implemented")
 }
 
 // triggerSingleCompaction trigerr a compaction bundled with collection-partiiton-channel-segment
-func (t *mockCompactionTrigger) triggerSingleCompaction(collectionID int64, partitionID int64, segmentID int64, channel string, tt *timetravel) error {
+func (t *mockCompactionTrigger) triggerSingleCompaction(collectionID int64, partitionID int64, segmentID int64, channel string, ct *compactTime) error {
 	if f, ok := t.methods["triggerSingleCompaction"]; ok {
-		if ff, ok := f.(func(collectionID int64, partitionID int64, segmentID int64, channel string, tt *timetravel) error); ok {
-			return ff(collectionID, partitionID, segmentID, channel, tt)
+		if ff, ok := f.(func(collectionID int64, partitionID int64, segmentID int64, channel string, ct *compactTime) error); ok {
+			return ff(collectionID, partitionID, segmentID, channel, ct)
 		}
 	}
 	panic("not implemented")
 }
 
 // forceTriggerCompaction force to start a compaction
-func (t *mockCompactionTrigger) forceTriggerCompaction(collectionID int64, tt *timetravel) (UniqueID, error) {
+func (t *mockCompactionTrigger) forceTriggerCompaction(collectionID int64, ct *compactTime) (UniqueID, error) {
 	if f, ok := t.methods["forceTriggerCompaction"]; ok {
-		if ff, ok := f.(func(collectionID int64, tt *timetravel) (UniqueID, error)); ok {
-			return ff(collectionID, tt)
+		if ff, ok := f.(func(collectionID int64, ct *compactTime) (UniqueID, error)); ok {
+			return ff(collectionID, ct)
 		}
 	}
 	panic("not implemented")

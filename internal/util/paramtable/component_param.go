@@ -132,6 +132,7 @@ type commonConfig struct {
 	SimdType    string
 
 	AuthorizationEnabled bool
+	MemPurgeRatio        float64
 }
 
 func (p *commonConfig) init(base *BaseTable) {
@@ -170,14 +171,15 @@ func (p *commonConfig) init(base *BaseTable) {
 	p.initStorageType()
 
 	p.initEnableAuthorization()
+	p.initMemoryPurgeRatio()
 }
 
 func (p *commonConfig) initClusterPrefix() {
 	keys := []string{
-		"common.chanNamePrefix.cluster",
 		"msgChannel.chanNamePrefix.cluster",
+		"common.chanNamePrefix.cluster",
 	}
-	str, err := p.Base.Load2(keys)
+	str, err := p.Base.LoadWithPriority(keys)
 	if err != nil {
 		panic(err)
 	}
@@ -185,7 +187,7 @@ func (p *commonConfig) initClusterPrefix() {
 }
 
 func (p *commonConfig) initChanNamePrefix(keys []string) string {
-	value, err := p.Base.Load2(keys)
+	value, err := p.Base.LoadWithPriority(keys)
 	if err != nil {
 		panic(err)
 	}
@@ -196,8 +198,8 @@ func (p *commonConfig) initChanNamePrefix(keys []string) string {
 // --- proxy ---
 func (p *commonConfig) initProxySubName() {
 	keys := []string{
-		"common.subNamePrefix.proxySubNamePrefix",
 		"msgChannel.subNamePrefix.proxySubNamePrefix",
+		"common.subNamePrefix.proxySubNamePrefix",
 	}
 	p.ProxySubName = p.initChanNamePrefix(keys)
 }
@@ -206,40 +208,40 @@ func (p *commonConfig) initProxySubName() {
 // Deprecate
 func (p *commonConfig) initRootCoordTimeTick() {
 	keys := []string{
-		"common.chanNamePrefix.rootCoordTimeTick",
 		"msgChannel.chanNamePrefix.rootCoordTimeTick",
+		"common.chanNamePrefix.rootCoordTimeTick",
 	}
 	p.RootCoordTimeTick = p.initChanNamePrefix(keys)
 }
 
 func (p *commonConfig) initRootCoordStatistics() {
 	keys := []string{
-		"common.chanNamePrefix.rootCoordStatistics",
 		"msgChannel.chanNamePrefix.rootCoordStatistics",
+		"common.chanNamePrefix.rootCoordStatistics",
 	}
 	p.RootCoordStatistics = p.initChanNamePrefix(keys)
 }
 
 func (p *commonConfig) initRootCoordDml() {
 	keys := []string{
-		"common.chanNamePrefix.rootCoordDml",
 		"msgChannel.chanNamePrefix.rootCoordDml",
+		"common.chanNamePrefix.rootCoordDml",
 	}
 	p.RootCoordDml = p.initChanNamePrefix(keys)
 }
 
 func (p *commonConfig) initRootCoordDelta() {
 	keys := []string{
-		"common.chanNamePrefix.rootCoordDelta",
 		"msgChannel.chanNamePrefix.rootCoordDelta",
+		"common.chanNamePrefix.rootCoordDelta",
 	}
 	p.RootCoordDelta = p.initChanNamePrefix(keys)
 }
 
 func (p *commonConfig) initRootCoordSubName() {
 	keys := []string{
-		"common.subNamePrefix.rootCoordSubNamePrefix",
 		"msgChannel.subNamePrefix.rootCoordSubNamePrefix",
+		"common.subNamePrefix.rootCoordSubNamePrefix",
 	}
 	p.RootCoordSubName = p.initChanNamePrefix(keys)
 }
@@ -247,8 +249,8 @@ func (p *commonConfig) initRootCoordSubName() {
 // --- querycoord ---
 func (p *commonConfig) initQueryCoordSearch() {
 	keys := []string{
-		"common.chanNamePrefix.search",
 		"msgChannel.chanNamePrefix.search",
+		"common.chanNamePrefix.search",
 	}
 	p.QueryCoordSearch = p.initChanNamePrefix(keys)
 }
@@ -256,8 +258,8 @@ func (p *commonConfig) initQueryCoordSearch() {
 // Deprecated, search result use grpc instead of a result channel
 func (p *commonConfig) initQueryCoordSearchResult() {
 	keys := []string{
-		"common.chanNamePrefix.searchResult",
 		"msgChannel.chanNamePrefix.searchResult",
+		"common.chanNamePrefix.searchResult",
 	}
 	p.QueryCoordSearchResult = p.initChanNamePrefix(keys)
 }
@@ -265,8 +267,8 @@ func (p *commonConfig) initQueryCoordSearchResult() {
 // Deprecate
 func (p *commonConfig) initQueryCoordTimeTick() {
 	keys := []string{
-		"common.chanNamePrefix.queryTimeTick",
 		"msgChannel.chanNamePrefix.queryTimeTick",
+		"common.chanNamePrefix.queryTimeTick",
 	}
 	p.QueryCoordTimeTick = p.initChanNamePrefix(keys)
 }
@@ -274,16 +276,16 @@ func (p *commonConfig) initQueryCoordTimeTick() {
 // --- querynode ---
 func (p *commonConfig) initQueryNodeStats() {
 	keys := []string{
-		"common.chanNamePrefix.queryNodeStats",
 		"msgChannel.chanNamePrefix.queryNodeStats",
+		"common.chanNamePrefix.queryNodeStats",
 	}
 	p.QueryNodeStats = p.initChanNamePrefix(keys)
 }
 
 func (p *commonConfig) initQueryNodeSubName() {
 	keys := []string{
-		"common.subNamePrefix.queryNodeSubNamePrefix",
 		"msgChannel.subNamePrefix.queryNodeSubNamePrefix",
+		"common.subNamePrefix.queryNodeSubNamePrefix",
 	}
 	p.QueryNodeSubName = p.initChanNamePrefix(keys)
 }
@@ -291,8 +293,8 @@ func (p *commonConfig) initQueryNodeSubName() {
 // --- datacoord ---
 func (p *commonConfig) initDataCoordStatistic() {
 	keys := []string{
-		"common.chanNamePrefix.dataCoordStatistic",
 		"msgChannel.chanNamePrefix.dataCoordStatistic",
+		"common.chanNamePrefix.dataCoordStatistic",
 	}
 	p.DataCoordStatistic = p.initChanNamePrefix(keys)
 }
@@ -300,32 +302,32 @@ func (p *commonConfig) initDataCoordStatistic() {
 // Deprecate
 func (p *commonConfig) initDataCoordTimeTick() {
 	keys := []string{
-		"common.chanNamePrefix.dataCoordTimeTick",
 		"msgChannel.chanNamePrefix.dataCoordTimeTick",
+		"common.chanNamePrefix.dataCoordTimeTick",
 	}
 	p.DataCoordTimeTick = p.initChanNamePrefix(keys)
 }
 
 func (p *commonConfig) initDataCoordSegmentInfo() {
 	keys := []string{
-		"common.chanNamePrefix.dataCoordSegmentInfo",
 		"msgChannel.chanNamePrefix.dataCoordSegmentInfo",
+		"common.chanNamePrefix.dataCoordSegmentInfo",
 	}
 	p.DataCoordSegmentInfo = p.initChanNamePrefix(keys)
 }
 
 func (p *commonConfig) initDataCoordSubName() {
 	keys := []string{
-		"common.subNamePrefix.dataCoordSubNamePrefix",
 		"msgChannel.subNamePrefix.dataCoordSubNamePrefix",
+		"common.subNamePrefix.dataCoordSubNamePrefix",
 	}
 	p.DataCoordSubName = p.initChanNamePrefix(keys)
 }
 
 func (p *commonConfig) initDataNodeSubName() {
 	keys := []string{
-		"common.subNamePrefix.dataNodeSubNamePrefix",
 		"msgChannel.subNamePrefix.dataNodeSubNamePrefix",
+		"common.subNamePrefix.dataNodeSubNamePrefix",
 	}
 	p.DataNodeSubName = p.initChanNamePrefix(keys)
 }
@@ -381,6 +383,10 @@ func (p *commonConfig) initEnableAuthorization() {
 	p.AuthorizationEnabled = p.Base.ParseBool("common.security.authorizationEnabled", false)
 }
 
+func (p *commonConfig) initMemoryPurgeRatio() {
+	p.MemPurgeRatio = p.Base.ParseFloatWithDefault("common.mem_purge_ratio", 0.2)
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // --- rootcoord ---
 type rootCoordConfig struct {
@@ -411,12 +417,12 @@ func (p *rootCoordConfig) init(base *BaseTable) {
 	p.DmlChannelNum = p.Base.ParseInt64WithDefault("rootCoord.dmlChannelNum", 256)
 	p.MaxPartitionNum = p.Base.ParseInt64WithDefault("rootCoord.maxPartitionNum", 4096)
 	p.MinSegmentSizeToEnableIndex = p.Base.ParseInt64WithDefault("rootCoord.minSegmentSizeToEnableIndex", 1024)
-	p.ImportTaskExpiration = p.Base.ParseFloatWithDefault("rootCoord.importTaskExpiration", 3600)
-	p.ImportTaskRetention = p.Base.ParseFloatWithDefault("rootCoord.importTaskRetention", 3600*24)
+	p.ImportTaskExpiration = p.Base.ParseFloatWithDefault("rootCoord.importTaskExpiration", 15*60)
+	p.ImportTaskRetention = p.Base.ParseFloatWithDefault("rootCoord.importTaskRetention", 24*60*60)
 	p.ImportSegmentStateCheckInterval = p.Base.ParseFloatWithDefault("rootCoord.importSegmentStateCheckInterval", 10)
 	p.ImportSegmentStateWaitLimit = p.Base.ParseFloatWithDefault("rootCoord.importSegmentStateWaitLimit", 60)
-	p.ImportIndexCheckInterval = p.Base.ParseFloatWithDefault("rootCoord.importIndexCheckInterval", 60*5)
-	p.ImportIndexWaitLimit = p.Base.ParseFloatWithDefault("rootCoord.importIndexWaitLimit", 60*20)
+	p.ImportIndexCheckInterval = p.Base.ParseFloatWithDefault("rootCoord.importIndexCheckInterval", 10)
+	p.ImportIndexWaitLimit = p.Base.ParseFloatWithDefault("rootCoord.importIndexWaitLimit", 10*60)
 	p.ImportTaskSubPath = "importtask"
 }
 
@@ -693,6 +699,7 @@ type queryNodeConfig struct {
 	UpdatedTime time.Time
 
 	// memory limit
+	LoadMemoryUsageFactor               float64
 	OverloadedMemoryThresholdPercentage float64
 
 	// cache limit
@@ -718,6 +725,7 @@ func (p *queryNodeConfig) init(base *BaseTable) {
 
 	p.initSmallIndexParams()
 
+	p.initLoadMemoryUsageFactor()
 	p.initOverloadedMemoryThresholdPercentage()
 
 	p.initCacheMemoryLimit()
@@ -799,6 +807,15 @@ func (p *queryNodeConfig) initSmallIndexParams() {
 		log.Warn("small index nprobe must smaller than nlist, force set to", zap.Any("nprobe", p.SmallIndexNlist))
 		p.SmallIndexNProbe = p.SmallIndexNlist
 	}
+}
+
+func (p *queryNodeConfig) initLoadMemoryUsageFactor() {
+	loadMemoryUsageFactor := p.Base.LoadWithDefault("queryNode.loadMemoryUsageFactor", "3")
+	factor, err := strconv.ParseFloat(loadMemoryUsageFactor, 64)
+	if err != nil {
+		panic(err)
+	}
+	p.LoadMemoryUsageFactor = factor
 }
 
 func (p *queryNodeConfig) initOverloadedMemoryThresholdPercentage() {
@@ -883,14 +900,25 @@ type dataCoordConfig struct {
 	CreatedTime time.Time
 	UpdatedTime time.Time
 
-	EnableCompaction        bool
-	EnableAutoCompaction    atomic.Value
-	EnableGarbageCollection bool
+	// compaction
+	EnableCompaction     bool
+	EnableAutoCompaction atomic.Value
+
+	MinSegmentToMerge                 int
+	MaxSegmentToMerge                 int
+	SegmentSmallProportion            float64
+	CompactionTimeoutInSeconds        int32
+	SingleCompactionRatioThreshold    float32
+	SingleCompactionDeltaLogMaxSize   int64
+	SingleCompactionExpiredLogMaxSize int64
+	SingleCompactionBinlogMaxNum      int64
+	GlobalCompactionInterval          time.Duration
 
 	// Garbage Collection
-	GCInterval         time.Duration
-	GCMissingTolerance time.Duration
-	GCDropTolerance    time.Duration
+	EnableGarbageCollection bool
+	GCInterval              time.Duration
+	GCMissingTolerance      time.Duration
+	GCDropTolerance         time.Duration
 }
 
 func (p *dataCoordConfig) init(base *BaseTable) {
@@ -904,6 +932,16 @@ func (p *dataCoordConfig) init(base *BaseTable) {
 
 	p.initEnableCompaction()
 	p.initEnableAutoCompaction()
+
+	p.initCompactionMinSegment()
+	p.initCompactionMaxSegment()
+	p.initSegmentSmallProportion()
+	p.initCompactionTimeoutInSeconds()
+	p.initSingleCompactionRatioThreshold()
+	p.initSingleCompactionDeltaLogMaxSize()
+	p.initSingleCompactionExpiredLogMaxSize()
+	p.initSingleCompactionBinlogMaxNum()
+	p.initGlobalCompactionInterval()
 
 	p.initEnableGarbageCollection()
 	p.initGCInterval()
@@ -937,6 +975,52 @@ func (p *dataCoordConfig) initEnableCompaction() {
 	p.EnableCompaction = p.Base.ParseBool("dataCoord.enableCompaction", false)
 }
 
+func (p *dataCoordConfig) initEnableAutoCompaction() {
+	p.EnableAutoCompaction.Store(p.Base.ParseBool("dataCoord.compaction.enableAutoCompaction", false))
+}
+
+func (p *dataCoordConfig) initCompactionMinSegment() {
+	p.MinSegmentToMerge = p.Base.ParseIntWithDefault("dataCoord.compaction.min.segment", 4)
+}
+
+func (p *dataCoordConfig) initCompactionMaxSegment() {
+	p.MaxSegmentToMerge = p.Base.ParseIntWithDefault("dataCoord.compaction.max.segment", 30)
+}
+
+func (p *dataCoordConfig) initSegmentSmallProportion() {
+	p.SegmentSmallProportion = p.Base.ParseFloatWithDefault("dataCoord.segment.smallProportion", 0.5)
+}
+
+// compaction execution timeout
+func (p *dataCoordConfig) initCompactionTimeoutInSeconds() {
+	p.CompactionTimeoutInSeconds = p.Base.ParseInt32WithDefault("dataCoord.compaction.timeout", 60*3)
+}
+
+// if total delete entities is large than a ratio of total entities, trigger single compaction.
+func (p *dataCoordConfig) initSingleCompactionRatioThreshold() {
+	p.SingleCompactionRatioThreshold = float32(p.Base.ParseFloatWithDefault("dataCoord.compaction.single.ratio.threshold", 0.2))
+}
+
+// if total delta file size > SingleCompactionDeltaLogMaxSize, trigger single compaction
+func (p *dataCoordConfig) initSingleCompactionDeltaLogMaxSize() {
+	p.SingleCompactionDeltaLogMaxSize = p.Base.ParseInt64WithDefault("dataCoord.compaction.single.deltalog.maxsize", 2*1024*1024)
+}
+
+// if total expired file size > SingleCompactionExpiredLogMaxSize, trigger single compaction
+func (p *dataCoordConfig) initSingleCompactionExpiredLogMaxSize() {
+	p.SingleCompactionExpiredLogMaxSize = p.Base.ParseInt64WithDefault("dataCoord.compaction.single.expiredlog.maxsize", 10*1024*1024)
+}
+
+// if total binlog number > SingleCompactionBinlogMaxNum, trigger single compaction to ensure binlog number per segment is limited
+func (p *dataCoordConfig) initSingleCompactionBinlogMaxNum() {
+	p.SingleCompactionBinlogMaxNum = p.Base.ParseInt64WithDefault("dataCoord.compaction.single.binlog.maxnum", 1000)
+}
+
+// interval we check and trigger global compaction
+func (p *dataCoordConfig) initGlobalCompactionInterval() {
+	p.GlobalCompactionInterval = time.Duration(p.Base.ParseInt64WithDefault("dataCoord.compaction.global.interval", int64(60*time.Second)))
+}
+
 // -- GC --
 func (p *dataCoordConfig) initEnableGarbageCollection() {
 	p.EnableGarbageCollection = p.Base.ParseBool("dataCoord.enableGarbageCollection", false)
@@ -952,10 +1036,6 @@ func (p *dataCoordConfig) initGCMissingTolerance() {
 
 func (p *dataCoordConfig) initGCDropTolerance() {
 	p.GCDropTolerance = time.Duration(p.Base.ParseInt64WithDefault("dataCoord.gc.dropTolerance", 24*60*60)) * time.Second
-}
-
-func (p *dataCoordConfig) initEnableAutoCompaction() {
-	p.EnableAutoCompaction.Store(p.Base.ParseBool("dataCoord.compaction.enableAutoCompaction", false))
 }
 
 func (p *dataCoordConfig) SetEnableAutoCompaction(enable bool) {

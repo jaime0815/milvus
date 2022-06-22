@@ -68,6 +68,7 @@ message ShowCollectionsResponse {
   common.Status status = 1;
   repeated int64 collectionIDs = 2;
   repeated int64 inMemory_percentages = 3;
+  repeated bool query_service_available = 4;
 }
 
 message ShowPartitionsRequest {
@@ -171,6 +172,7 @@ message WatchDmChannelsRequest {
   repeated data.SegmentInfo exclude_infos = 7;
   LoadMetaInfo load_meta = 8;
   int64 replicaID = 9;
+  map<int64, data.SegmentInfo> segment_infos = 10;
 }
 
 message WatchDeltaChannelsRequest {
@@ -229,6 +231,7 @@ message ReleaseSegmentsRequest {
   int64 collectionID = 4;
   repeated int64 partitionIDs = 5;
   repeated int64 segmentIDs = 6;
+  DataScope scope = 7; // All, Streaming, Historical
 }
 
 message SearchRequest {

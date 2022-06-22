@@ -294,6 +294,20 @@ func (d *dataMock) Flush(ctx context.Context, req *datapb.FlushRequest) (*datapb
 	}, nil
 }
 
+func (d *dataMock) AcquireSegmentLock(context.Context, *datapb.AcquireSegmentLockRequest) (*commonpb.Status, error) {
+	return &commonpb.Status{
+		ErrorCode: commonpb.ErrorCode_Success,
+		Reason:    "",
+	}, nil
+}
+
+func (d *dataMock) ReleaseSegmentLock(context.Context, *datapb.ReleaseSegmentLockRequest) (*commonpb.Status, error) {
+	return &commonpb.Status{
+		ErrorCode: commonpb.ErrorCode_Success,
+		Reason:    "",
+	}, nil
+}
+
 type queryMock struct {
 	types.QueryCoord
 	collID []typeutil.UniqueID
@@ -361,6 +375,15 @@ func (idx *indexMock) DropIndex(ctx context.Context, req *indexpb.DropIndexReque
 	idx.mutex.Lock()
 	defer idx.mutex.Unlock()
 	idx.idxDropID = append(idx.idxDropID, req.IndexID)
+	return &commonpb.Status{
+		ErrorCode: commonpb.ErrorCode_Success,
+		Reason:    "",
+	}, nil
+}
+
+func (idx *indexMock) RemoveIndex(ctx context.Context, req *indexpb.RemoveIndexRequest) (*commonpb.Status, error) {
+	idx.mutex.Lock()
+	defer idx.mutex.Unlock()
 	return &commonpb.Status{
 		ErrorCode: commonpb.ErrorCode_Success,
 		Reason:    "",
@@ -874,6 +897,7 @@ func TestRootCoord_Base(t *testing.T) {
 		return localTSO, nil
 	}
 
+	expireOldTasksInterval = 500
 	err = core.Start()
 	assert.NoError(t, err)
 
@@ -1369,14 +1393,14 @@ func TestRootCoord_Base(t *testing.T) {
 		coll, err := core.MetaTable.GetCollectionByName(collName, 0)
 		assert.NoError(t, err)
 		// Normal case.
-		count, err := core.CountCompleteIndex(context.WithValue(ctx, ctxKey{}, ""),
+		done, err := core.CountCompleteIndex(context.WithValue(ctx, ctxKey{}, ""),
 			collName, coll.CollectionID, []UniqueID{1000, 1001, 1002})
 		assert.NoError(t, err)
-		assert.Equal(t, 3, count)
+		assert.Equal(t, true, done)
 		// Case with an empty result.
-		count, err = core.CountCompleteIndex(ctx, collName, coll.CollectionID, []UniqueID{})
+		done, err = core.CountCompleteIndex(ctx, collName, coll.CollectionID, []UniqueID{})
 		assert.NoError(t, err)
-		assert.Equal(t, 0, count)
+		assert.Equal(t, true, done)
 		// Case where GetIndexStates failed with error.
 		_, err = core.CountCompleteIndex(context.WithValue(ctx, ctxKey{}, returnError),
 			collName, coll.CollectionID, []UniqueID{1000, 1001, 1002})
@@ -1385,6 +1409,10 @@ func TestRootCoord_Base(t *testing.T) {
 		_, err = core.CountCompleteIndex(context.WithValue(ctx, ctxKey{}, returnUnsuccessfulStatus),
 			collName, coll.CollectionID, []UniqueID{1000, 1001, 1002})
 		assert.Error(t, err)
+		// Case where describing segment fails, which is not considered as an error.
+		_, err = core.CountCompleteIndex(context.WithValue(ctx, ctxKey{}, ""),
+			collName, coll.ID, []UniqueID{9000, 9001, 9002})
+		assert.NoError(t, err)
 	})
 
 	wg.Add(1)
@@ -1402,6 +1430,46 @@ func TestRootCoord_Base(t *testing.T) {
 				ID:           segID,
 				CollectionID: coll.CollectionID,
 				PartitionID:  partID,
+			},
+		}
+		st, err := core.SegmentFlushCompleted(ctx, &flushMsg)
+		assert.NoError(t, err)
+		assert.Equal(t, st.ErrorCode, commonpb.ErrorCode_Success)
+
+		req := &milvuspb.DescribeIndexRequest{
+			Base: &commonpb.MsgBase{
+				MsgType:   commonpb.MsgType_DescribeIndex,
+				MsgID:     210,
+				Timestamp: 210,
+				SourceID:  210,
+			},
+			DbName:         "",
+			CollectionName: collName,
+			FieldName:      "vector",
+			IndexName:      "",
+		}
+		rsp, err := core.DescribeIndex(ctx, req)
+		assert.NoError(t, err)
+		assert.Equal(t, commonpb.ErrorCode_Success, rsp.Status.ErrorCode)
+		assert.Equal(t, 1, len(rsp.IndexDescriptions))
+		assert.Equal(t, Params.CommonCfg.DefaultIndexName, rsp.IndexDescriptions[0].IndexName)
+	})
+
+	t.Run("flush segment from compaction", func(t *testing.T) {
+		coll, err := core.MetaTable.GetCollectionByName(collName, 0)
+		assert.NoError(t, err)
+		partID := coll.PartitionIDs[1]
+
+		flushMsg := datapb.SegmentFlushCompletedMsg{
+			Base: &commonpb.MsgBase{
+				MsgType: commonpb.MsgType_SegmentFlushDone,
+			},
+			Segment: &datapb.SegmentInfo{
+				ID:                  segID + 1,
+				CollectionID:        coll.ID,
+				PartitionID:         partID,
+				CompactionFrom:      []int64{segID},
+				CreatedByCompaction: true,
 			},
 		}
 		st, err := core.SegmentFlushCompleted(ctx, &flushMsg)
@@ -1579,6 +1647,21 @@ func TestRootCoord_Base(t *testing.T) {
 	})
 
 	wg.Add(1)
+	t.Run("report import with alloc seg state", func(t *testing.T) {
+		defer wg.Done()
+		req := &rootcoordpb.ImportResult{
+			TaskId:   1,
+			RowCount: 100,
+			Segments: []int64{1000, 1001, 1002},
+			State:    commonpb.ImportState_ImportAllocSegment,
+		}
+		resp, err := core.ReportImport(context.WithValue(ctx, ctxKey{}, ""), req)
+		assert.NoError(t, err)
+		assert.Equal(t, commonpb.ErrorCode_Success, resp.ErrorCode)
+		time.Sleep(500 * time.Millisecond)
+	})
+
+	wg.Add(1)
 	t.Run("report import wait for index", func(t *testing.T) {
 		defer wg.Done()
 		core.CallGetSegmentInfoService = func(ctx context.Context, collectionID int64,
@@ -1696,10 +1779,16 @@ func TestRootCoord_Base(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, commonpb.ErrorCode_Success, rsp.ErrorCode)
 
-		im.mutex.Lock()
-		assert.Equal(t, 1, len(im.idxDropID))
-		assert.Equal(t, idx[0].IndexID, im.idxDropID[0])
-		im.mutex.Unlock()
+		for {
+			im.mutex.Lock()
+			if len(im.idxDropID) == 1 {
+				assert.Equal(t, idx[0].IndexID, im.idxDropID[0])
+				im.mutex.Unlock()
+				break
+			}
+			im.mutex.Unlock()
+			time.Sleep(time.Second)
+		}
 
 		_, idx, err = core.MetaTable.GetIndexByName(collName, Params.CommonCfg.DefaultIndexName)
 		assert.NoError(t, err)
@@ -3014,6 +3103,12 @@ func TestCheckInit(t *testing.T) {
 	err = c.checkInit()
 	assert.Error(t, err)
 
+	c.CallRemoveIndexService = func(ctx context.Context, buildIDs []typeutil.UniqueID) error {
+		return nil
+	}
+	err = c.checkInit()
+	assert.Error(t, err)
+
 	c.NewProxyClient = func(*sessionutil.Session) (types.Proxy, error) {
 		return nil, nil
 	}
@@ -3044,6 +3139,18 @@ func TestCheckInit(t *testing.T) {
 				ErrorCode: commonpb.ErrorCode_Success,
 			},
 		}
+	}
+	err = c.checkInit()
+	assert.Error(t, err)
+
+	c.CallAddSegRefLock = func(context.Context, int64, []int64) error {
+		return nil
+	}
+	err = c.checkInit()
+	assert.Error(t, err)
+
+	c.CallReleaseSegRefLock = func(context.Context, int64, []int64) error {
+		return nil
 	}
 	err = c.checkInit()
 	assert.NoError(t, err)
@@ -3404,4 +3511,155 @@ func TestCore_DescribeSegments(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, indexName, indexInfo.IndexName)
 	assert.Equal(t, indexID, indexInfo.IndexID)
+}
+
+func TestCore_getCollectionName(t *testing.T) {
+	mt := &MetaTable{
+		ddLock:      sync.RWMutex{},
+		collID2Meta: make(map[int64]etcdpb.CollectionInfo),
+	}
+
+	core := &Core{
+		MetaTable: mt,
+	}
+
+	collName, partName, err := core.getCollectionName(1, 2)
+	assert.Error(t, err)
+	assert.Empty(t, collName)
+	assert.Empty(t, partName)
+
+	ids := make([]int64, 0)
+	names := make([]string, 0)
+	mt.collID2Meta[1] = etcdpb.CollectionInfo{
+		Schema: &schemapb.CollectionSchema{
+			Name: "dummy",
+		},
+		PartitionIDs:   ids,
+		PartitionNames: names,
+	}
+
+	collName, partName, err = core.getCollectionName(1, 2)
+	assert.Error(t, err)
+	assert.Equal(t, "dummy", collName)
+	assert.Empty(t, partName)
+
+	ids = append(ids, 2)
+	names = append(names, "p2")
+	mt.collID2Meta[1] = etcdpb.CollectionInfo{
+		Schema: &schemapb.CollectionSchema{
+			Name: "dummy",
+		},
+		PartitionIDs:   ids,
+		PartitionNames: names,
+	}
+
+	collName, partName, err = core.getCollectionName(1, 2)
+	assert.Nil(t, err)
+	assert.Equal(t, "dummy", collName)
+	assert.Equal(t, "p2", partName)
+}
+
+func TestCore_GetIndexState(t *testing.T) {
+	var (
+		collName  = "collName"
+		fieldName = "fieldName"
+		indexName = "indexName"
+	)
+	mt := &MetaTable{
+		ddLock: sync.RWMutex{},
+		collID2Meta: map[typeutil.UniqueID]etcdpb.CollectionInfo{
+			1: {
+				FieldIndexes: []*etcdpb.FieldIndexInfo{
+					{
+						FiledID: 1,
+						IndexID: 1,
+					},
+				},
+			},
+		},
+		collName2ID: map[string]typeutil.UniqueID{
+			collName: 2,
+		},
+		indexID2Meta: map[typeutil.UniqueID]etcdpb.IndexInfo{
+			1: {
+				IndexID:   1,
+				IndexName: indexName,
+			},
+		},
+		segID2IndexMeta: map[typeutil.UniqueID]map[typeutil.UniqueID]etcdpb.SegmentIndexInfo{
+			3: {
+				1: {
+					SegmentID:   3,
+					BuildID:     1,
+					EnableIndex: false,
+				},
+			},
+		},
+	}
+
+	core := &Core{
+		MetaTable: mt,
+	}
+	req := &milvuspb.GetIndexStateRequest{
+		CollectionName: collName,
+		FieldName:      fieldName,
+		IndexName:      indexName,
+	}
+	core.stateCode.Store(internalpb.StateCode_Abnormal)
+
+	t.Run("core not healthy", func(t *testing.T) {
+		resp, err := core.GetIndexState(context.Background(), req)
+		assert.Nil(t, err)
+		assert.Equal(t, commonpb.ErrorCode_UnexpectedError, resp.Status.GetErrorCode())
+	})
+
+	core.stateCode.Store(internalpb.StateCode_Healthy)
+
+	t.Run("get init buildiDs failed", func(t *testing.T) {
+		resp, err := core.GetIndexState(context.Background(), req)
+		assert.Nil(t, err)
+		assert.Equal(t, commonpb.ErrorCode_UnexpectedError, resp.Status.GetErrorCode())
+	})
+
+	core.MetaTable.collName2ID[collName] = 1
+
+	t.Run("number of buildIDs is zero", func(t *testing.T) {
+		core.CallGetIndexStatesService = func(ctx context.Context, IndexBuildIDs []int64) ([]*indexpb.IndexInfo, error) {
+			return []*indexpb.IndexInfo{}, nil
+		}
+		resp, err := core.GetIndexState(context.Background(), req)
+		assert.NoError(t, err)
+		assert.Equal(t, commonpb.ErrorCode_Success, resp.Status.GetErrorCode())
+	})
+
+	t.Run("CallGetIndexStatesService failed", func(t *testing.T) {
+		core.MetaTable.segID2IndexMeta[3] = map[typeutil.UniqueID]etcdpb.SegmentIndexInfo{
+			1: {
+				SegmentID:   3,
+				BuildID:     1,
+				EnableIndex: true,
+			},
+		}
+		core.CallGetIndexStatesService = func(ctx context.Context, IndexBuildIDs []int64) ([]*indexpb.IndexInfo, error) {
+			return nil, errors.New("error occurred")
+		}
+
+		resp, err := core.GetIndexState(context.Background(), req)
+		assert.Error(t, err)
+		assert.Equal(t, commonpb.ErrorCode_UnexpectedError, resp.Status.GetErrorCode())
+	})
+
+	t.Run("success", func(t *testing.T) {
+		core.CallGetIndexStatesService = func(ctx context.Context, IndexBuildIDs []int64) ([]*indexpb.IndexInfo, error) {
+			return []*indexpb.IndexInfo{
+				{
+					State:        commonpb.IndexState_Finished,
+					IndexBuildID: 1,
+				},
+			}, nil
+		}
+		resp, err := core.GetIndexState(context.Background(), req)
+		assert.NoError(t, err)
+		assert.Equal(t, commonpb.ErrorCode_Success, resp.Status.GetErrorCode())
+	})
 }

@@ -162,6 +162,10 @@ func (m *MockRootCoord) DescribeIndex(ctx context.Context, req *milvuspb.Describ
 	return nil, nil
 }
 
+func (m *MockRootCoord) GetIndexState(ctx context.Context, req *milvuspb.GetIndexStateRequest) (*indexpb.GetIndexStatesResponse, error) {
+	return nil, nil
+}
+
 func (m *MockRootCoord) DropIndex(ctx context.Context, req *milvuspb.DropIndexRequest) (*commonpb.Status, error) {
 	return nil, nil
 }
@@ -284,6 +288,10 @@ func (m *MockIndexCoord) BuildIndex(ctx context.Context, req *indexpb.BuildIndex
 }
 
 func (m *MockIndexCoord) DropIndex(ctx context.Context, req *indexpb.DropIndexRequest) (*commonpb.Status, error) {
+	return nil, nil
+}
+
+func (m *MockIndexCoord) RemoveIndex(ctx context.Context, req *indexpb.RemoveIndexRequest) (*commonpb.Status, error) {
 	return nil, nil
 }
 

@@ -567,6 +567,36 @@ func (i *IndexCoord) DropIndex(ctx context.Context, req *indexpb.DropIndexReques
 	return ret, nil
 }
 
+func (i *IndexCoord) RemoveIndex(ctx context.Context, req *indexpb.RemoveIndexRequest) (*commonpb.Status, error) {
+	log.Info("IndexCoord receive RemoveIndex", zap.Int64s("buildIDs", req.BuildIDs))
+
+	if !i.isHealthy() {
+		errMsg := "IndexCoord is not healthy"
+		log.Warn(errMsg)
+		return &commonpb.Status{
+			ErrorCode: commonpb.ErrorCode_UnexpectedError,
+			Reason:    errMsg,
+		}, nil
+	}
+
+	sp, _ := trace.StartSpanFromContextWithOperationName(ctx, "IndexCoord-RemoveIndex")
+	defer sp.Finish()
+
+	ret := &commonpb.Status{
+		ErrorCode: commonpb.ErrorCode_Success,
+	}
+	err := i.metaTable.MarkIndexAsDeletedByBuildIDs(req.GetBuildIDs())
+	if err != nil {
+		log.Error("IndexCoord MarkIndexAsDeletedByBuildIDs failed", zap.Int64s("buildIDs", req.GetBuildIDs()),
+			zap.Error(err))
+		ret.ErrorCode = commonpb.ErrorCode_UnexpectedError
+		ret.Reason = err.Error()
+		return ret, nil
+	}
+
+	return ret, nil
+}
+
 // GetIndexFilePaths gets the index file paths from IndexCoord.
 func (i *IndexCoord) GetIndexFilePaths(ctx context.Context, req *indexpb.GetIndexFilePathsRequest) (*indexpb.GetIndexFilePathsResponse, error) {
 	log.Debug("IndexCoord GetIndexFilePaths", zap.Int("number of IndexBuildIds", len(req.IndexBuildIDs)))
@@ -853,7 +883,7 @@ func (i *IndexCoord) watchMetaLoop() {
 						log.Debug("This task has finished", zap.Int64("indexBuildID", indexBuildID),
 							zap.Int64("Finish by IndexNode", indexMeta.NodeID),
 							zap.Int64("The version of the task", indexMeta.Version))
-						if err = i.tryReleaseSegmentReferLock(ctx, []UniqueID{indexMeta.Req.SegmentID}); err != nil {
+						if err = i.tryReleaseSegmentReferLock(ctx, indexBuildID, []UniqueID{indexMeta.Req.SegmentID}); err != nil {
 							panic(err)
 						}
 						i.nodeManager.pq.IncPriority(indexMeta.NodeID, -1)
@@ -873,8 +903,10 @@ func (i *IndexCoord) watchMetaLoop() {
 	}
 }
 
-func (i *IndexCoord) tryAcquireSegmentReferLock(ctx context.Context, segIDs []UniqueID) error {
+func (i *IndexCoord) tryAcquireSegmentReferLock(ctx context.Context, buildID UniqueID, segIDs []UniqueID) error {
+	// IndexCoord use buildID instead of taskID.
 	status, err := i.dataCoordClient.AcquireSegmentLock(ctx, &datapb.AcquireSegmentLockRequest{
+		TaskID:     buildID,
 		NodeID:     i.session.ServerID,
 		SegmentIDs: segIDs,
 	})
@@ -891,11 +923,11 @@ func (i *IndexCoord) tryAcquireSegmentReferLock(ctx context.Context, segIDs []Un
 	return nil
 }
 
-func (i *IndexCoord) tryReleaseSegmentReferLock(ctx context.Context, segIDs []UniqueID) error {
+func (i *IndexCoord) tryReleaseSegmentReferLock(ctx context.Context, buildID UniqueID, segIDs []UniqueID) error {
 	releaseLock := func() error {
 		status, err := i.dataCoordClient.ReleaseSegmentLock(ctx, &datapb.ReleaseSegmentLockRequest{
-			NodeID:     i.session.ServerID,
-			SegmentIDs: segIDs,
+			TaskID: buildID,
+			NodeID: i.session.ServerID,
 		})
 		if err != nil {
 			return err
@@ -964,7 +996,7 @@ func (i *IndexCoord) assignTaskLoop() {
 			for index, meta := range metas {
 				indexBuildID := meta.indexMeta.IndexBuildID
 				segID := meta.indexMeta.Req.SegmentID
-				if err := i.tryAcquireSegmentReferLock(ctx, []UniqueID{segID}); err != nil {
+				if err := i.tryAcquireSegmentReferLock(ctx, indexBuildID, []UniqueID{segID}); err != nil {
 					log.Warn("IndexCoord try to acquire segment reference lock failed, maybe this segment has been compacted",
 						zap.Int64("segID", segID), zap.Int64("buildID", indexBuildID), zap.Error(err))
 					continue

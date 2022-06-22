@@ -108,6 +108,38 @@ func TestAssignSegmentID(t *testing.T) {
 		assert.EqualValues(t, 1000, assign.Count)
 	})
 
+	t.Run("assign segment for bulkload", func(t *testing.T) {
+		svr := newTestServer(t, nil)
+		defer closeTestServer(t, svr)
+		schema := newTestSchema()
+		svr.meta.AddCollection(&datapb.CollectionInfo{
+			ID:         collID,
+			Schema:     schema,
+			Partitions: []int64{},
+		})
+		req := &datapb.SegmentIDRequest{
+			Count:        1000,
+			ChannelName:  channel0,
+			CollectionID: collID,
+			PartitionID:  partID,
+			IsImport:     true,
+		}
+
+		resp, err := svr.AssignSegmentID(context.TODO(), &datapb.AssignSegmentIDRequest{
+			NodeID:            0,
+			PeerRole:          "",
+			SegmentIDRequests: []*datapb.SegmentIDRequest{req},
+		})
+		assert.Nil(t, err)
+		assert.EqualValues(t, 1, len(resp.SegIDAssignments))
+		assign := resp.SegIDAssignments[0]
+		assert.EqualValues(t, commonpb.ErrorCode_Success, assign.Status.ErrorCode)
+		assert.EqualValues(t, collID, assign.CollectionID)
+		assert.EqualValues(t, partID, assign.PartitionID)
+		assert.EqualValues(t, channel0, assign.ChannelName)
+		assert.EqualValues(t, 1000, assign.Count)
+	})
+
 	t.Run("with closed server", func(t *testing.T) {
 		req := &datapb.SegmentIDRequest{
 			Count:        100,
@@ -499,7 +531,33 @@ func TestGetSegmentInfo(t *testing.T) {
 		assert.Equal(t, commonpb.ErrorCode_UnexpectedError, resp.GetStatus().GetErrorCode())
 		assert.Equal(t, serverNotServingErrMsg, resp.GetStatus().GetReason())
 	})
+	t.Run("with dropped segment", func(t *testing.T) {
+		svr := newTestServer(t, nil)
+		defer closeTestServer(t, svr)
 
+		segInfo := &datapb.SegmentInfo{
+			ID:    0,
+			State: commonpb.SegmentState_Dropped,
+		}
+		err := svr.meta.AddSegment(NewSegmentInfo(segInfo))
+		assert.Nil(t, err)
+
+		req := &datapb.GetSegmentInfoRequest{
+			SegmentIDs:       []int64{0},
+			IncludeUnHealthy: false,
+		}
+		resp, err := svr.GetSegmentInfo(svr.ctx, req)
+		assert.Nil(t, err)
+		assert.Equal(t, 0, len(resp.Infos))
+
+		req = &datapb.GetSegmentInfoRequest{
+			SegmentIDs:       []int64{0},
+			IncludeUnHealthy: true,
+		}
+		resp2, err := svr.GetSegmentInfo(svr.ctx, req)
+		assert.Nil(t, err)
+		assert.Equal(t, 1, len(resp2.Infos))
+	})
 }
 
 func TestGetComponentStates(t *testing.T) {
@@ -690,10 +748,12 @@ func TestServer_watchCoord(t *testing.T) {
 	dnCh := make(chan *sessionutil.SessionEvent)
 	icCh := make(chan *sessionutil.SessionEvent)
 	qcCh := make(chan *sessionutil.SessionEvent)
+	rcCh := make(chan *sessionutil.SessionEvent)
 
 	svr.dnEventCh = dnCh
 	svr.icEventCh = icCh
 	svr.qcEventCh = qcCh
+	svr.rcEventCh = rcCh
 
 	segRefer, err := NewSegmentReferenceManager(etcdKV, nil)
 	assert.NoError(t, err)
@@ -751,10 +811,12 @@ func TestServer_watchQueryCoord(t *testing.T) {
 	dnCh := make(chan *sessionutil.SessionEvent)
 	icCh := make(chan *sessionutil.SessionEvent)
 	qcCh := make(chan *sessionutil.SessionEvent)
+	rcCh := make(chan *sessionutil.SessionEvent)
 
 	svr.dnEventCh = dnCh
 	svr.icEventCh = icCh
 	svr.qcEventCh = qcCh
+	svr.rcEventCh = rcCh
 
 	segRefer, err := NewSegmentReferenceManager(etcdKV, nil)
 	assert.NoError(t, err)
@@ -791,6 +853,69 @@ func TestServer_watchQueryCoord(t *testing.T) {
 		},
 	}
 	close(qcCh)
+	<-sigQuit
+	svr.serverLoopWg.Wait()
+	assert.True(t, closed)
+}
+
+func TestServer_watchRootCoord(t *testing.T) {
+	Params.Init()
+	etcdCli, err := etcd.GetEtcdClient(&Params.EtcdCfg)
+	assert.Nil(t, err)
+	etcdKV := etcdkv.NewEtcdKV(etcdCli, Params.EtcdCfg.MetaRootPath)
+	assert.NotNil(t, etcdKV)
+	factory := dependency.NewDefaultFactory(true)
+	svr := CreateServer(context.TODO(), factory)
+	svr.session = &sessionutil.Session{
+		TriggerKill: true,
+	}
+	svr.kvClient = etcdKV
+
+	dnCh := make(chan *sessionutil.SessionEvent)
+	icCh := make(chan *sessionutil.SessionEvent)
+	qcCh := make(chan *sessionutil.SessionEvent)
+	rcCh := make(chan *sessionutil.SessionEvent)
+
+	svr.dnEventCh = dnCh
+	svr.icEventCh = icCh
+	svr.qcEventCh = qcCh
+	svr.rcEventCh = rcCh
+
+	segRefer, err := NewSegmentReferenceManager(etcdKV, nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, segRefer)
+	svr.segReferManager = segRefer
+
+	sc := make(chan os.Signal, 1)
+	signal.Notify(sc, syscall.SIGINT)
+	defer signal.Reset(syscall.SIGINT)
+	closed := false
+	sigQuit := make(chan struct{}, 1)
+
+	svr.serverLoopWg.Add(1)
+	go func() {
+		svr.watchService(context.Background())
+	}()
+
+	go func() {
+		<-sc
+		closed = true
+		sigQuit <- struct{}{}
+	}()
+
+	rcCh <- &sessionutil.SessionEvent{
+		EventType: sessionutil.SessionAddEvent,
+		Session: &sessionutil.Session{
+			ServerID: 3,
+		},
+	}
+	rcCh <- &sessionutil.SessionEvent{
+		EventType: sessionutil.SessionDelEvent,
+		Session: &sessionutil.Session{
+			ServerID: 3,
+		},
+	}
+	close(rcCh)
 	<-sigQuit
 	svr.serverLoopWg.Wait()
 	assert.True(t, closed)
@@ -867,6 +992,10 @@ type spySegmentManager struct {
 
 // AllocSegment allocates rows and record the allocation.
 func (s *spySegmentManager) AllocSegment(ctx context.Context, collectionID UniqueID, partitionID UniqueID, channelName string, requestRows int64) ([]*Allocation, error) {
+	panic("not implemented") // TODO: Implement
+}
+
+func (s *spySegmentManager) AllocSegmentForImport(ctx context.Context, collectionID UniqueID, partitionID UniqueID, channelName string, requestRows int64) (*Allocation, error) {
 	panic("not implemented") // TODO: Implement
 }
 
@@ -1504,31 +1633,31 @@ func TestGetVChannelPos(t *testing.T) {
 
 	t.Run("get unexisted channel", func(t *testing.T) {
 		vchan := svr.handler.GetVChanPositions("chx1", 0, allPartitionID)
-		assert.Empty(t, vchan.UnflushedSegments)
-		assert.Empty(t, vchan.FlushedSegments)
+		assert.Empty(t, vchan.UnflushedSegmentIds)
+		assert.Empty(t, vchan.FlushedSegmentIds)
 	})
 
 	t.Run("get existed channel", func(t *testing.T) {
 		vchan := svr.handler.GetVChanPositions("ch1", 0, allPartitionID)
-		assert.EqualValues(t, 1, len(vchan.FlushedSegments))
-		assert.EqualValues(t, 1, vchan.FlushedSegments[0].ID)
-		assert.EqualValues(t, 2, len(vchan.UnflushedSegments))
+		assert.EqualValues(t, 1, len(vchan.FlushedSegmentIds))
+		assert.EqualValues(t, 1, vchan.FlushedSegmentIds[0])
+		assert.EqualValues(t, 2, len(vchan.UnflushedSegmentIds))
 		assert.EqualValues(t, []byte{1, 2, 3}, vchan.GetSeekPosition().GetMsgID())
 	})
 
 	t.Run("empty collection", func(t *testing.T) {
 		infos := svr.handler.GetVChanPositions("ch0_suffix", 1, allPartitionID)
 		assert.EqualValues(t, 1, infos.CollectionID)
-		assert.EqualValues(t, 0, len(infos.FlushedSegments))
-		assert.EqualValues(t, 0, len(infos.UnflushedSegments))
+		assert.EqualValues(t, 0, len(infos.FlushedSegmentIds))
+		assert.EqualValues(t, 0, len(infos.UnflushedSegmentIds))
 		assert.EqualValues(t, []byte{8, 9, 10}, infos.SeekPosition.MsgID)
 	})
 
 	t.Run("filter partition", func(t *testing.T) {
 		infos := svr.handler.GetVChanPositions("ch1", 0, 1)
 		assert.EqualValues(t, 0, infos.CollectionID)
-		assert.EqualValues(t, 0, len(infos.FlushedSegments))
-		assert.EqualValues(t, 1, len(infos.UnflushedSegments))
+		assert.EqualValues(t, 0, len(infos.FlushedSegmentIds))
+		assert.EqualValues(t, 1, len(infos.UnflushedSegmentIds))
 		assert.EqualValues(t, []byte{11, 12, 13}, infos.SeekPosition.MsgID)
 	})
 }
@@ -1749,8 +1878,8 @@ func TestGetRecoveryInfo(t *testing.T) {
 		assert.Nil(t, err)
 		assert.EqualValues(t, commonpb.ErrorCode_Success, resp.Status.ErrorCode)
 		assert.EqualValues(t, 1, len(resp.GetChannels()))
-		assert.EqualValues(t, 0, len(resp.GetChannels()[0].GetUnflushedSegments()))
-		assert.ElementsMatch(t, []*datapb.SegmentInfo{trimSegmentInfo(seg1), trimSegmentInfo(seg2)}, resp.GetChannels()[0].GetFlushedSegments())
+		assert.EqualValues(t, 0, len(resp.GetChannels()[0].GetUnflushedSegmentIds()))
+		//assert.ElementsMatch(t, []*datapb.SegmentInfo{trimSegmentInfo(seg1), trimSegmentInfo(seg2)}, resp.GetChannels()[0].GetFlushedSegments())
 		assert.EqualValues(t, 10, resp.GetChannels()[0].GetSeekPosition().GetTimestamp())
 	})
 
@@ -1886,8 +2015,8 @@ func TestGetRecoveryInfo(t *testing.T) {
 		assert.EqualValues(t, 1, len(resp.GetChannels()))
 		assert.NotNil(t, resp.GetChannels()[0].SeekPosition)
 		assert.NotEqual(t, 0, resp.GetChannels()[0].GetSeekPosition().GetTimestamp())
-		assert.Len(t, resp.GetChannels()[0].GetDroppedSegments(), 1)
-		assert.Equal(t, UniqueID(8), resp.GetChannels()[0].GetDroppedSegments()[0].GetID())
+		assert.Len(t, resp.GetChannels()[0].GetDroppedSegmentIds(), 1)
+		assert.Equal(t, UniqueID(8), resp.GetChannels()[0].GetDroppedSegmentIds()[0])
 	})
 
 	t.Run("with closed server", func(t *testing.T) {
@@ -2011,7 +2140,7 @@ func TestManualCompaction(t *testing.T) {
 		svr.isServing = ServerStateHealthy
 		svr.compactionTrigger = &mockCompactionTrigger{
 			methods: map[string]interface{}{
-				"forceTriggerCompaction": func(collectionID int64, tt *timetravel) (UniqueID, error) {
+				"forceTriggerCompaction": func(collectionID int64, ct *compactTime) (UniqueID, error) {
 					return 1, nil
 				},
 			},
@@ -2030,7 +2159,7 @@ func TestManualCompaction(t *testing.T) {
 		svr.isServing = ServerStateHealthy
 		svr.compactionTrigger = &mockCompactionTrigger{
 			methods: map[string]interface{}{
-				"forceTriggerCompaction": func(collectionID int64, tt *timetravel) (UniqueID, error) {
+				"forceTriggerCompaction": func(collectionID int64, ct *compactTime) (UniqueID, error) {
 					return 0, errors.New("mock error")
 				},
 			},
@@ -2049,7 +2178,7 @@ func TestManualCompaction(t *testing.T) {
 		svr.isServing = ServerStateStopped
 		svr.compactionTrigger = &mockCompactionTrigger{
 			methods: map[string]interface{}{
-				"forceTriggerCompaction": func(collectionID int64, tt *timetravel) (UniqueID, error) {
+				"forceTriggerCompaction": func(collectionID int64, ct *compactTime) (UniqueID, error) {
 					return 1, nil
 				},
 			},
@@ -2638,8 +2767,8 @@ func TestDataCoord_Import(t *testing.T) {
 		closeTestServer(t, svr)
 
 		status, err := svr.ReleaseSegmentLock(context.TODO(), &datapb.ReleaseSegmentLockRequest{
-			SegmentIDs: []UniqueID{1, 2},
-			NodeID:     UniqueID(1),
+			TaskID: UniqueID(1),
+			NodeID: UniqueID(1),
 		})
 		assert.NoError(t, err)
 		assert.Equal(t, commonpb.ErrorCode_UnexpectedError, status.GetErrorCode())
