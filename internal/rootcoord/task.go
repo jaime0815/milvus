@@ -1017,6 +1017,7 @@ func (t *CreateIndexReqTask) Execute(ctx context.Context) error {
 				PartitionID: segID2PartID[segID],
 			},
 			EnableIndex: false,
+			ByAutoFlush: false,
 		}
 
 		segmentIndex.BuildID, err = t.core.BuildIndex(ctx, segID, segID2Binlog[segID].GetNumOfRows(), segID2Binlog[segID].GetFieldBinlogs(), &field, idxInfo, false)
@@ -1031,7 +1032,6 @@ func (t *CreateIndexReqTask) Execute(ctx context.Context) error {
 			CollectionID:   collMeta.CollectionID,
 			FieldID:        field.FieldID,
 			IndexID:        idxInfo.IndexID,
-			ByAutoFlush:  false,
 			SegmentIndexes: map[int64]model.SegmentIndex{segID: segmentIndex},
 		}
 

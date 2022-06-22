@@ -29,7 +29,6 @@ import (
 	kvmetestore "github.com/milvus-io/milvus/internal/metastore/kv"
 	"github.com/milvus-io/milvus/internal/metastore/model"
 	"github.com/milvus-io/milvus/internal/proto/commonpb"
-	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
 	"github.com/milvus-io/milvus/internal/proto/milvuspb"
 	"github.com/milvus-io/milvus/internal/proto/schemapb"
@@ -88,12 +87,12 @@ type MetaTable struct {
 // for collection, partition, segment, index etc.
 func NewMetaTable(ctx context.Context, txn kv.TxnKV, snap kv.SnapShotKV) (*MetaTable, error) {
 	mt := &MetaTable{
-		ctx:       ctx,
-		txn:       txn,
-		snapshot:  snap,
-		catalog:   &kvmetestore.Catalog{Txn: txn, Snapshot: snap},
-		ddLock:    sync.RWMutex{},
-		credLock:  sync.RWMutex{},
+		ctx:      ctx,
+		txn:      txn,
+		snapshot: snap,
+		catalog:  &kvmetestore.Catalog{Txn: txn, Snapshot: snap},
+		ddLock:   sync.RWMutex{},
+		credLock: sync.RWMutex{},
 	}
 	err := mt.reloadFromKV()
 	if err != nil {
@@ -109,12 +108,26 @@ func (mt *MetaTable) reloadFromKV() error {
 	mt.partID2SegID = make(map[typeutil.UniqueID]map[typeutil.UniqueID]bool)
 	mt.segID2IndexID = make(map[typeutil.UniqueID]typeutil.UniqueID)
 	mt.indexID2Meta = make(map[typeutil.UniqueID]*model.Index)
+	mt.collAlias2ID = make(map[string]typeutil.UniqueID)
+
+	collAliases, err := mt.catalog.ListAliases(mt.ctx)
+	if err != nil {
+		return err
+	}
+	for _, aliasInfo := range collAliases {
+		mt.collAlias2ID[aliasInfo.Name] = aliasInfo.CollectionID
+	}
 
 	collMap, err := mt.catalog.ListCollections(mt.ctx, 0)
 	if err != nil {
 		return err
 	}
+
 	for _, coll := range collMap {
+		if _, ok := mt.collAlias2ID[coll.Name]; ok {
+			continue
+		}
+
 		mt.collID2Meta[coll.CollectionID] = *coll
 		mt.collName2ID[coll.Name] = coll.CollectionID
 	}
@@ -159,10 +172,6 @@ func (mt *MetaTable) AddCollection(coll *model.Collection, ts typeutil.Timestamp
 		partition.PartitionCreatedTimestamp = ts
 	}
 
-	meta := map[string]string{}
-	meta[DDMsgSendPrefix] = "false"
-	meta[DDOperationPrefix] = ddOpStr
-	coll.Extra = meta
 	if err := mt.catalog.CreateCollection(mt.ctx, coll, ts); err != nil {
 		return err
 	}
@@ -190,16 +199,9 @@ func (mt *MetaTable) DeleteCollection(collID typeutil.UniqueID, ts typeutil.Time
 		}
 	}
 
-	// save ddOpStr into etcd
-	var meta = map[string]string{
-		DDMsgSendPrefix:   "false",
-		DDOperationPrefix: ddOpStr,
-	}
-
 	collection := &model.Collection{
 		CollectionID: collID,
 		Aliases:      aliases,
-		Extra:        meta,
 	}
 
 	if err := mt.catalog.DropCollection(mt.ctx, collection, ts); err != nil {
@@ -392,14 +394,13 @@ func (mt *MetaTable) AddPartition(collID typeutil.UniqueID, partitionName string
 			PartitionName:             partitionName,
 			PartitionCreatedTimestamp: ts,
 		})
-	mt.collID2Meta[collID] = coll
 
-	metaTxn := map[string]string{}
-	// save ddOpStr into etcd
-	metaTxn[DDMsgSendPrefix] = "false"
-	metaTxn[DDOperationPrefix] = ddOpStr
-	coll.Extra = metaTxn
-	return mt.catalog.CreatePartition(mt.ctx, &coll, ts)
+	if err := mt.catalog.CreatePartition(mt.ctx, &coll, ts); err != nil {
+		return err
+	}
+
+	mt.collID2Meta[collID] = coll
+	return nil
 }
 
 // GetPartitionNameByID return partition name by partition id
@@ -503,10 +504,14 @@ func (mt *MetaTable) DeletePartition(collID typeutil.UniqueID, partitionName str
 	if !exist {
 		return 0, fmt.Errorf("partition %s does not exist", partitionName)
 	}
-	col.Partitions = parts
-	mt.collID2Meta[collID] = col
 
-	// update segID2IndexID and partID2SegID
+	col.Partitions = parts
+	if err := mt.catalog.DropPartition(mt.ctx, &col, partID, ts); err != nil {
+		return 0, err
+	}
+
+	// update cache
+	mt.collID2Meta[collID] = col
 	if segIDMap, ok := mt.partID2SegID[partID]; ok {
 		for segID := range segIDMap {
 			indexID, ok := mt.segID2IndexID[segID]
@@ -522,17 +527,6 @@ func (mt *MetaTable) DeletePartition(collID typeutil.UniqueID, partitionName str
 		}
 	}
 	delete(mt.partID2SegID, partID)
-
-	metaTxn := make(map[string]string)
-	// save ddOpStr into etcd
-	metaTxn[DDMsgSendPrefix] = "false"
-	metaTxn[DDOperationPrefix] = ddOpStr
-	col.Extra = metaTxn
-
-	err := mt.catalog.DropPartition(mt.ctx, &col, partID, ts)
-	if err != nil {
-		return 0, err
-	}
 
 	return partID, nil
 }
@@ -566,12 +560,13 @@ func (mt *MetaTable) AlterIndex(newIndex *model.Index) error {
 		return fmt.Errorf("collection id = %d not found", newIndex.CollectionID)
 	}
 
-	if oldIndex, ok := mt.indexID2Meta[newIndex.IndexID]; !ok || newIndex.GetDeleted() {
+	oldIndex, ok := mt.indexID2Meta[newIndex.IndexID]
+	if !ok || newIndex.IsDeleted {
 		log.Error("index id not found or has been deleted", zap.Int64("indexID", newIndex.IndexID))
 		return fmt.Errorf("index id = %d not found", newIndex.IndexID)
 	}
 
-	if err := mt.catalog.AlterIndex(mt.ctx, oldIndex, newIndex); err != nil {
+	if err := mt.catalog.AlterIndex(mt.ctx, oldIndex, newIndex, metastore.ADD); err != nil {
 		return err
 	}
 
@@ -593,53 +588,50 @@ func (mt *MetaTable) MarkIndexDeleted(collName, fieldName, indexName string) err
 		return err
 	}
 
-	var clonedIndex *pb.IndexInfo
-	var dropIdxID typeutil.UniqueID
-	for _, info := range collMeta.FieldIndexes {
-		if info.FiledID != fieldSch.FieldID {
+	var deletedIdxMeta *model.Index
+	for _, t := range collMeta.FieldIDToIndexID {
+		fieldID := t.Key
+		indexID := t.Value
+		if fieldID != fieldSch.FieldID {
 			continue
 		}
-		idxMeta, ok := mt.indexID2Meta[info.IndexID]
+		idxMeta, ok := mt.indexID2Meta[indexID]
 		if !ok {
-			errMsg := fmt.Errorf("index not has meta with ID = %d", info.IndexID)
-			log.Error("index id not has meta", zap.Int64("index id", info.IndexID))
+			errMsg := fmt.Errorf("index not has meta with ID = %d", indexID)
+			log.Error("index id not has meta", zap.Int64("index id", indexID))
 			return errMsg
 		}
-		if idxMeta.GetDeleted() {
+		if idxMeta.IsDeleted {
 			continue
 		}
 		if idxMeta.IndexName != indexName {
 			continue
 		}
-		dropIdxID = info.IndexID
-		clonedIndex = proto.Clone(&idxMeta).(*pb.IndexInfo)
-		clonedIndex.Deleted = true
+		deletedIdxMeta = idxMeta
 	}
 
-	if dropIdxID == 0 {
-		log.Warn("index not found", zap.String("collName", collName), zap.String("fieldName", fieldName),
+	if deletedIdxMeta == nil {
+		log.Warn("index not found",
+			zap.String("collName", collName),
+			zap.String("fieldName", fieldName),
 			zap.String("indexName", indexName))
 		return nil
 	}
-	log.Info("MarkIndexDeleted", zap.String("collName", collName), zap.String("fieldName", fieldName),
-		zap.String("indexName", indexName), zap.Int64("dropIndexID", dropIdxID))
 
-	k := fmt.Sprintf("%s/%d/%d", IndexMetaPrefix, collMeta.ID, dropIdxID)
-	v, err := proto.Marshal(clonedIndex)
-	if err != nil {
-		log.Error("MetaTable MarkIndexDeleted Marshal idxInfo fail",
-			zap.String("key", k), zap.Error(err))
+	log.Info("mark index deleted",
+		zap.String("collName", collName),
+		zap.String("fieldName", fieldName),
+		zap.String("indexName", indexName),
+		zap.Int64("dropIndexID", deletedIdxMeta.IndexID))
+
+	// update metastore
+	newIndex := &model.Index{IsDeleted: true}
+	if err = mt.catalog.AlterIndex(mt.ctx, deletedIdxMeta, newIndex, metastore.ADD); err != nil {
 		return err
 	}
 
-	err = mt.txn.Save(k, string(v))
-	if err != nil {
-		log.Error("MetaTable MarkIndexDeleted txn MultiSave failed", zap.Error(err))
-		return err
-	}
-
-	// update meta cache
-	mt.indexID2Meta[dropIdxID] = *clonedIndex
+	// update cache
+	deletedIdxMeta.IsDeleted = true
 	return nil
 }
 
@@ -677,13 +669,13 @@ func (mt *MetaTable) DropIndex(collName, fieldName, indexName string) (typeutil.
 		}
 
 		idxMeta, ok := mt.indexID2Meta[indexID]
-		if !ok || idxMeta.GetDeleted() || idxMeta.IndexName != indexName {
+		if !ok || idxMeta.IsDeleted || idxMeta.IndexName != indexName {
 			fieldIDToIndexID = append(fieldIDToIndexID, t)
 			log.Warn("index id not has meta", zap.Int64("index id", indexID))
 			continue
 		}
-		dropIdxID = info.IndexID
-		fieldIDToIndexID = append(fieldIDToIndexID, collMeta.FieldIndexes[i+1:]...)
+		dropIdxID = indexID
+		fieldIDToIndexID = append(fieldIDToIndexID, col.FieldIDToIndexID[i+1:]...)
 		break
 	}
 
@@ -692,10 +684,16 @@ func (mt *MetaTable) DropIndex(collName, fieldName, indexName string) (typeutil.
 		return 0, false, nil
 	}
 
-	// update cache
 	col.FieldIDToIndexID = fieldIDToIndexID
-	mt.collID2Meta[collID] = col
 
+	// update metastore
+	err = mt.catalog.DropIndex(mt.ctx, &col, dropIdxID, 0)
+	if err != nil {
+		return 0, false, err
+	}
+
+	// update cache
+	mt.collID2Meta[collID] = col
 	delete(mt.indexID2Meta, dropIdxID)
 	for _, part := range col.Partitions {
 		if segIDMap, ok := mt.partID2SegID[part.PartitionID]; ok {
@@ -704,13 +702,6 @@ func (mt *MetaTable) DropIndex(collName, fieldName, indexName string) (typeutil.
 			}
 		}
 	}
-
-	// update metastore
-	err = mt.catalog.DropIndex(mt.ctx, &col, dropIdxID, 0)
-	if err != nil {
-		return 0, false, err
-	}
-
 	return dropIdxID, true, nil
 }
 
@@ -724,10 +715,10 @@ func (mt *MetaTable) GetInitBuildIDs(collName, indexName string) ([]UniqueID, er
 	}
 
 	var indexID typeutil.UniqueID
-	for _, info := range collMeta.FieldIndexes {
-		idxMeta, ok := mt.indexID2Meta[info.IndexID]
+	for _, t := range collMeta.FieldIDToIndexID {
+		idxMeta, ok := mt.indexID2Meta[t.Value]
 		if ok && idxMeta.IndexName == indexName {
-			indexID = info.IndexID
+			indexID = t.Value
 			break
 		}
 	}
@@ -738,13 +729,14 @@ func (mt *MetaTable) GetInitBuildIDs(collName, indexName string) ([]UniqueID, er
 		return nil, fmt.Errorf("index not found with name = %s in collection %s", indexName, collName)
 	}
 
+	idxMeta, _ := mt.indexID2Meta[indexID]
 	initBuildIDs := make([]UniqueID, 0)
-	for _, indexID2Info := range mt.segID2IndexMeta {
-		segIndexInfo, ok := indexID2Info[indexID]
-		if ok && segIndexInfo.EnableIndex && !segIndexInfo.ByAutoFlush {
+	for _, segIndexInfo := range idxMeta.SegmentIndexes {
+		if segIndexInfo.EnableIndex && !segIndexInfo.ByAutoFlush {
 			initBuildIDs = append(initBuildIDs, segIndexInfo.BuildID)
 		}
 	}
+
 	return initBuildIDs, nil
 }
 
@@ -754,11 +746,12 @@ func (mt *MetaTable) GetBuildIDsBySegIDs(segIDs []UniqueID) []UniqueID {
 
 	buildIDs := make([]UniqueID, 0)
 	for _, segID := range segIDs {
-		if idxID2segIdx, ok := mt.segID2IndexMeta[segID]; ok {
-			for _, segIndex := range idxID2segIdx {
-				buildIDs = append(buildIDs, segIndex.BuildID)
-			}
+		segmentIdx, err := mt.getSegIdxMetaBySegID(segID)
+		// skip if not found corresponding index meta
+		if err != nil {
+			continue
 		}
+		buildIDs = append(buildIDs, segmentIdx.BuildID)
 	}
 	return buildIDs
 }
@@ -769,8 +762,8 @@ func (mt *MetaTable) AlignSegmentsMeta(collID, partID UniqueID, segIDs map[Uniqu
 
 	allIndexID := make([]UniqueID, 0)
 	if collMeta, ok := mt.collID2Meta[collID]; ok {
-		for _, fieldIndex := range collMeta.FieldIndexes {
-			allIndexID = append(allIndexID, fieldIndex.IndexID)
+		for _, tuple := range collMeta.FieldIDToIndexID {
+			allIndexID = append(allIndexID, tuple.Value)
 		}
 	}
 
@@ -781,11 +774,13 @@ func (mt *MetaTable) AlignSegmentsMeta(collID, partID UniqueID, segIDs map[Uniqu
 			if _, ok := segIDs[segID]; !ok {
 				recycledSegIDs = append(recycledSegIDs, segID)
 			}
-			if idxID2segIndex, ok := mt.segID2IndexMeta[segID]; ok {
-				for _, segIndex := range idxID2segIndex {
-					recycledBuildIDs = append(recycledBuildIDs, segIndex.BuildID)
-				}
+
+			segmentIdx, err := mt.getSegIdxMetaBySegID(segID)
+			// skip if not found corresponding index meta
+			if err != nil {
+				continue
 			}
+			recycledBuildIDs = append(recycledBuildIDs, segmentIdx.BuildID)
 		}
 	}
 
@@ -800,37 +795,61 @@ func (mt *MetaTable) RemoveSegments(collID, partID UniqueID, segIDs []UniqueID) 
 		zap.Int64s("segIDs", segIDs))
 	allIndexID := make([]UniqueID, 0)
 	if collMeta, ok := mt.collID2Meta[collID]; ok {
-		for _, fieldIndex := range collMeta.FieldIndexes {
-			allIndexID = append(allIndexID, fieldIndex.IndexID)
+		for _, tuple := range collMeta.FieldIDToIndexID {
+			allIndexID = append(allIndexID, tuple.Value)
 		}
 	}
 
-	for _, segID := range segIDs {
-		delMeta := make([]string, 0)
-		for _, indexID := range allIndexID {
-			delMeta = append(delMeta, fmt.Sprintf("%s/%d/%d/%d/%d", SegmentIndexMetaPrefix, collID, indexID, partID, segID))
+	for _, indexID := range allIndexID {
+		deletedSegIdx := make(map[int64]model.SegmentIndex, len(segIDs))
+		for _, segID := range segIDs {
+			deletedSegIdx[segID] = model.SegmentIndex{
+				Segment: model.Segment{
+					SegmentID:   segID,
+					PartitionID: partID,
+				},
+			}
 		}
-		if err := mt.txn.MultiRemove(delMeta); err != nil {
-			log.Error("remove redundant segment failed, wait to retry", zap.Int64("collID", collID), zap.Int64("part", partID),
-				zap.Int64("segID", segID), zap.Error(err))
+
+		deletedIdxMeta := &model.Index{
+			CollectionID:   collID,
+			IndexID:        indexID,
+			SegmentIndexes: deletedSegIdx,
+		}
+
+		if err := mt.catalog.AlterIndex(mt.ctx, nil, deletedIdxMeta, metastore.DELETE); err != nil {
 			return err
 		}
-		delete(mt.partID2SegID[partID], segID)
-		delete(mt.segID2IndexMeta, segID)
 	}
 
+	// update cache
+	for _, segID := range segIDs {
+		idxID, ok := mt.segID2IndexID[segID]
+		if !ok {
+			return fmt.Errorf("index id not found in collectionID %d with segmentID: %d", collID, segID)
+		}
+
+		idxMeta, ok := mt.indexID2Meta[idxID]
+		if !ok {
+			return fmt.Errorf("index meta not found in collectionID %d with idxID: %d", collID, idxID)
+		}
+
+		delete(idxMeta.SegmentIndexes, segID)
+		delete(mt.segID2IndexID, segID)
+		delete(mt.partID2SegID[partID], segID)
+	}
 	return nil
 }
 
-func (mt *MetaTable) GetDroppedIndex() map[UniqueID][]*pb.FieldIndexInfo {
+func (mt *MetaTable) GetDroppedIndex() map[UniqueID][]UniqueID {
 	mt.ddLock.Lock()
 	defer mt.ddLock.Unlock()
 
-	droppedIndex := make(map[UniqueID][]*pb.FieldIndexInfo)
+	droppedIndex := make(map[UniqueID][]UniqueID)
 	for collID, meta := range mt.collID2Meta {
-		for _, fieldIndex := range meta.FieldIndexes {
-			if indexMeta, ok := mt.indexID2Meta[fieldIndex.IndexID]; ok && indexMeta.Deleted {
-				droppedIndex[collID] = append(droppedIndex[collID], proto.Clone(fieldIndex).(*pb.FieldIndexInfo))
+		for _, tuple := range meta.FieldIDToIndexID {
+			if indexMeta, ok := mt.indexID2Meta[tuple.Value]; ok && indexMeta.IsDeleted {
+				droppedIndex[collID] = append(droppedIndex[collID], tuple.Value)
 			}
 		}
 	}
@@ -838,68 +857,38 @@ func (mt *MetaTable) GetDroppedIndex() map[UniqueID][]*pb.FieldIndexInfo {
 }
 
 // RecycleDroppedIndex remove the meta about index which is deleted.
+// TODO:: Enable time travel
 func (mt *MetaTable) RecycleDroppedIndex() error {
 	mt.ddLock.Lock()
 	defer mt.ddLock.Unlock()
 
-	for collID, collMeta := range mt.collID2Meta {
-		meta := collMeta
-		fieldIndexes := make([]*pb.FieldIndexInfo, 0)
-		delMeta := make([]string, 0)
-		deletedIndexIDs := make(map[UniqueID]struct{})
-		for _, fieldIndex := range meta.FieldIndexes {
-			// Prevent the number of transaction operations from exceeding the etcd limit (128), where a maximum of 100 are processed each time
-			if len(delMeta) >= 100 {
-				break
-			}
-			if idxInfo, ok := mt.indexID2Meta[fieldIndex.IndexID]; !ok || idxInfo.GetDeleted() {
-				deletedIndexIDs[fieldIndex.IndexID] = struct{}{}
-				delMeta = append(delMeta, fmt.Sprintf("%s/%d/%d", IndexMetaPrefix, collID, fieldIndex.IndexID))
-				delMeta = append(delMeta, fmt.Sprintf("%s/%d/%d", SegmentIndexMetaPrefix, collID, fieldIndex.IndexID))
-				continue
-			}
-			fieldIndexes = append(fieldIndexes, fieldIndex)
-		}
-		// node index is deleted
-		if len(fieldIndexes) == len(meta.FieldIndexes) {
-			continue
-		}
-		clonedCollMeta := proto.Clone(&meta).(*pb.CollectionInfo)
-		clonedCollMeta.FieldIndexes = fieldIndexes
+	for collID, colMeta := range mt.collID2Meta {
+		filedIDToIdxID := mt.arrayConvertMap(colMeta.FieldIDToIndexID)
+		for idx, tuple := range filedIDToIdxID {
+			dropIdxID := tuple.Value
+			if idxInfo, ok := mt.indexID2Meta[dropIdxID]; !ok || idxInfo.IsDeleted {
+				delete(filedIDToIdxID, idx)
+				colMeta.FieldIDToIndexID = mt.mapConvertArray(filedIDToIdxID)
 
-		saveMeta := make(map[string]string)
-		k := path.Join(CollectionMetaPrefix, strconv.FormatInt(collID, 10))
-		v, err := proto.Marshal(clonedCollMeta)
-		if err != nil {
-			log.Error("MetaTable RecycleDroppedIndex Marshal collMeta failed",
-				zap.String("key", k), zap.Error(err))
-			return err
-		}
-		saveMeta[k] = string(v)
+				// update metastore
+				if err := mt.catalog.DropIndex(mt.ctx, &colMeta, dropIdxID, 0); err != nil {
+					return err
+				}
 
-		if err = mt.txn.MultiSaveAndRemoveWithPrefix(saveMeta, delMeta); err != nil {
-			log.Error("MetaTable RecycleDroppedIndex MultiSaveAndRemoveWithPrefix failed", zap.Error(err))
-			return err
-		}
-		mt.collID2Meta[collID] = *clonedCollMeta
-		for indexID := range deletedIndexIDs {
-			delete(mt.indexID2Meta, indexID)
-		}
-		// update segID2IndexMeta
-		for _, partID := range meta.PartitionIDs {
-			if segIDMap, ok := mt.partID2SegID[partID]; ok {
-				for segID := range segIDMap {
-					if segIndexInfos, ok := mt.segID2IndexMeta[segID]; ok {
-						for indexID := range segIndexInfos {
-							if _, ok := deletedIndexIDs[indexID]; ok {
-								delete(mt.segID2IndexMeta[segID], indexID)
-							}
+				// update cache
+				mt.collID2Meta[collID] = colMeta
+				delete(mt.indexID2Meta, dropIdxID)
+				for _, part := range colMeta.Partitions {
+					if segIDMap, ok := mt.partID2SegID[part.PartitionID]; ok {
+						for segID := range segIDMap {
+							delete(mt.segID2IndexID, segID)
 						}
 					}
 				}
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -913,31 +902,15 @@ func (mt *MetaTable) GetSegmentIndexInfoByID(segID typeutil.UniqueID, fieldID in
 	}
 
 	// return default index
-	if fieldID == -1 && idxName == "" && idxMeta.IndexName == Params.CommonCfg.DefaultIndexName {
+	if fieldID == -1 && idxName == "" && !idxMeta.IsDeleted && idxMeta.IndexName == Params.CommonCfg.DefaultIndexName {
 		return idxMeta, nil
 	}
 
-	if idxMeta.IndexName == idxName && idxMeta.FieldID == fieldID {
+	if idxMeta.IndexName == idxName && !idxMeta.IsDeleted && idxMeta.FieldID == fieldID {
 		return idxMeta, nil
 	}
 
 	return model.Index{}, fmt.Errorf("can't find index name = %s on segment = %d, with filed id = %d", idxName, segID, fieldID)
-	if fieldID == -1 && idxName == "" { // return default index
-		for _, seg := range segIdxMap {
-			info, ok := mt.indexID2Meta[seg.IndexID]
-			if ok && !info.GetDeleted() && info.IndexName == Params.CommonCfg.DefaultIndexName {
-				return seg, nil
-			}
-		}
-	} else {
-		for idxID, seg := range segIdxMap {
-			idxMeta, ok := mt.indexID2Meta[idxID]
-			if ok && !idxMeta.GetDeleted() && idxMeta.IndexName == idxName && seg.FieldID == fieldID {
-				return seg, nil
-			}
-		}
-	}
-	return pb.SegmentIndexInfo{}, fmt.Errorf("can't find index name = %s on segment = %d, with filed id = %d", idxName, segID, fieldID)
 }
 
 func (mt *MetaTable) GetSegmentIndexInfos(segID typeutil.UniqueID) (model.Index, error) {
@@ -989,7 +962,7 @@ func (mt *MetaTable) isSegmentIndexedInternal(segID typeutil.UniqueID, fieldSche
 	}
 
 	segIndex, ok := index.SegmentIndexes[segID]
-	if ok && !idxMeta.GetDeleted() &&
+	if ok && !index.IsDeleted &&
 		index.FieldID == fieldSchema.FieldID &&
 		EqualKeyPairArray(indexParams, index.IndexParams) &&
 		segIndex.EnableIndex {
@@ -1018,7 +991,7 @@ func (mt *MetaTable) checkFieldCanBeIndexed(collMeta model.Collection, fieldSche
 	for _, tuple := range collMeta.FieldIDToIndexID {
 		if tuple.Key == fieldSchema.FieldID {
 			if info, ok := mt.indexID2Meta[tuple.Value]; ok {
-				if info.GetDeleted() {
+				if info.IsDeleted {
 					continue
 				}
 
@@ -1045,7 +1018,7 @@ func (mt *MetaTable) checkFieldCanBeIndexed(collMeta model.Collection, fieldSche
 
 func (mt *MetaTable) checkFieldIndexDuplicate(collMeta model.Collection, fieldSchema model.Field, idxInfo *model.Index) (duplicate bool, err error) {
 	for _, t := range collMeta.FieldIDToIndexID {
-		if info, ok := mt.indexID2Meta[t.Value]; ok && !info.GetDeleted() {
+		if info, ok := mt.indexID2Meta[t.Value]; ok && !info.IsDeleted {
 			if info.IndexName == idxInfo.IndexName {
 				// the index name must be different for different indexes
 				if t.Key != fieldSchema.FieldID || !EqualKeyPairArray(info.IndexParams, idxInfo.IndexParams) {
@@ -1152,7 +1125,6 @@ func (mt *MetaTable) AddIndex(colName string, fieldName string, idxInfo *model.I
 
 	mt.collID2Meta[collMeta.CollectionID] = collMeta
 	mt.indexID2Meta[idxInfo.IndexID] = idxInfo
-
 	return false, nil
 }
 
@@ -1180,7 +1152,7 @@ func (mt *MetaTable) GetIndexByName(collName, indexName string) (model.Collectio
 		if !ok {
 			return model.Collection{}, nil, fmt.Errorf("index id = %d not found", indexID)
 		}
-		if idxInfo.GetDeleted() {
+		if idxInfo.IsDeleted {
 			continue
 		}
 		if indexName == "" || idxInfo.IndexName == indexName {
@@ -1196,22 +1168,16 @@ func (mt *MetaTable) GetIndexByID(indexID typeutil.UniqueID) (*model.Index, erro
 	defer mt.ddLock.RUnlock()
 
 	indexInfo, ok := mt.indexID2Meta[indexID]
-	if !ok || indexInfo.GetDeleted() {
+	if !ok || indexInfo.IsDeleted {
 		return nil, fmt.Errorf("cannot find index, id = %d", indexID)
 	}
 	return indexInfo, nil
 }
 
-func (mt *MetaTable) dupCollectionMeta() map[typeutil.UniqueID]pb.CollectionInfo {
+func (mt *MetaTable) dupCollectionMeta() map[typeutil.UniqueID]model.Collection {
 	mt.ddLock.RLock()
 	defer mt.ddLock.RUnlock()
-
-	collID2Meta := map[typeutil.UniqueID]pb.CollectionInfo{}
-	for k, v := range mt.collID2Meta {
-		v := v
-		collID2Meta[k] = *proto.Clone(&v).(*pb.CollectionInfo)
-	}
-	return collID2Meta
+	return mt.collID2Meta
 }
 
 func (mt *MetaTable) dupMeta() (
@@ -1253,13 +1219,17 @@ func (mt *MetaTable) AddAlias(collectionAlias string, collectionName string, ts 
 	if !ok {
 		return fmt.Errorf("aliased collection name does not exist, name = %s", collectionName)
 	}
-	mt.collAlias2ID[collectionAlias] = id
 
 	coll := &model.Collection{
 		CollectionID: id,
 		Aliases:      []string{collectionAlias},
 	}
-	return mt.catalog.CreateAlias(mt.ctx, coll, ts)
+	if err := mt.catalog.CreateAlias(mt.ctx, coll, ts); err != nil {
+		return err
+	}
+
+	mt.collAlias2ID[collectionAlias] = id
+	return nil
 }
 
 // DropAlias drop collection alias
@@ -1270,9 +1240,12 @@ func (mt *MetaTable) DropAlias(collectionAlias string, ts typeutil.Timestamp) er
 	if !ok {
 		return fmt.Errorf("alias does not exist, alias = %s", collectionAlias)
 	}
-	delete(mt.collAlias2ID, collectionAlias)
 
-	return mt.catalog.DropAlias(mt.ctx, collectionID, collectionAlias, ts)
+	if err := mt.catalog.DropAlias(mt.ctx, collectionID, collectionAlias, ts); err != nil {
+		return err
+	}
+	delete(mt.collAlias2ID, collectionAlias)
+	return nil
 }
 
 // AlterAlias alter collection alias
@@ -1287,13 +1260,17 @@ func (mt *MetaTable) AlterAlias(collectionAlias string, collectionName string, t
 	if !ok {
 		return fmt.Errorf("aliased collection name does not exist, name = %s", collectionName)
 	}
-	mt.collAlias2ID[collectionAlias] = id
 
 	coll := &model.Collection{
 		CollectionID: id,
 		Aliases:      []string{collectionAlias},
 	}
-	return mt.catalog.AlterAlias(mt.ctx, coll, ts)
+
+	if err := mt.catalog.AlterAlias(mt.ctx, coll, ts); err != nil {
+		return err
+	}
+	mt.collAlias2ID[collectionAlias] = id
+	return nil
 }
 
 // IsAlias returns true if specific `collectionAlias` is an alias of collection.
@@ -1349,4 +1326,35 @@ func (mt *MetaTable) getIdxMetaBySegID(segID int64) (model.Index, error) {
 	}
 
 	return *idxMeta, nil
+}
+
+func (mt *MetaTable) getSegIdxMetaBySegID(segID int64) (model.SegmentIndex, error) {
+	idxMeta, err := mt.getIdxMetaBySegID(segID)
+	if err != nil {
+		return model.SegmentIndex{}, err
+	}
+
+	segmentIdx, ok := idxMeta.SegmentIndexes[segID]
+	if !ok {
+		return model.SegmentIndex{}, fmt.Errorf("segment id: %d not has any segment index,"+
+			" request index id: %d", segID, idxMeta.IndexID)
+	}
+
+	return segmentIdx, nil
+}
+
+func (mt *MetaTable) arrayConvertMap(s []common.Int64Tuple) map[int]common.Int64Tuple {
+	ret := make(map[int]common.Int64Tuple, len(s))
+	for i, e := range s {
+		ret[i] = e
+	}
+	return ret
+}
+
+func (mt *MetaTable) mapConvertArray(s map[int]common.Int64Tuple) []common.Int64Tuple {
+	ret := make([]common.Int64Tuple, len(s))
+	for _, e := range s {
+		ret = append(ret, e)
+	}
+	return ret
 }

@@ -19,6 +19,7 @@ type Segment struct {
 type SegmentIndex struct {
 	Segment
 	EnableIndex    bool
+	ByAutoFlush    bool
 	BuildID        int64
 	IndexSize      uint64
 	IndexFilePaths []string

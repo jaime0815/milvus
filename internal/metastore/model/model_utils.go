@@ -157,41 +157,44 @@ func ConvertToCollectionPB(coll *Collection) *pb.CollectionInfo {
 }
 
 func MergeIndexModel(a *Index, b *Index) *Index {
+	newIdx := *a
 	if b.SegmentIndexes != nil {
-		if a.SegmentIndexes == nil {
-			a.SegmentIndexes = b.SegmentIndexes
+		if newIdx.SegmentIndexes == nil {
+			newIdx.SegmentIndexes = b.SegmentIndexes
 		} else {
 			for segID, segmentIndex := range b.SegmentIndexes {
-				a.SegmentIndexes[segID] = segmentIndex
+				newIdx.SegmentIndexes[segID] = segmentIndex
 			}
 		}
 	}
 
-	if a.CollectionID == 0 && b.CollectionID != 0 {
-		a.CollectionID = b.CollectionID
+	if newIdx.CollectionID == 0 && b.CollectionID != 0 {
+		newIdx.CollectionID = b.CollectionID
 	}
 
-	if a.FieldID == 0 && b.FieldID != 0 {
-		a.FieldID = b.FieldID
+	if newIdx.FieldID == 0 && b.FieldID != 0 {
+		newIdx.FieldID = b.FieldID
 	}
 
-	if a.IndexID == 0 && b.IndexID != 0 {
-		a.IndexID = b.IndexID
+	if newIdx.IndexID == 0 && b.IndexID != 0 {
+		newIdx.IndexID = b.IndexID
 	}
 
-	if a.IndexName == "" && b.IndexName != "" {
-		a.IndexName = b.IndexName
+	if newIdx.IndexName == "" && b.IndexName != "" {
+		newIdx.IndexName = b.IndexName
 	}
 
-	if a.IndexParams == nil && b.IndexParams != nil {
-		a.IndexParams = b.IndexParams
+	if newIdx.IndexParams == nil && b.IndexParams != nil {
+		newIdx.IndexParams = b.IndexParams
 	}
 
-	if a.Extra == nil && b.Extra != nil {
-		a.Extra = b.Extra
+	newIdx.IsDeleted = b.IsDeleted
+
+	if newIdx.Extra == nil && b.Extra != nil {
+		newIdx.Extra = b.Extra
 	}
 
-	return a
+	return &newIdx
 }
 
 func ConvertSegmentIndexPBToModel(segIndex *pb.SegmentIndexInfo) *Index {
@@ -205,6 +208,7 @@ func ConvertSegmentIndexPBToModel(segIndex *pb.SegmentIndexInfo) *Index {
 				},
 				BuildID:     segIndex.BuildID,
 				EnableIndex: segIndex.EnableIndex,
+				ByAutoFlush: segIndex.ByAutoFlush,
 			},
 		},
 		FieldID: segIndex.FieldID,
@@ -217,6 +221,7 @@ func ConvertIndexPBToModel(indexInfo *pb.IndexInfo) *Index {
 		IndexName:   indexInfo.IndexName,
 		IndexID:     indexInfo.IndexID,
 		IndexParams: indexInfo.IndexParams,
+		IsDeleted:   indexInfo.Deleted,
 	}
 }
 
@@ -225,6 +230,7 @@ func ConvertToIndexPB(index *Index) *pb.IndexInfo {
 		IndexName:   index.IndexName,
 		IndexID:     index.IndexID,
 		IndexParams: index.IndexParams,
+		Deleted:     index.IsDeleted,
 	}
 }
 

@@ -383,13 +383,12 @@ func (c *Core) recycleDroppedIndex() {
 			return
 		case <-ticker.C:
 			droppedIndex := c.MetaTable.GetDroppedIndex()
-			for collID, fieldIndexes := range droppedIndex {
-				for _, fieldIndex := range fieldIndexes {
-					indexID := fieldIndex.GetIndexID()
-					fieldID := fieldIndex.GetFiledID()
+			for collID, idxIDs := range droppedIndex {
+				for _, indexID := range idxIDs {
 					if err := c.CallDropIndexService(c.ctx, indexID); err != nil {
-						log.Warn("Notify IndexCoord to drop index failed, wait to retry", zap.Int64("collID", collID),
-							zap.Int64("fieldID", fieldID), zap.Int64("indexID", indexID))
+						log.Warn("Notify IndexCoord to drop index failed, wait to retry",
+							zap.Int64("collID", collID),
+							zap.Int64("indexID", indexID))
 					}
 				}
 			}
@@ -408,27 +407,29 @@ func (c *Core) createIndexForSegment(ctx context.Context, collID, partID, segID 
 		log.Error("collection meta is not exist", zap.Int64("collID", collID))
 		return fmt.Errorf("collection meta is not exist with ID = %d", collID)
 	}
-	if len(collMeta.FieldIndexes) == 0 {
+	if len(collMeta.FieldIDToIndexID) == 0 {
 		log.Info("collection has no index, no need to build index on segment", zap.Int64("collID", collID),
 			zap.Int64("segID", segID))
 		return nil
 	}
-	for _, fieldIndex := range collMeta.FieldIndexes {
-		indexMeta, ok := indexID2Meta[fieldIndex.IndexID]
+	for _, t := range collMeta.FieldIDToIndexID {
+		fieldID := t.Key
+		indexID := t.Value
+		indexMeta, ok := indexID2Meta[indexID]
 		if !ok {
-			log.Warn("index has no meta", zap.Int64("collID", collID), zap.Int64("indexID", fieldIndex.IndexID))
-			return fmt.Errorf("index has no meta with ID = %d in collection %d", fieldIndex.IndexID, collID)
+			log.Warn("index has no meta", zap.Int64("collID", collID), zap.Int64("indexID", indexID))
+			return fmt.Errorf("index has no meta with ID = %d in collection %d", indexID, collID)
 		}
-		if indexMeta.Deleted {
+		if indexMeta.IsDeleted {
 			log.Info("index has been deleted, no need to build index on segment")
 			continue
 		}
 
-		field, err := GetFieldSchemaByID(&collMeta, fieldIndex.FiledID)
+		field, err := GetFieldSchemaByID(&collMeta, fieldID)
 		if err != nil {
 			log.Debug("GetFieldSchemaByID failed",
 				zap.Int64("collectionID", collID),
-				zap.Int64("fieldID", fieldIndex.FiledID))
+				zap.Int64("fieldID", fieldID))
 			return err
 		}
 		if c.MetaTable.IsSegmentIndexed(segID, field, indexMeta.IndexParams) {
@@ -437,16 +438,16 @@ func (c *Core) createIndexForSegment(ctx context.Context, collID, partID, segID 
 
 		indexInfo := model.Index{
 			CollectionID: collMeta.CollectionID,
-			FieldID:      fieldIndex.FiledID,
-			IndexID:      fieldIndex.IndexID,
+			FieldID:      fieldID,
+			IndexID:      indexID,
 			SegmentIndexes: map[int64]model.SegmentIndex{
 				segID: {
 					Segment: model.Segment{
-						PartitionID:  partID,
-						SegmentID:    segID,
+						PartitionID: partID,
+						SegmentID:   segID,
 					},
-					EnableIndex:  false,
-					ByAutoFlush:  true,
+					EnableIndex: false,
+					ByAutoFlush: true,
 				},
 			},
 		}
@@ -466,15 +467,15 @@ func (c *Core) createIndexForSegment(ctx context.Context, collID, partID, segID 
 			segIndexInfo.EnableIndex = true
 		}
 
-		if err := c.MetaTable.AlterIndex(&segIndexInfo); err != nil {
+		if err := c.MetaTable.AlterIndex(&indexInfo); err != nil {
 			log.Error("alter index into meta table failed, need remove index with buildID",
-				zap.Int64("collectionID", collID), zap.Int64("indexID", fieldIndex.IndexID),
+				zap.Int64("collectionID", collID), zap.Int64("indexID", indexID),
 				zap.Int64("buildID", buildID), zap.Error(err))
 			if err = retry.Do(ctx, func() error {
 				return c.CallRemoveIndexService(ctx, []UniqueID{buildID})
 			}); err != nil {
 				log.Error("remove index failed, need to be resolved manually", zap.Int64("collectionID", collID),
-					zap.Int64("indexID", fieldIndex.IndexID), zap.Int64("buildID", buildID), zap.Error(err))
+					zap.Int64("indexID", indexID), zap.Int64("buildID", buildID), zap.Error(err))
 				return err
 			}
 			return err

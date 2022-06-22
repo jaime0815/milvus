@@ -454,22 +454,6 @@ func TestMetaTable(t *testing.T) {
 	})
 
 	wg.Add(1)
-	t.Run("drop index", func(t *testing.T) {
-		defer wg.Done()
-		idx, ok, err := mt.DropIndex(collName, "field110", indexName)
-		assert.Nil(t, err)
-		assert.True(t, ok)
-		assert.Equal(t, idxInfo[0].IndexID, idx)
-
-		_, ok, err = mt.DropIndex(collName, "field110", "field110-error")
-		assert.Nil(t, err)
-		assert.False(t, ok)
-
-		_, err = mt.GetSegmentIndexInfoByID(segID, -1, "")
-		assert.NotNil(t, err)
-	})
-
-	wg.Add(1)
 	t.Run("drop partition", func(t *testing.T) {
 		defer wg.Done()
 		ts := ftso()
@@ -735,7 +719,7 @@ func TestMetaTable(t *testing.T) {
 		mt.collID2Meta = make(map[int64]model.Collection)
 		err = mt.AlterIndex(segIdxInfo)
 		assert.NotNil(t, err)
-		assert.EqualError(t, err, fmt.Sprintf("index id = %d not found", segIdxInfo.IndexID))
+		assert.EqualError(t, err, fmt.Sprintf("collection id = %d not found", collInfo.CollectionID))
 
 		err = mt.reloadFromKV()
 		assert.Nil(t, err)
@@ -894,7 +878,7 @@ func TestMetaTable(t *testing.T) {
 		err = mt.AddCollection(collInfo, ts, "")
 		assert.Nil(t, err)
 
-		mt.collID2Meta = make(map[int64]pb.CollectionInfo)
+		mt.collID2Meta = make(map[int64]model.Collection)
 		_, err = mt.getFieldSchemaInternal(collInfo.Name, collInfo.Fields[0].Name)
 		assert.NotNil(t, err)
 		assert.EqualError(t, err, fmt.Sprintf("collection %s not found", collInfo.Name))
@@ -1232,8 +1216,8 @@ func TestFixIssue10540(t *testing.T) {
 	//txnKV := etcdkv.NewEtcdKVWithClient(etcdCli, rootPath)
 	txnKV := memkv.NewMemoryKV()
 	// compose rc7 legace tombstone cases
-	txnKV.Save(path.Join(SegmentIndexMetaPrefix, "2"), string(suffixSnapshotTombstone))
-	txnKV.Save(path.Join(IndexMetaPrefix, "3"), string(suffixSnapshotTombstone))
+	txnKV.Save(path.Join(kvmetestore.SegmentIndexMetaPrefix, "2"), string(kvmetestore.SuffixSnapshotTombstone))
+	txnKV.Save(path.Join(kvmetestore.IndexMetaPrefix, "3"), string(kvmetestore.SuffixSnapshotTombstone))
 
 	_, err = NewMetaTable(context.TODO(), txnKV, skv)
 	assert.Nil(t, err)
@@ -1441,20 +1425,20 @@ func TestMetaTable_GetInitBuildIDs(t *testing.T) {
 		indexName = "GetInitBuildID-Index"
 	)
 	mt := &MetaTable{
-		collID2Meta: map[typeutil.UniqueID]pb.CollectionInfo{
+		collID2Meta: map[typeutil.UniqueID]model.Collection{
 			1: {
-				FieldIndexes: []*pb.FieldIndexInfo{
+				FieldIDToIndexID: []common.Int64Tuple{
 					{
-						FiledID: 1,
-						IndexID: 1,
+						Key:   1,
+						Value: 1,
 					},
 					{
-						FiledID: 2,
-						IndexID: 2,
+						Key:   2,
+						Value: 2,
 					},
 					{
-						FiledID: 3,
-						IndexID: 3,
+						Key:   3,
+						Value: 3,
 					},
 				},
 			},
@@ -1462,10 +1446,18 @@ func TestMetaTable_GetInitBuildIDs(t *testing.T) {
 		collName2ID: map[string]typeutil.UniqueID{
 			"GetInitBuildID-Coll-1": 2,
 		},
-		indexID2Meta: map[typeutil.UniqueID]pb.IndexInfo{
+		indexID2Meta: map[typeutil.UniqueID]*model.Index{
 			1: {
 				IndexName: "GetInitBuildID-Index-1",
 				IndexID:   1,
+				SegmentIndexes: map[int64]model.SegmentIndex{
+					4: {
+						Segment: model.Segment{
+							SegmentID: 4,
+						},
+						EnableIndex: true,
+					},
+				},
 			},
 			2: {
 				IndexName: "GetInitBuildID-Index-2",
@@ -1487,25 +1479,23 @@ func TestMetaTable_GetInitBuildIDs(t *testing.T) {
 		assert.Nil(t, buildIDs)
 	})
 
-	mt.indexID2Meta[3] = pb.IndexInfo{
+	mt.indexID2Meta[3] = &model.Index{
 		IndexName: indexName,
 		IndexID:   3,
-	}
-
-	mt.segID2IndexMeta = map[typeutil.UniqueID]map[typeutil.UniqueID]pb.SegmentIndexInfo{
-		4: {
-			1: {
-				IndexID:     1,
-				EnableIndex: true,
-			},
-		},
-		5: {
-			3: {
-				IndexID:     3,
+		SegmentIndexes: map[int64]model.SegmentIndex{
+			5: {
+				Segment: model.Segment{
+					SegmentID: 5,
+				},
 				EnableIndex: true,
 				ByAutoFlush: false,
 			},
 		},
+	}
+
+	mt.segID2IndexID = map[typeutil.UniqueID]typeutil.UniqueID{
+		4: 1,
+		5: 3,
 	}
 
 	t.Run("success", func(t *testing.T) {
@@ -1517,34 +1507,34 @@ func TestMetaTable_GetInitBuildIDs(t *testing.T) {
 
 func TestMetaTable_GetDroppedIndex(t *testing.T) {
 	mt := &MetaTable{
-		collID2Meta: map[typeutil.UniqueID]pb.CollectionInfo{
+		collID2Meta: map[typeutil.UniqueID]model.Collection{
 			1: {
-				FieldIndexes: []*pb.FieldIndexInfo{
+				FieldIDToIndexID: []common.Int64Tuple{
 					{
-						FiledID: 1,
-						IndexID: 1,
+						Key:   1,
+						Value: 1,
 					},
 					{
-						FiledID: 2,
-						IndexID: 2,
+						Key:   2,
+						Value: 2,
 					},
 					{
-						FiledID: 3,
-						IndexID: 3,
+						Key:   3,
+						Value: 3,
 					},
 				},
 			},
 		},
-		indexID2Meta: map[typeutil.UniqueID]pb.IndexInfo{
+		indexID2Meta: map[typeutil.UniqueID]*model.Index{
 			1: {
 				IndexName: "GetInitBuildID-Index-1",
 				IndexID:   1,
-				Deleted:   true,
+				IsDeleted: true,
 			},
 			2: {
 				IndexName: "GetInitBuildID-Index-2",
 				IndexID:   2,
-				Deleted:   false,
+				IsDeleted: false,
 			},
 		},
 	}
@@ -1568,12 +1558,12 @@ func TestMetaTable_AlignSegmentsMeta(t *testing.T) {
 				return nil
 			},
 		},
-		collID2Meta: map[typeutil.UniqueID]pb.CollectionInfo{
+		collID2Meta: map[typeutil.UniqueID]model.Collection{
 			collID: {
-				FieldIndexes: []*pb.FieldIndexInfo{
+				FieldIDToIndexID: []common.Int64Tuple{
 					{
-						FiledID: 1,
-						IndexID: 1,
+						Key:   1,
+						Value: 1,
 					},
 				},
 			},
@@ -1585,11 +1575,11 @@ func TestMetaTable_AlignSegmentsMeta(t *testing.T) {
 				102: true,
 			},
 		},
-		indexID2Meta: map[typeutil.UniqueID]pb.IndexInfo{
+		indexID2Meta: map[typeutil.UniqueID]*model.Index{
 			indexID: {
 				IndexName: indexName,
 				IndexID:   1,
-				Deleted:   true,
+				IsDeleted: true,
 			},
 		},
 	}
@@ -1619,28 +1609,19 @@ func TestMetaTable_MarkIndexDeleted(t *testing.T) {
 		indexID   = UniqueID(1000)
 	)
 	mt := &MetaTable{
-		txn: &mockTestTxnKV{
-			multiRemove: func(keys []string) error {
-				return nil
-			},
-			save: func(key, value string) error {
-				return nil
-			},
-		},
-		collID2Meta: map[typeutil.UniqueID]pb.CollectionInfo{
+		ctx: context.TODO(),
+		collID2Meta: map[typeutil.UniqueID]model.Collection{
 			collID: {
-				FieldIndexes: []*pb.FieldIndexInfo{
+				FieldIDToIndexID: []common.Int64Tuple{
 					{
-						FiledID: 101,
-						IndexID: 1001,
+						Key:   101,
+						Value: 1001,
 					},
 				},
-				Schema: &schemapb.CollectionSchema{
-					Fields: []*schemapb.FieldSchema{
-						{
-							FieldID: fieldID,
-							Name:    fieldName,
-						},
+				Fields: []*model.Field{
+					{
+						FieldID: fieldID,
+						Name:    fieldName,
 					},
 				},
 			},
@@ -1655,11 +1636,11 @@ func TestMetaTable_MarkIndexDeleted(t *testing.T) {
 				102: true,
 			},
 		},
-		indexID2Meta: map[typeutil.UniqueID]pb.IndexInfo{
+		indexID2Meta: map[typeutil.UniqueID]*model.Index{
 			1001: {
 				IndexName: indexName,
 				IndexID:   indexID,
-				Deleted:   true,
+				IsDeleted: true,
 			},
 		},
 	}
@@ -1678,19 +1659,17 @@ func TestMetaTable_MarkIndexDeleted(t *testing.T) {
 	})
 
 	t.Run("indexMeta error", func(t *testing.T) {
-		collMeta := pb.CollectionInfo{
-			FieldIndexes: []*pb.FieldIndexInfo{
+		collMeta := model.Collection{
+			FieldIDToIndexID: []common.Int64Tuple{
 				{
-					FiledID: fieldID,
-					IndexID: indexID,
+					Key:   fieldID,
+					Value: indexID,
 				},
 			},
-			Schema: &schemapb.CollectionSchema{
-				Fields: []*schemapb.FieldSchema{
-					{
-						FieldID: fieldID,
-						Name:    fieldName,
-					},
+			Fields: []*model.Field{
+				{
+					FieldID: fieldID,
+					Name:    fieldName,
 				},
 			},
 		}
@@ -1699,7 +1678,7 @@ func TestMetaTable_MarkIndexDeleted(t *testing.T) {
 		err := mt.MarkIndexDeleted(collName, fieldName, indexName)
 		assert.Error(t, err)
 
-		mt.indexID2Meta[indexID] = pb.IndexInfo{
+		mt.indexID2Meta[indexID] = &model.Index{
 			IndexName: "indexName",
 			IndexID:   indexID,
 		}
@@ -1709,30 +1688,24 @@ func TestMetaTable_MarkIndexDeleted(t *testing.T) {
 	})
 
 	t.Run("txn save failed", func(t *testing.T) {
-		mt.indexID2Meta[indexID] = pb.IndexInfo{
+		mt.indexID2Meta[indexID] = &model.Index{
 			IndexName: indexName,
 			IndexID:   indexID,
 		}
+		mc := &MockedCatalog{}
+		targetErr := errors.New("alter add index fail")
 
-		txn := &mockTestTxnKV{
-			save: func(key, value string) error {
-				return fmt.Errorf("error occurred")
-			},
-		}
-		mt.txn = txn
+		mc.On("AlterIndex").Return(targetErr)
+		mt.catalog = mc
 		err := mt.MarkIndexDeleted(collName, fieldName, indexName)
 		assert.Error(t, err)
+		assert.True(t, errors.Is(err, targetErr))
 
-		txn = &mockTestTxnKV{
-			save: func(key, value string) error {
-				return nil
-			},
-		}
-		mt.txn = txn
-
+		mc = &MockedCatalog{}
+		mc.On("AlterIndex").Return(nil)
+		mt.catalog = mc
 		err = mt.MarkIndexDeleted(collName, fieldName, indexName)
 		assert.NoError(t, err)
-
 		err = mt.MarkIndexDeleted(collName, fieldName, indexName)
 		assert.NoError(t, err)
 	})
@@ -1756,6 +1729,15 @@ func (mc *MockedCatalog) ListIndexes(ctx context.Context) ([]*model.Index, error
 func (mc *MockedCatalog) ListAliases(ctx context.Context) ([]*model.Collection, error) {
 	args := mc.Called()
 	return args.Get(0).([]*model.Collection), nil
+}
+
+func (mc *MockedCatalog) AlterIndex(ctx context.Context, oldIndex *model.Index, newIndex *model.Index, alterType metastore.AlterType) error {
+	args := mc.Called()
+	err := args.Get(0)
+	if err == nil {
+		return nil
+	}
+	return err.(error)
 }
 
 func TestMetaTable_ReloadFromKV(t *testing.T) {
@@ -1825,7 +1807,13 @@ func TestMetaTable_ReloadFromKV(t *testing.T) {
 		},
 	}
 	mc.On("ListIndexes").Return(indexes, nil)
-	mc.On("ListAliases").Return([]*model.Collection{collInfo}, nil)
+
+	alias1 := *collInfo
+	alias1.Name = collInfo.Aliases[0]
+
+	alias2 := *collInfo
+	alias2.Name = collInfo.Aliases[1]
+	mc.On("ListAliases").Return([]*model.Collection{&alias1, &alias2}, nil)
 
 	mt := &MetaTable{}
 	mt.catalog = mc
@@ -1836,9 +1824,8 @@ func TestMetaTable_ReloadFromKV(t *testing.T) {
 
 	assert.True(t, len(mt.collName2ID) == 1)
 
-	// FIXME: actually collAlias2ID key should be alias, but it is a collection name now
-	assert.True(t, len(mt.collAlias2ID) == 1)
-	ret, ok := mt.collAlias2ID[collectionName]
+	assert.True(t, len(mt.collAlias2ID) == 2)
+	ret, ok := mt.collAlias2ID[collInfo.Aliases[0]]
 	assert.True(t, ok)
 	assert.Equal(t, int64(1), ret)
 

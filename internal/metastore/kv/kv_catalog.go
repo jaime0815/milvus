@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path"
 	"strconv"
+
+	"github.com/milvus-io/milvus/internal/metastore"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/milvus-io/milvus/internal/kv"
@@ -100,7 +103,7 @@ func (kc *Catalog) CreateIndex(ctx context.Context, col *model.Collection, index
 	return nil
 }
 
-func (kc *Catalog) AlterIndex(ctx context.Context, oldIndex *model.Index, newIndex *model.Index) error {
+func (kc *Catalog) alterAddIndex(ctx context.Context, oldIndex *model.Index, newIndex *model.Index) error {
 	kvs := make(map[string]string, len(newIndex.SegmentIndexes))
 	for _, segmentIndex := range newIndex.SegmentIndexes {
 		segment := segmentIndex.Segment
@@ -124,13 +127,61 @@ func (kc *Catalog) AlterIndex(ctx context.Context, oldIndex *model.Index, newInd
 		kvs[k] = string(v)
 	}
 
+	// other field can not be modified, just check deleted status is updated
+	if oldIndex.IsDeleted != newIndex.IsDeleted {
+		idxPb := model.ConvertToIndexPB(oldIndex)
+		idxPb.Deleted = newIndex.IsDeleted
+		k := fmt.Sprintf("%s/%d/%d", IndexMetaPrefix, newIndex.CollectionID, newIndex.IndexID)
+		v, err := proto.Marshal(idxPb)
+		if err != nil {
+			log.Error("alter index marshal fail", zap.String("key", k), zap.Error(err))
+			return err
+		}
+
+		kvs[k] = string(v)
+	}
+
+	if len(kvs) == 0 {
+		return nil
+	}
+
 	err := kc.Txn.MultiSave(kvs)
 	if err != nil {
-		log.Error("alter index persist meta fail", zap.Any("segmentIndex", newIndex.SegmentIndexes), zap.Error(err))
+		log.Error("alter add index persist meta fail", zap.Any("segmentIndex", newIndex.SegmentIndexes), zap.Error(err))
 		return err
 	}
 
 	return nil
+}
+
+func (kc *Catalog) alterDeleteIndex(ctx context.Context, oldIndex *model.Index, newIndex *model.Index) error {
+	delKeys := make([]string, len(newIndex.SegmentIndexes))
+	for _, segIdx := range newIndex.SegmentIndexes {
+		delKeys = append(delKeys, fmt.Sprintf("%s/%d/%d/%d/%d",
+			SegmentIndexMetaPrefix, newIndex.CollectionID, newIndex.IndexID, segIdx.PartitionID, segIdx.SegmentID))
+	}
+
+	if len(delKeys) == 0 {
+		return nil
+	}
+
+	if err := kc.Txn.MultiRemove(delKeys); err != nil {
+		log.Error("alter delete index persist meta fail", zap.Any("keys", delKeys), zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+func (kc *Catalog) AlterIndex(ctx context.Context, oldIndex *model.Index, newIndex *model.Index, alterType metastore.AlterType) error {
+	switch alterType {
+	case metastore.ADD:
+		return kc.alterAddIndex(ctx, oldIndex, newIndex)
+	case metastore.DELETE:
+		return kc.alterDeleteIndex(ctx, oldIndex, newIndex)
+	default:
+		return errors.New("Unknown alter type:" + fmt.Sprintf("%d", alterType))
+	}
 }
 
 func (kc *Catalog) CreateAlias(ctx context.Context, collection *model.Collection, ts typeutil.Timestamp) error {

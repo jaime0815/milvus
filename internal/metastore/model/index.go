@@ -7,6 +7,7 @@ type Index struct {
 	FieldID        int64
 	IndexID        int64
 	IndexName      string
+	IsDeleted      bool
 	IndexParams    []*commonpb.KeyValuePair
 	SegmentIndexes map[int64]SegmentIndex //segmentID -> segmentIndex
 	Extra          map[string]string

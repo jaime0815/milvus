@@ -19,7 +19,8 @@ type Catalog interface {
 	DropPartition(ctx context.Context, collectionInfo *model.Collection, partitionID typeutil.UniqueID, ts typeutil.Timestamp) error
 
 	CreateIndex(ctx context.Context, col *model.Collection, index *model.Index) error
-	AlterIndex(ctx context.Context, oldIndex *model.Index, newIndex *model.Index) error
+	// AlterIndex newIndex only contains updated parts
+	AlterIndex(ctx context.Context, oldIndex *model.Index, newIndex *model.Index, alterType AlterType) error
 	DropIndex(ctx context.Context, collectionInfo *model.Collection, dropIdxID typeutil.UniqueID, ts typeutil.Timestamp) error
 	ListIndexes(ctx context.Context) ([]*model.Index, error)
 
@@ -35,3 +36,11 @@ type Catalog interface {
 
 	Close()
 }
+
+type AlterType int32
+
+const (
+	ADD AlterType = iota
+	DELETE
+	MODIFY
+)

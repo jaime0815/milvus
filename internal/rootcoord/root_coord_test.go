@@ -1411,7 +1411,7 @@ func TestRootCoord_Base(t *testing.T) {
 		assert.Error(t, err)
 		// Case where describing segment fails, which is not considered as an error.
 		_, err = core.CountCompleteIndex(context.WithValue(ctx, ctxKey{}, ""),
-			collName, coll.ID, []UniqueID{9000, 9001, 9002})
+			collName, coll.CollectionID, []UniqueID{9000, 9001, 9002})
 		assert.NoError(t, err)
 	})
 
@@ -1458,7 +1458,7 @@ func TestRootCoord_Base(t *testing.T) {
 	t.Run("flush segment from compaction", func(t *testing.T) {
 		coll, err := core.MetaTable.GetCollectionByName(collName, 0)
 		assert.NoError(t, err)
-		partID := coll.PartitionIDs[1]
+		partID := coll.Partitions[1].PartitionID
 
 		flushMsg := datapb.SegmentFlushCompletedMsg{
 			Base: &commonpb.MsgBase{
@@ -1466,7 +1466,7 @@ func TestRootCoord_Base(t *testing.T) {
 			},
 			Segment: &datapb.SegmentInfo{
 				ID:                  segID + 1,
-				CollectionID:        coll.ID,
+				CollectionID:        coll.CollectionID,
 				PartitionID:         partID,
 				CompactionFrom:      []int64{segID},
 				CreatedByCompaction: true,
@@ -3516,7 +3516,7 @@ func TestCore_DescribeSegments(t *testing.T) {
 func TestCore_getCollectionName(t *testing.T) {
 	mt := &MetaTable{
 		ddLock:      sync.RWMutex{},
-		collID2Meta: make(map[int64]etcdpb.CollectionInfo),
+		collID2Meta: make(map[int64]model.Collection),
 	}
 
 	core := &Core{
@@ -3528,14 +3528,9 @@ func TestCore_getCollectionName(t *testing.T) {
 	assert.Empty(t, collName)
 	assert.Empty(t, partName)
 
-	ids := make([]int64, 0)
-	names := make([]string, 0)
-	mt.collID2Meta[1] = etcdpb.CollectionInfo{
-		Schema: &schemapb.CollectionSchema{
-			Name: "dummy",
-		},
-		PartitionIDs:   ids,
-		PartitionNames: names,
+	mt.collID2Meta[1] = model.Collection{
+		Name:       "dummy",
+		Partitions: make([]*model.Partition, 0),
 	}
 
 	collName, partName, err = core.getCollectionName(1, 2)
@@ -3543,14 +3538,14 @@ func TestCore_getCollectionName(t *testing.T) {
 	assert.Equal(t, "dummy", collName)
 	assert.Empty(t, partName)
 
-	ids = append(ids, 2)
-	names = append(names, "p2")
-	mt.collID2Meta[1] = etcdpb.CollectionInfo{
-		Schema: &schemapb.CollectionSchema{
-			Name: "dummy",
+	mt.collID2Meta[1] = model.Collection{
+		Name: "dummy",
+		Partitions: []*model.Partition{
+			{
+				PartitionID:   2,
+				PartitionName: "p2",
+			},
 		},
-		PartitionIDs:   ids,
-		PartitionNames: names,
 	}
 
 	collName, partName, err = core.getCollectionName(1, 2)
@@ -3567,12 +3562,12 @@ func TestCore_GetIndexState(t *testing.T) {
 	)
 	mt := &MetaTable{
 		ddLock: sync.RWMutex{},
-		collID2Meta: map[typeutil.UniqueID]etcdpb.CollectionInfo{
+		collID2Meta: map[typeutil.UniqueID]model.Collection{
 			1: {
-				FieldIndexes: []*etcdpb.FieldIndexInfo{
+				FieldIDToIndexID: []common.Int64Tuple{
 					{
-						FiledID: 1,
-						IndexID: 1,
+						Key:   1,
+						Value: 1,
 					},
 				},
 			},
@@ -3580,21 +3575,22 @@ func TestCore_GetIndexState(t *testing.T) {
 		collName2ID: map[string]typeutil.UniqueID{
 			collName: 2,
 		},
-		indexID2Meta: map[typeutil.UniqueID]etcdpb.IndexInfo{
+		indexID2Meta: map[typeutil.UniqueID]*model.Index{
 			1: {
 				IndexID:   1,
 				IndexName: indexName,
-			},
-		},
-		segID2IndexMeta: map[typeutil.UniqueID]map[typeutil.UniqueID]etcdpb.SegmentIndexInfo{
-			3: {
-				1: {
-					SegmentID:   3,
-					BuildID:     1,
-					EnableIndex: false,
+				SegmentIndexes: map[int64]model.SegmentIndex{
+					3: {
+						Segment: model.Segment{
+							SegmentID: 3,
+						},
+						EnableIndex: false,
+						BuildID:     1,
+					},
 				},
 			},
 		},
+		segID2IndexID: map[typeutil.UniqueID]typeutil.UniqueID{3: 1},
 	}
 
 	core := &Core{
@@ -3633,12 +3629,12 @@ func TestCore_GetIndexState(t *testing.T) {
 	})
 
 	t.Run("CallGetIndexStatesService failed", func(t *testing.T) {
-		core.MetaTable.segID2IndexMeta[3] = map[typeutil.UniqueID]etcdpb.SegmentIndexInfo{
-			1: {
-				SegmentID:   3,
-				BuildID:     1,
-				EnableIndex: true,
+		core.MetaTable.indexID2Meta[1].SegmentIndexes[3] = model.SegmentIndex{
+			Segment: model.Segment{
+				SegmentID: 3,
 			},
+			EnableIndex: true,
+			BuildID:     1,
 		}
 		core.CallGetIndexStatesService = func(ctx context.Context, IndexBuildIDs []int64) ([]*indexpb.IndexInfo, error) {
 			return nil, errors.New("error occurred")

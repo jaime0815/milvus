@@ -5,10 +5,11 @@ package etcdpb
 
 import (
 	fmt "fmt"
+	math "math"
+
 	proto "github.com/golang/protobuf/proto"
 	commonpb "github.com/milvus-io/milvus/internal/proto/commonpb"
 	schemapb "github.com/milvus-io/milvus/internal/proto/schemapb"
-	math "math"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
