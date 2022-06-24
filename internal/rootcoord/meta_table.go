@@ -1103,6 +1103,12 @@ func (mt *MetaTable) AddIndex(colName string, fieldName string, idxInfo *model.I
 		}
 		mt.indexID2Meta[dupIdxInfo.IndexID] = &newIdxMeta
 	} else {
+		log.Info("======AddIndex 1==========",
+			zap.Any("collectionName", colName),
+			zap.Any("collectionID", collMeta.CollectionID),
+			zap.Int64("indexID", dupIdxInfo.IndexID),
+			zap.Any("index", idxInfo))
+
 		segmentIndexes := make(map[int64]model.SegmentIndex, len(segIDs))
 		for _, segID := range segIDs {
 			segmentIndex := model.SegmentIndex{
@@ -1129,6 +1135,13 @@ func (mt *MetaTable) AddIndex(colName string, fieldName string, idxInfo *model.I
 
 		mt.collID2Meta[collMeta.CollectionID] = collMeta
 		mt.indexID2Meta[idxInfo.IndexID] = idxInfo
+
+		log.Info("======AddIndex 2==========",
+			zap.Any("collectionName", colName),
+			zap.Any("collectionID", collMeta.CollectionID),
+			zap.Int64("indexID", dupIdxInfo.IndexID),
+			zap.Any("col", mt.collID2Meta),
+			zap.Any("index", mt.indexID2Meta))
 	}
 
 	return isDuplicated, nil
@@ -1150,6 +1163,12 @@ func (mt *MetaTable) GetIndexByName(collName, indexName string) (model.Collectio
 	if !ok {
 		return model.Collection{}, nil, fmt.Errorf("collection %s not found", collName)
 	}
+
+	log.Info("======GetIndexByName 1==========",
+		zap.Any("collectionName", collName),
+		zap.Any("collectionID", collID),
+		zap.Any("col", mt.collID2Meta),
+		zap.Any("index", mt.indexID2Meta))
 
 	rstIndex := make([]model.Index, 0, len(col.FieldIDToIndexID))
 	for _, t := range col.FieldIDToIndexID {
