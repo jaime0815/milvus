@@ -1182,7 +1182,7 @@ func (mt *MetaTable) GetIndexByName(collName, indexName string) (model.Collectio
 		indexID := t.Value
 		idxInfo, ok := mt.indexID2Meta[indexID]
 		if !ok {
-			log.Info("======GetIndexByName 1==========",
+			log.Info("======GetIndexByName 2==========",
 				zap.Any("collectionName", collName),
 				zap.Any("collectionID", collID),
 				zap.Any("indexName", indexName),
