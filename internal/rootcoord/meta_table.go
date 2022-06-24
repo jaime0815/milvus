@@ -874,6 +874,12 @@ func (mt *MetaTable) RecycleDroppedIndex() error {
 		for idx, tuple := range filedIDToIdxID {
 			dropIdxID := tuple.Value
 			if idxInfo, ok := mt.indexID2Meta[dropIdxID]; !ok || idxInfo.IsDeleted {
+				log.Debug("===1======== recycle dropped index meta",
+					zap.Int64("collID", collID),
+					zap.Any("colMeta", mt.collID2Meta),
+					zap.Any("idxMeta", mt.indexID2Meta),
+					zap.Int64("indexID", dropIdxID))
+
 				delete(filedIDToIdxID, idx)
 				colMeta.FieldIDToIndexID = mt.mapConvertArray(filedIDToIdxID)
 
@@ -892,6 +898,14 @@ func (mt *MetaTable) RecycleDroppedIndex() error {
 						}
 					}
 				}
+
+				log.Debug("recycle dropped index meta", zap.Int64("collID", collID), zap.Int64("indexID", dropIdxID))
+
+				log.Debug("======2===== recycle dropped index meta",
+					zap.Int64("collID", collID),
+					zap.Any("colMeta", mt.collID2Meta),
+					zap.Any("idxMeta", mt.indexID2Meta),
+					zap.Int64("indexID", dropIdxID))
 			}
 		}
 	}
