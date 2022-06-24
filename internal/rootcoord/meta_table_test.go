@@ -1365,7 +1365,7 @@ func TestMetaTable_checkFieldIndexDuplicate(t *testing.T) {
 		}
 		fieldSchema := model.Field{Name: "test", FieldID: 101}
 		idxInfo := &model.Index{IndexName: "test"}
-		_, err := mt.checkFieldIndexDuplicate(collMeta, fieldSchema, idxInfo)
+		_,_, err := mt.checkFieldIndexDuplicate(collMeta, fieldSchema, idxInfo)
 		assert.Error(t, err)
 	})
 
@@ -1382,7 +1382,7 @@ func TestMetaTable_checkFieldIndexDuplicate(t *testing.T) {
 		}
 		fieldSchema := model.Field{Name: "test", FieldID: 100}
 		idxInfo := &model.Index{IndexName: "test", IndexParams: []*commonpb.KeyValuePair{{Key: "Key", Value: "not_Value"}}}
-		_, err := mt.checkFieldIndexDuplicate(collMeta, fieldSchema, idxInfo)
+		_,_, err := mt.checkFieldIndexDuplicate(collMeta, fieldSchema, idxInfo)
 		assert.Error(t, err)
 	})
 
@@ -1399,9 +1399,10 @@ func TestMetaTable_checkFieldIndexDuplicate(t *testing.T) {
 		}
 		fieldSchema := model.Field{Name: "test", FieldID: 100}
 		idxInfo := &model.Index{IndexName: "test", IndexParams: []*commonpb.KeyValuePair{{Key: "Key", Value: "Value"}}}
-		duplicate, err := mt.checkFieldIndexDuplicate(collMeta, fieldSchema, idxInfo)
+		duplicate, dupIdxInfo, err := mt.checkFieldIndexDuplicate(collMeta, fieldSchema, idxInfo)
 		assert.NoError(t, err)
 		assert.True(t, duplicate)
+		assert.Equal(t, idxInfo.IndexName, dupIdxInfo.IndexName)
 	})
 
 	t.Run("field not found", func(t *testing.T) {
@@ -1413,9 +1414,10 @@ func TestMetaTable_checkFieldIndexDuplicate(t *testing.T) {
 			FieldID: 101,
 		}
 		idxInfo := &model.Index{}
-		duplicate, err := mt.checkFieldIndexDuplicate(collMeta, fieldSchema, idxInfo)
+		duplicate, dupIdxInfo, err := mt.checkFieldIndexDuplicate(collMeta, fieldSchema, idxInfo)
 		assert.NoError(t, err)
 		assert.False(t, duplicate)
+		assert.Nil(t, dupIdxInfo)
 	})
 }
 
@@ -1456,12 +1458,15 @@ func TestMetaTable_GetInitBuildIDs(t *testing.T) {
 							SegmentID: 4,
 						},
 						EnableIndex: true,
+						CreateTime:  5,
 					},
 				},
+				CreateTime: 10,
 			},
 			2: {
-				IndexName: "GetInitBuildID-Index-2",
-				IndexID:   2,
+				IndexName:  "GetInitBuildID-Index-2",
+				IndexID:    2,
+				CreateTime: 10,
 			},
 		},
 	}
@@ -1482,13 +1487,14 @@ func TestMetaTable_GetInitBuildIDs(t *testing.T) {
 	mt.indexID2Meta[3] = &model.Index{
 		IndexName: indexName,
 		IndexID:   3,
+		CreateTime:  10,
 		SegmentIndexes: map[int64]model.SegmentIndex{
 			5: {
 				Segment: model.Segment{
 					SegmentID: 5,
 				},
 				EnableIndex: true,
-				ByAutoFlush: false,
+				CreateTime:  5,
 			},
 		},
 	}
@@ -1846,4 +1852,69 @@ func TestMetaTable_ReloadFromKV(t *testing.T) {
 	meta, ok := mt.indexID2Meta[1]
 	assert.True(t, ok)
 	assert.Equal(t, indexes[0], meta)
+}
+
+func TestMetaTable_GetNotIndexedSegments(t *testing.T) {
+	var (
+		collName  = "MarkIndexDeleted-Coll"
+		fieldName = "MarkIndexDeleted-Field"
+		indexName = "MarkIndexDeleted-Index"
+		collID    = UniqueID(1)
+		fieldID   = UniqueID(100)
+		indexID   = UniqueID(1000)
+		segID     = UniqueID(10000)
+	)
+	mt := &MetaTable{
+		txn: &mockTestTxnKV{
+			multiSave: func(kvs map[string]string) error {
+				return nil
+			},
+			multiRemove: func(keys []string) error {
+				return nil
+			},
+			save: func(key, value string) error {
+				return nil
+			},
+		},
+		collID2Meta: map[typeutil.UniqueID]model.Collection{
+			collID: {
+				FieldIDToIndexID: []common.Int64Tuple{
+					{
+						Key: fieldID,
+						Value: indexID,
+					},
+				},
+				Fields: []*model.Field {
+					{
+						FieldID:     fieldID,
+						Name:        fieldName,
+						DataType:    schemapb.DataType_FloatVector,
+						IndexParams: []*commonpb.KeyValuePair{{Key: "index_type", Value: DefaultIndexType}},
+					},
+				},
+			},
+		},
+		collName2ID: map[string]typeutil.UniqueID{
+			collName: collID,
+		},
+		indexID2Meta: map[typeutil.UniqueID]pb.IndexInfo{
+			indexID: {
+				IndexName:   indexName,
+				IndexID:     indexID,
+				IndexParams: []*commonpb.KeyValuePair{{Key: "index_type", Value: DefaultIndexType}},
+				Deleted:     false,
+			},
+		},
+	}
+
+	t.Run("GetNotIndexedSegments", func(t *testing.T) {
+		idxInfo := &model.Index{
+			IndexName:   indexName,
+			IndexID:     indexID,
+			IndexParams: []*commonpb.KeyValuePair{{Key: "index_type", Value: DefaultIndexType}},
+			CreateTime:  0,
+		}
+		_, _, err := mt.GetNotIndexedSegments(collName, fieldName, idxInfo, []UniqueID{segID})
+		assert.NoError(t, err)
+	})
 }

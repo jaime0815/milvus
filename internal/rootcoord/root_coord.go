@@ -427,13 +427,18 @@ func (c *Core) createIndexForSegment(ctx context.Context, collID, partID, segID 
 
 		field, err := GetFieldSchemaByID(&collMeta, fieldID)
 		if err != nil {
-			log.Debug("GetFieldSchemaByID failed",
+			log.Error("GetFieldSchemaByID failed",
 				zap.Int64("collectionID", collID),
 				zap.Int64("fieldID", fieldID))
 			return err
 		}
 		if c.MetaTable.IsSegmentIndexed(segID, field, indexMeta.IndexParams) {
 			continue
+		}
+		createTS, err := c.TSOAllocator(1)
+		if err != nil {
+			log.Error("RootCoord alloc timestamp failed", zap.Int64("collectionID", collID), zap.Error(err))
+			return err
 		}
 
 		indexInfo := model.Index{
@@ -447,7 +452,7 @@ func (c *Core) createIndexForSegment(ctx context.Context, collID, partID, segID 
 						SegmentID:   segID,
 					},
 					EnableIndex: false,
-					ByAutoFlush: true,
+					CreateTime:   createTS,
 				},
 			},
 		}
@@ -511,10 +516,12 @@ func (c *Core) checkFlushedSegments(ctx context.Context) {
 			}
 			recycledSegIDs, recycledBuildIDs := c.MetaTable.AlignSegmentsMeta(collID, part.PartitionID, segIDs)
 			log.Info("there buildIDs should be remove index", zap.Int64s("buildIDs", recycledBuildIDs))
-			if err := c.CallRemoveIndexService(ctx, recycledBuildIDs); err != nil {
-				log.Error("CallRemoveIndexService remove indexes on segments failed",
-					zap.Int64s("need dropped buildIDs", recycledBuildIDs), zap.Error(err))
-				continue
+			if len(recycledBuildIDs) > 0 {
+				if err := c.CallRemoveIndexService(ctx, recycledBuildIDs); err != nil {
+					log.Error("CallRemoveIndexService remove indexes on segments failed",
+						zap.Int64s("need dropped buildIDs", recycledBuildIDs), zap.Error(err))
+					continue
+				}
 			}
 			if err := c.MetaTable.RemoveSegments(collID, part.PartitionID, recycledSegIDs); err != nil {
 				log.Warn("remove segments failed, wait to retry", zap.Int64("collID", collID), zap.Int64("partID", part.PartitionID),
