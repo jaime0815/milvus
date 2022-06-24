@@ -8,6 +8,7 @@ type Index struct {
 	IndexID        int64
 	IndexName      string
 	IsDeleted      bool
+	CreateTime     uint64
 	IndexParams    []*commonpb.KeyValuePair
 	SegmentIndexes map[int64]SegmentIndex //segmentID -> segmentIndex
 	Extra          map[string]string

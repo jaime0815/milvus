@@ -452,7 +452,7 @@ func (c *Core) createIndexForSegment(ctx context.Context, collID, partID, segID 
 						SegmentID:   segID,
 					},
 					EnableIndex: false,
-					CreateTime:   createTS,
+					CreateTime:  createTS,
 				},
 			},
 		}

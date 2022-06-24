@@ -189,6 +189,7 @@ func MergeIndexModel(a *Index, b *Index) *Index {
 	}
 
 	newIdx.IsDeleted = b.IsDeleted
+	newIdx.CreateTime = b.CreateTime
 
 	if newIdx.Extra == nil && b.Extra != nil {
 		newIdx.Extra = b.Extra
@@ -208,7 +209,7 @@ func ConvertSegmentIndexPBToModel(segIndex *pb.SegmentIndexInfo) *Index {
 				},
 				BuildID:     segIndex.BuildID,
 				EnableIndex: segIndex.EnableIndex,
-				ByAutoFlush: segIndex.ByAutoFlush,
+				CreateTime:  segIndex.CreateTime,
 			},
 		},
 		FieldID: segIndex.FieldID,

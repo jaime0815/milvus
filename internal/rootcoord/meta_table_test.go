@@ -241,11 +241,6 @@ func TestMetaTable(t *testing.T) {
 		field, err := mt.GetFieldSchema(collName, "field110")
 		assert.Nil(t, err)
 		assert.Equal(t, collInfo.Fields[0].FieldID, field.FieldID)
-
-		// check DD operation flag
-		flag, err := mt.snapshot.Load(DDMsgSendPrefix, 0)
-		assert.Nil(t, err)
-		assert.Equal(t, "false", flag)
 	})
 
 	wg.Add(1)
@@ -304,11 +299,6 @@ func TestMetaTable(t *testing.T) {
 		assert.Equal(t, 2, len(collMeta.Partitions))
 		assert.Equal(t, collMeta.Partitions[1].PartitionName, partName)
 		assert.Equal(t, ts, collMeta.Partitions[1].PartitionCreatedTimestamp)
-
-		// check DD operation flag
-		flag, err := mt.txn.Load(DDMsgSendPrefix)
-		assert.Nil(t, err)
-		assert.Equal(t, "false", flag)
 	})
 
 	wg.Add(1)
@@ -460,11 +450,6 @@ func TestMetaTable(t *testing.T) {
 		id, err := mt.DeletePartition(collID, partName, ts, "")
 		assert.Nil(t, err)
 		assert.Equal(t, partID, id)
-
-		// check DD operation flag
-		flag, err := mt.txn.Load(DDMsgSendPrefix)
-		assert.Nil(t, err)
-		assert.Equal(t, "false", flag)
 	})
 
 	wg.Add(1)
@@ -481,11 +466,6 @@ func TestMetaTable(t *testing.T) {
 		ts3 := ftso()
 		err = mt.DropAlias(aliasName2, ts3)
 		assert.NotNil(t, err)
-
-		// check DD operation flag
-		flag, err := mt.txn.Load(DDMsgSendPrefix)
-		assert.Nil(t, err)
-		assert.Equal(t, "false", flag)
 	})
 
 	wg.Add(1)
@@ -698,26 +678,28 @@ func TestMetaTable(t *testing.T) {
 		err = mt.AddCollection(collInfo, ts, "")
 		assert.Nil(t, err)
 
-		segIdxInfo := &model.Index{
+		index := &model.Index{
 			CollectionID: collID,
 			FieldID:      fieldID,
-			IndexID:      indexID2,
+			IndexID:      indexID,
 			SegmentIndexes: map[int64]model.SegmentIndex{
 				segID: {
 					Segment: model.Segment{
 						SegmentID:   segID,
 						PartitionID: partID,
 					},
-					BuildID: buildID,
+					BuildID:     buildID,
+					CreateTime:  10,
+					EnableIndex: false,
 				},
 			},
 		}
-		err = mt.AlterIndex(segIdxInfo)
+		err = mt.AlterIndex(index)
 		assert.NotNil(t, err)
-		assert.EqualError(t, err, fmt.Sprintf("index id = %d not found", segIdxInfo.IndexID))
+		assert.EqualError(t, err, fmt.Sprintf("index id = %d not found", index.IndexID))
 
 		mt.collID2Meta = make(map[int64]model.Collection)
-		err = mt.AlterIndex(segIdxInfo)
+		err = mt.AlterIndex(index)
 		assert.NotNil(t, err)
 		assert.EqualError(t, err, fmt.Sprintf("collection id = %d not found", collInfo.CollectionID))
 
@@ -729,12 +711,24 @@ func TestMetaTable(t *testing.T) {
 		err = mt.AddCollection(collInfo, ts, "")
 		assert.Nil(t, err)
 
-		segIdxInfo.IndexID = indexID
-		mt.indexID2Meta[indexID] = segIdxInfo
+		newIdx := *index
+		newIdx.SegmentIndexes = map[int64]model.SegmentIndex{
+			segID: {
+				Segment: model.Segment{
+					SegmentID:   segID,
+					PartitionID: partID,
+				},
+				BuildID:     buildID,
+				CreateTime:  10,
+				EnableIndex: true,
+			},
+		}
+
+		mt.indexID2Meta[indexID] = index
 		mockTxnKV.multiSave = func(kvs map[string]string) error {
 			return fmt.Errorf("save error")
 		}
-		assert.Error(t, mt.AlterIndex(segIdxInfo))
+		assert.Error(t, mt.AlterIndex(&newIdx))
 	})
 
 	wg.Add(1)
@@ -1365,7 +1359,7 @@ func TestMetaTable_checkFieldIndexDuplicate(t *testing.T) {
 		}
 		fieldSchema := model.Field{Name: "test", FieldID: 101}
 		idxInfo := &model.Index{IndexName: "test"}
-		_,_, err := mt.checkFieldIndexDuplicate(collMeta, fieldSchema, idxInfo)
+		_, _, err := mt.checkFieldIndexDuplicate(collMeta, fieldSchema, idxInfo)
 		assert.Error(t, err)
 	})
 
@@ -1382,7 +1376,7 @@ func TestMetaTable_checkFieldIndexDuplicate(t *testing.T) {
 		}
 		fieldSchema := model.Field{Name: "test", FieldID: 100}
 		idxInfo := &model.Index{IndexName: "test", IndexParams: []*commonpb.KeyValuePair{{Key: "Key", Value: "not_Value"}}}
-		_,_, err := mt.checkFieldIndexDuplicate(collMeta, fieldSchema, idxInfo)
+		_, _, err := mt.checkFieldIndexDuplicate(collMeta, fieldSchema, idxInfo)
 		assert.Error(t, err)
 	})
 
@@ -1485,9 +1479,9 @@ func TestMetaTable_GetInitBuildIDs(t *testing.T) {
 	})
 
 	mt.indexID2Meta[3] = &model.Index{
-		IndexName: indexName,
-		IndexID:   3,
-		CreateTime:  10,
+		IndexName:  indexName,
+		IndexID:    3,
+		CreateTime: 10,
 		SegmentIndexes: map[int64]model.SegmentIndex{
 			5: {
 				Segment: model.Segment{
@@ -1720,6 +1714,8 @@ func TestMetaTable_MarkIndexDeleted(t *testing.T) {
 type MockedCatalog struct {
 	mock.Mock
 	metastore.Catalog
+	alterIndexParamsVerification  func(ctx context.Context, oldIndex *model.Index, newIndex *model.Index, alterType metastore.AlterType)
+	createIndexParamsVerification func(ctx context.Context, col *model.Collection, index *model.Index)
 }
 
 func (mc *MockedCatalog) ListCollections(ctx context.Context, ts typeutil.Timestamp) (map[string]*model.Collection, error) {
@@ -1738,6 +1734,21 @@ func (mc *MockedCatalog) ListAliases(ctx context.Context) ([]*model.Collection, 
 }
 
 func (mc *MockedCatalog) AlterIndex(ctx context.Context, oldIndex *model.Index, newIndex *model.Index, alterType metastore.AlterType) error {
+	if mc.alterIndexParamsVerification != nil {
+		mc.alterIndexParamsVerification(ctx, oldIndex, newIndex, alterType)
+	}
+	args := mc.Called()
+	err := args.Get(0)
+	if err == nil {
+		return nil
+	}
+	return err.(error)
+}
+
+func (mc *MockedCatalog) CreateIndex(ctx context.Context, col *model.Collection, index *model.Index) error {
+	if mc.createIndexParamsVerification != nil {
+		mc.createIndexParamsVerification(ctx, col, index)
+	}
 	args := mc.Called()
 	err := args.Get(0)
 	if err == nil {
@@ -1854,67 +1865,147 @@ func TestMetaTable_ReloadFromKV(t *testing.T) {
 	assert.Equal(t, indexes[0], meta)
 }
 
-func TestMetaTable_GetNotIndexedSegments(t *testing.T) {
+func TestMetaTable_AddIndex(t *testing.T) {
 	var (
-		collName  = "MarkIndexDeleted-Coll"
-		fieldName = "MarkIndexDeleted-Field"
-		indexName = "MarkIndexDeleted-Index"
-		collID    = UniqueID(1)
-		fieldID   = UniqueID(100)
-		indexID   = UniqueID(1000)
-		segID     = UniqueID(10000)
+		collName   = "MarkIndexDeleted-Coll"
+		fieldName  = "MarkIndexDeleted-Field"
+		fieldName2 = "MarkIndexDeleted-Field2"
+		indexName  = "MarkIndexDeleted-Index"
+		collID     = UniqueID(1)
+		fieldID    = UniqueID(100)
+		fieldID2   = UniqueID(101)
+		indexID    = UniqueID(1000)
+		indexID2   = UniqueID(1001)
+		segID      = UniqueID(10000)
 	)
-	mt := &MetaTable{
-		txn: &mockTestTxnKV{
-			multiSave: func(kvs map[string]string) error {
-				return nil
-			},
-			multiRemove: func(keys []string) error {
-				return nil
-			},
-			save: func(key, value string) error {
-				return nil
+
+	colMeta := model.Collection{
+		CollectionID: collID,
+		Name:         collName,
+		FieldIDToIndexID: []common.Int64Tuple{
+			{
+				Key:   fieldID,
+				Value: indexID,
 			},
 		},
-		collID2Meta: map[typeutil.UniqueID]model.Collection{
-			collID: {
-				FieldIDToIndexID: []common.Int64Tuple{
-					{
-						Key: fieldID,
-						Value: indexID,
-					},
-				},
-				Fields: []*model.Field {
-					{
-						FieldID:     fieldID,
-						Name:        fieldName,
-						DataType:    schemapb.DataType_FloatVector,
-						IndexParams: []*commonpb.KeyValuePair{{Key: "index_type", Value: DefaultIndexType}},
-					},
-				},
-			},
-		},
-		collName2ID: map[string]typeutil.UniqueID{
-			collName: collID,
-		},
-		indexID2Meta: map[typeutil.UniqueID]pb.IndexInfo{
-			indexID: {
-				IndexName:   indexName,
-				IndexID:     indexID,
+		Fields: []*model.Field{
+			{
+				FieldID:     fieldID,
+				Name:        fieldName,
+				DataType:    schemapb.DataType_FloatVector,
 				IndexParams: []*commonpb.KeyValuePair{{Key: "index_type", Value: DefaultIndexType}},
-				Deleted:     false,
+			},
+			{
+				FieldID:     fieldID2,
+				Name:        fieldName2,
+				DataType:    schemapb.DataType_FloatVector,
+				IndexParams: []*commonpb.KeyValuePair{{Key: "index_type", Value: DefaultIndexType}},
 			},
 		},
 	}
 
-	t.Run("GetNotIndexedSegments", func(t *testing.T) {
+	t.Run("test index already exists", func(t *testing.T) {
+		mt := &MetaTable{
+			collID2Meta: map[typeutil.UniqueID]model.Collection{collID: colMeta},
+			collName2ID: map[string]typeutil.UniqueID{collName: collID},
+		}
+		mt.indexID2Meta = map[typeutil.UniqueID]*model.Index{
+			indexID: {
+				IndexName:   indexName,
+				IndexID:     indexID,
+				IndexParams: []*commonpb.KeyValuePair{{Key: "index_type", Value: DefaultIndexType}},
+				IsDeleted:   false,
+				CreateTime:  0,
+			},
+		}
+
+		mc := &MockedCatalog{}
+		mc.On("AlterIndex").Return(nil)
+		mc.alterIndexParamsVerification = func(ctx context.Context, oldIndex *model.Index, newIndex *model.Index, alterType metastore.AlterType) {
+			assert.NotNil(t, oldIndex)
+			assert.NotNil(t, newIndex)
+			assert.Equal(t, metastore.ADD, alterType)
+			assert.Equal(t, oldIndex.IndexID, newIndex.IndexID)
+			assert.Equal(t, oldIndex.IsDeleted, newIndex.IsDeleted)
+			assert.Equal(t, oldIndex.IndexParams, newIndex.IndexParams)
+			assert.Equal(t, oldIndex.CreateTime, uint64(0))
+			assert.Equal(t, newIndex.CreateTime, uint64(100))
+		}
+		mt.catalog = mc
+
 		idxInfo := &model.Index{
 			IndexName:   indexName,
 			IndexID:     indexID,
 			IndexParams: []*commonpb.KeyValuePair{{Key: "index_type", Value: DefaultIndexType}},
-			CreateTime:  0,
+			CreateTime:  100,
 		}
-		_, _, err := mt.GetNotIndexedSegments(collName, fieldName, idxInfo, []UniqueID{segID})
+
+		ret, err := mt.AddIndex(collName, fieldName, idxInfo, []UniqueID{segID})
+		assert.True(t, ret)
+
+		idxMeta, ok := mt.indexID2Meta[indexID]
+		assert.True(t, ok)
+		assert.Equal(t, uint64(100), idxMeta.CreateTime)
 		assert.NoError(t, err)
+	})
+
+	t.Run("test add index firstly(create index)", func(t *testing.T) {
+		mt := &MetaTable{
+			collID2Meta:  map[typeutil.UniqueID]model.Collection{collID: colMeta},
+			collName2ID:  map[string]typeutil.UniqueID{collName: collID},
+			indexID2Meta: make(map[typeutil.UniqueID]*model.Index, 0),
+		}
+
+		idxInfo := &model.Index{
+			FieldID:     fieldID2,
+			IndexName:   indexName,
+			IndexID:     indexID2,
+			IndexParams: []*commonpb.KeyValuePair{{Key: "index_type", Value: DefaultIndexType}},
+			CreateTime:  100,
+		}
+
+		mc := &MockedCatalog{}
+		mc.On("CreateIndex").Return(errors.New("create index fail"))
+		mt.catalog = mc
+		ret, err := mt.AddIndex(collName, fieldName2, idxInfo, []UniqueID{segID})
+		assert.False(t, ret)
+		assert.Error(t, err)
+		_, ok := mt.indexID2Meta[indexID2]
+		assert.False(t, ok)
+
+		mc = &MockedCatalog{}
+		mc.On("CreateIndex").Return(nil)
+		mc.createIndexParamsVerification = func(ctx context.Context, col *model.Collection, index *model.Index) {
+			assert.NotNil(t, col)
+			assert.NotNil(t, index)
+			assert.NotEqual(t, colMeta, col)
+			assert.Equal(t, 2, len(col.FieldIDToIndexID))
+			assert.Equal(t, fieldID, col.FieldIDToIndexID[0].Key)
+			assert.Equal(t, fieldID2, col.FieldIDToIndexID[1].Key)
+			assert.Equal(t, indexID2, index.IndexID)
+			assert.Equal(t, uint64(100), index.CreateTime)
+			assert.Equal(t, 1, len(index.SegmentIndexes))
+			assert.Equal(t, segID, index.SegmentIndexes[segID].SegmentID)
+			assert.Equal(t, false, index.SegmentIndexes[segID].EnableIndex)
+		}
+
+		mt.catalog = mc
+		ret, err = mt.AddIndex(collName, fieldName2, idxInfo, []UniqueID{segID})
+		assert.False(t, ret)
+		assert.NoError(t, err)
+
+		idxMeta, ok := mt.indexID2Meta[indexID2]
+		assert.True(t, ok)
+		assert.Equal(t, uint64(100), idxMeta.CreateTime)
+		assert.NoError(t, err)
+
+		newColMeta, ok := mt.collID2Meta[collID]
+		assert.True(t, ok)
+		assert.Equal(t, collID, newColMeta.CollectionID)
+		assert.Equal(t, 2, len(newColMeta.FieldIDToIndexID))
+		assert.Equal(t, fieldID, newColMeta.FieldIDToIndexID[0].Key)
+		assert.Equal(t, indexID, newColMeta.FieldIDToIndexID[0].Value)
+		assert.Equal(t, fieldID2, newColMeta.FieldIDToIndexID[1].Key)
+		assert.Equal(t, indexID2, newColMeta.FieldIDToIndexID[1].Value)
 	})
 }

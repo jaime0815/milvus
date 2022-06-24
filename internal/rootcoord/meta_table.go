@@ -1069,7 +1069,7 @@ func (mt *MetaTable) AddIndex(colName string, fieldName string, idxInfo *model.I
 		return false, err
 	}
 
-	//TODO:: check index params for sclar field
+	//TODO:: check index params for scalar field
 	// set default index type for scalar index
 	if !typeutil.IsVectorType(fieldSchema.DataType) {
 		if fieldSchema.DataType == schemapb.DataType_VarChar {
@@ -1087,67 +1087,51 @@ func (mt *MetaTable) AddIndex(colName string, fieldName string, idxInfo *model.I
 		return false, err
 	}
 
-	dupIdx, dupIdxInfo, err := mt.checkFieldIndexDuplicate(collMeta, fieldSchema, idxInfo)
+	isDuplicated, dupIdxInfo, err := mt.checkFieldIndexDuplicate(collMeta, fieldSchema, idxInfo)
 	if err != nil {
-		// error here if index already exists.
-		return dupIdx, err
+		return isDuplicated, err
 	}
 
-	if dupIdx {
-		log.Warn("due to index already exists, skip add index to metastore", zap.Int64("collectionID", collMeta.CollectionID),
-			zap.Int64("indexID", idxInfo.IndexID), zap.String("indexName", idxInfo.IndexName))
-		// skip already exist index
-
-		log.Info("index has been created, update timestamp for IndexID", zap.Int64("indexID", dupIdxInfo.IndexID))
-		// just update create time for IndexID
-		dupIdxInfo.CreateTime = idxInfo.CreateTime
-		k := fmt.Sprintf("%s/%d/%d", IndexMetaPrefix, collMeta.ID, dupIdxInfo.IndexID)
-		v, err := proto.Marshal(dupIdxInfo)
-		if err != nil {
-			log.Error("MetaTable GetNotIndexedSegments Marshal idxInfo fail",
-				zap.String("key", k), zap.Error(err))
-			return nil, schemapb.FieldSchema{}, fmt.Errorf("metaTable GetNotIndexedSegments Marshal idxInfo fail key:%s, err:%w", k, err)
+	if isDuplicated {
+		log.Info("index already exists, update timestamp for IndexID",
+			zap.Any("indexTs", idxInfo.CreateTime),
+			zap.Int64("indexID", dupIdxInfo.IndexID))
+		newIdxMeta := *dupIdxInfo
+		newIdxMeta.CreateTime = idxInfo.CreateTime
+		if err := mt.catalog.AlterIndex(mt.ctx, dupIdxInfo, &newIdxMeta, metastore.ADD); err != nil {
+			return isDuplicated, err
 		}
-		meta := map[string]string{k: string(v)}
-
-		err = mt.txn.MultiSave(meta)
-		if err != nil {
-			log.Error("TxnKV MultiSave fail", zap.Error(err))
-			panic("TxnKV MultiSave fail")
+		mt.indexID2Meta[dupIdxInfo.IndexID] = &newIdxMeta
+	} else {
+		segmentIndexes := make(map[int64]model.SegmentIndex, len(segIDs))
+		for _, segID := range segIDs {
+			segmentIndex := model.SegmentIndex{
+				Segment: model.Segment{
+					SegmentID: segID,
+				},
+				EnableIndex: false,
+			}
+			segmentIndexes[segID] = segmentIndex
 		}
-		mt.indexID2Meta[dupIdxInfo.IndexID] = *dupIdxInfo
 
+		idxInfo.SegmentIndexes = segmentIndexes
+		idxInfo.FieldID = fieldSchema.FieldID
+		idxInfo.CollectionID = collMeta.CollectionID
 
-		return dupIdx, nil
-	}
-
-	segmentIndexes := make(map[int64]model.SegmentIndex, len(segIDs))
-	for _, segID := range segIDs {
-		segmentIndex := model.SegmentIndex{
-			Segment: model.Segment{
-				SegmentID: segID,
-			},
-			EnableIndex: false,
+		tuple := common.Int64Tuple{
+			Key:   fieldSchema.FieldID,
+			Value: idxInfo.IndexID,
 		}
-		segmentIndexes[segID] = segmentIndex
+		collMeta.FieldIDToIndexID = append(collMeta.FieldIDToIndexID, tuple)
+		if err := mt.catalog.CreateIndex(mt.ctx, &collMeta, idxInfo); err != nil {
+			return isDuplicated, err
+		}
+
+		mt.collID2Meta[collMeta.CollectionID] = collMeta
+		mt.indexID2Meta[idxInfo.IndexID] = idxInfo
 	}
 
-	idxInfo.SegmentIndexes = segmentIndexes
-	idxInfo.FieldID = fieldSchema.FieldID
-	idxInfo.CollectionID = collMeta.CollectionID
-
-	tuple := common.Int64Tuple{
-		Key:   fieldSchema.FieldID,
-		Value: idxInfo.IndexID,
-	}
-	collMeta.FieldIDToIndexID = append(collMeta.FieldIDToIndexID, tuple)
-	if err := mt.catalog.CreateIndex(mt.ctx, &collMeta, idxInfo); err != nil {
-		return false, nil
-	}
-
-	mt.collID2Meta[collMeta.CollectionID] = collMeta
-	mt.indexID2Meta[idxInfo.IndexID] = idxInfo
-	return false, nil
+	return isDuplicated, nil
 }
 
 // GetIndexByName return index info by index name

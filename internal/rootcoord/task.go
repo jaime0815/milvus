@@ -920,10 +920,12 @@ func (t *DescribeSegmentsReqTask) Execute(ctx context.Context) error {
 
 		segIdxMeta, ok := index.SegmentIndexes[segID]
 		if !ok {
-			log.Error("requested segment index not found",
+			log.Warn("index not found in meta table, maybe index has been deleted",
+				zap.Error(err),
+				zap.Int64("indexID", index.IndexID),
 				zap.Int64("collection", collectionID),
 				zap.Int64("segment", segID))
-			return fmt.Errorf("segment index not found, collection: %d, segment: %d", collectionID, segID)
+			continue
 		}
 
 		t.Rsp.SegmentInfos[segID].IndexInfos = append(
@@ -1024,7 +1026,7 @@ func (t *CreateIndexReqTask) Execute(ctx context.Context) error {
 				PartitionID: segID2PartID[segID],
 			},
 			EnableIndex: false,
-			CreateTime:   createTS,
+			CreateTime:  createTS,
 		}
 
 		segmentIndex.BuildID, err = t.core.BuildIndex(ctx, segID, segID2Binlog[segID].GetNumOfRows(), segID2Binlog[segID].GetFieldBinlogs(), &field, idxInfo, false)

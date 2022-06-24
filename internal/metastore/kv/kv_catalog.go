@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"reflect"
 	"strconv"
 
 	"github.com/milvus-io/milvus/internal/metastore"
@@ -105,32 +106,34 @@ func (kc *Catalog) CreateIndex(ctx context.Context, col *model.Collection, index
 
 func (kc *Catalog) alterAddIndex(ctx context.Context, oldIndex *model.Index, newIndex *model.Index) error {
 	kvs := make(map[string]string, len(newIndex.SegmentIndexes))
-	for _, segmentIndex := range newIndex.SegmentIndexes {
-		segment := segmentIndex.Segment
-		k := fmt.Sprintf("%s/%d/%d/%d/%d", SegmentIndexMetaPrefix, newIndex.CollectionID, newIndex.IndexID, segment.PartitionID, segment.SegmentID)
-		segIdxInfo := &pb.SegmentIndexInfo{
-			CollectionID: newIndex.CollectionID,
-			PartitionID:  segment.PartitionID,
-			SegmentID:    segment.SegmentID,
-			BuildID:      segmentIndex.BuildID,
-			EnableIndex:  segmentIndex.EnableIndex,
-			FieldID:      newIndex.FieldID,
-			IndexID:      newIndex.IndexID,
-		}
+	for segID, newSegIdx := range newIndex.SegmentIndexes {
+		oldSegIdx, ok := oldIndex.SegmentIndexes[segID]
+		if !ok || !reflect.DeepEqual(oldSegIdx, newSegIdx) {
+			segment := newSegIdx.Segment
+			k := fmt.Sprintf("%s/%d/%d/%d/%d", SegmentIndexMetaPrefix, newIndex.CollectionID, newIndex.IndexID, segment.PartitionID, segment.SegmentID)
+			segIdxInfo := &pb.SegmentIndexInfo{
+				CollectionID: newIndex.CollectionID,
+				PartitionID:  segment.PartitionID,
+				SegmentID:    segment.SegmentID,
+				BuildID:      newSegIdx.BuildID,
+				EnableIndex:  newSegIdx.EnableIndex,
+				CreateTime:   newSegIdx.CreateTime,
+				FieldID:      newIndex.FieldID,
+				IndexID:      newIndex.IndexID,
+			}
 
-		v, err := proto.Marshal(segIdxInfo)
-		if err != nil {
-			log.Error("alter index marshal fail", zap.String("key", k), zap.Error(err))
-			return err
-		}
+			v, err := proto.Marshal(segIdxInfo)
+			if err != nil {
+				log.Error("alter index marshal fail", zap.String("key", k), zap.Error(err))
+				return err
+			}
 
-		kvs[k] = string(v)
+			kvs[k] = string(v)
+		}
 	}
 
-	// other field can not be modified, just check deleted status is updated
-	if oldIndex.IsDeleted != newIndex.IsDeleted {
-		idxPb := model.ConvertToIndexPB(oldIndex)
-		idxPb.Deleted = newIndex.IsDeleted
+	if oldIndex.CreateTime != newIndex.CreateTime || oldIndex.IsDeleted != newIndex.IsDeleted {
+		idxPb := model.ConvertToIndexPB(newIndex)
 		k := fmt.Sprintf("%s/%d/%d", IndexMetaPrefix, newIndex.CollectionID, newIndex.IndexID)
 		v, err := proto.Marshal(idxPb)
 		if err != nil {
