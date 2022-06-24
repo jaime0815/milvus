@@ -920,12 +920,11 @@ func (t *DescribeSegmentsReqTask) Execute(ctx context.Context) error {
 
 		segIdxMeta, ok := index.SegmentIndexes[segID]
 		if !ok {
-			log.Warn("index not found in meta table, maybe index has been deleted",
-				zap.Error(err),
-				zap.Int64("indexID", index.IndexID),
+			log.Error("requested segment index not found",
 				zap.Int64("collection", collectionID),
+				zap.Int64("indexID", index.IndexID),
 				zap.Int64("segment", segID))
-			continue
+			return fmt.Errorf("segment index not found, collection: %d, segment: %d", collectionID, segID)
 		}
 
 		t.Rsp.SegmentInfos[segID].IndexInfos = append(
