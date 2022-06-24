@@ -827,7 +827,7 @@ func (mt *MetaTable) RemoveSegments(collID, partID UniqueID, segIDs []UniqueID) 
 	for _, segID := range segIDs {
 		idxID, ok := mt.segID2IndexID[segID]
 		if !ok {
-			return fmt.Errorf("index id not found in collectionID %d with segmentID: %d", collID, segID)
+			continue
 		}
 
 		idxMeta, ok := mt.indexID2Meta[idxID]
