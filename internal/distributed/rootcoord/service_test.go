@@ -638,6 +638,10 @@ func TestGrpcService(t *testing.T) {
 		coll, err := core.MetaTable.GetCollectionByName(collName, 0)
 		assert.Nil(t, err)
 
+		segLock.Lock()
+		segs = []typeutil.UniqueID{segID}
+		segLock.Unlock()
+
 		req := &milvuspb.DescribeSegmentRequest{
 			Base: &commonpb.MsgBase{
 				MsgType:   commonpb.MsgType_DescribeSegment,
@@ -646,7 +650,7 @@ func TestGrpcService(t *testing.T) {
 				SourceID:  190,
 			},
 			CollectionID: coll.CollectionID,
-			SegmentID:    1000,
+			SegmentID:    segID,
 		}
 		rsp, err := cli.DescribeSegment(ctx, req)
 		assert.Nil(t, err)
