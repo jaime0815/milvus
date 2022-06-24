@@ -1106,7 +1106,7 @@ func (mt *MetaTable) AddIndex(colName string, fieldName string, idxInfo *model.I
 		log.Info("======AddIndex 1==========",
 			zap.Any("collectionName", colName),
 			zap.Any("collectionID", collMeta.CollectionID),
-			zap.Int64("indexID", dupIdxInfo.IndexID),
+			zap.Int64("indexID", idxInfo.IndexID),
 			zap.Any("index", idxInfo))
 
 		segmentIndexes := make(map[int64]model.SegmentIndex, len(segIDs))
