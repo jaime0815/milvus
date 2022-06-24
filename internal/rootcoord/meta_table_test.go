@@ -1716,6 +1716,7 @@ type MockedCatalog struct {
 	metastore.Catalog
 	alterIndexParamsVerification  func(ctx context.Context, oldIndex *model.Index, newIndex *model.Index, alterType metastore.AlterType)
 	createIndexParamsVerification func(ctx context.Context, col *model.Collection, index *model.Index)
+	dropIndexParamsVerification   func(ctx context.Context, collectionInfo *model.Collection, dropIdxID typeutil.UniqueID, ts typeutil.Timestamp)
 }
 
 func (mc *MockedCatalog) ListCollections(ctx context.Context, ts typeutil.Timestamp) (map[string]*model.Collection, error) {
@@ -1749,6 +1750,20 @@ func (mc *MockedCatalog) CreateIndex(ctx context.Context, col *model.Collection,
 	if mc.createIndexParamsVerification != nil {
 		mc.createIndexParamsVerification(ctx, col, index)
 	}
+	args := mc.Called()
+	err := args.Get(0)
+	if err == nil {
+		return nil
+	}
+	return err.(error)
+}
+
+func (mc *MockedCatalog) DropIndex(ctx context.Context, collectionInfo *model.Collection,
+	dropIdxID typeutil.UniqueID, ts typeutil.Timestamp) error {
+	if mc.dropIndexParamsVerification != nil {
+		mc.dropIndexParamsVerification(ctx, collectionInfo, dropIdxID, ts)
+	}
+
 	args := mc.Called()
 	err := args.Get(0)
 	if err == nil {
@@ -2008,4 +2023,115 @@ func TestMetaTable_AddIndex(t *testing.T) {
 		assert.Equal(t, fieldID2, newColMeta.FieldIDToIndexID[1].Key)
 		assert.Equal(t, indexID2, newColMeta.FieldIDToIndexID[1].Value)
 	})
+}
+
+func TestMetaTable_RecycleDroppedIndex(t *testing.T) {
+	colName := "c"
+	fieldName := "f1"
+	indexName1 := "idx1"
+	indexName2 := "idx2"
+
+	colMeta := model.Collection{
+		CollectionID: 1,
+		Name:         colName,
+		FieldIDToIndexID: []common.Int64Tuple{
+			{
+				Key:   1,
+				Value: 1,
+			},
+			{
+				Key:   1,
+				Value: 2,
+			},
+		},
+		Fields: []*model.Field{
+			{
+				FieldID:     1,
+				Name:        fieldName,
+				DataType:    schemapb.DataType_FloatVector,
+				IndexParams: []*commonpb.KeyValuePair{{Key: "index_type", Value: DefaultIndexType}},
+			},
+		},
+		Partitions: []*model.Partition{
+			{
+				PartitionID:   1,
+				PartitionName: "p",
+			},
+		},
+	}
+
+	mt := &MetaTable{
+		collID2Meta: map[typeutil.UniqueID]model.Collection{1: colMeta},
+		collName2ID: map[string]typeutil.UniqueID{colName: 1},
+		segID2IndexID: map[typeutil.UniqueID]typeutil.UniqueID{
+			1: 1,
+		},
+		partID2SegID: map[typeutil.UniqueID]map[typeutil.UniqueID]bool{
+			1: {
+				1: true,
+			},
+		},
+	}
+	mt.indexID2Meta = map[typeutil.UniqueID]*model.Index{
+		1: {
+			IndexName:   indexName1,
+			IndexID:     1,
+			IndexParams: []*commonpb.KeyValuePair{{Key: "index_type", Value: DefaultIndexType}},
+			IsDeleted:   true,
+			SegmentIndexes: map[int64]model.SegmentIndex{
+				1: {
+					Segment: model.Segment{
+						SegmentID:   1,
+						PartitionID: 1,
+					},
+					BuildID:     1000,
+					EnableIndex: true,
+				},
+			},
+		},
+		2: {
+			IndexName:   indexName2,
+			IndexID:     2,
+			IndexParams: []*commonpb.KeyValuePair{{Key: "index_type", Value: DefaultIndexType}},
+			IsDeleted:   false,
+			SegmentIndexes: map[int64]model.SegmentIndex{
+				1: {
+					Segment: model.Segment{
+						SegmentID:   1,
+						PartitionID: 1,
+					},
+					BuildID:     1000,
+					EnableIndex: true,
+				},
+			},
+		},
+	}
+
+	mc := &MockedCatalog{}
+	mc.On("DropIndex").Return(nil)
+	mc.dropIndexParamsVerification = func(ctx context.Context, collectionInfo *model.Collection, dropIdxID typeutil.UniqueID, ts typeutil.Timestamp) {
+		assert.NotNil(t, collectionInfo)
+		assert.Equal(t, int64(1), dropIdxID)
+		assert.Equal(t, int64(1), collectionInfo.CollectionID)
+		assert.Equal(t, 1, len(collectionInfo.FieldIDToIndexID))
+		assert.Equal(t, int64(1), collectionInfo.FieldIDToIndexID[0].Key)
+		assert.Equal(t, int64(2), collectionInfo.FieldIDToIndexID[0].Value)
+	}
+	mt.catalog = mc
+
+	mt.RecycleDroppedIndex()
+	newColMeta, ok := mt.collID2Meta[1]
+	assert.True(t, ok)
+	assert.Equal(t, int64(1), newColMeta.CollectionID)
+	assert.Equal(t, 1, len(newColMeta.FieldIDToIndexID))
+	assert.Equal(t, int64(1), newColMeta.FieldIDToIndexID[0].Key)
+	assert.Equal(t, int64(2), newColMeta.FieldIDToIndexID[0].Value)
+
+	assert.Equal(t, 1, len(mt.indexID2Meta))
+	idxMeta, ok := mt.indexID2Meta[2]
+	assert.True(t, ok)
+	assert.Equal(t, false, idxMeta.IsDeleted)
+
+	assert.Equal(t, 0, len(mt.segID2IndexID))
+	assert.Equal(t, 1, len(mt.partID2SegID))
 }
