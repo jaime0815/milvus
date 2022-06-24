@@ -622,7 +622,7 @@ func (mt *MetaTable) MarkIndexDeleted(collName, fieldName, indexName string) err
 		zap.String("collName", collName),
 		zap.String("fieldName", fieldName),
 		zap.String("indexName", indexName),
-		zap.Int64("dropIndexID", deletedIdxMeta.IndexID))
+		zap.Int64("indexID", deletedIdxMeta.IndexID))
 
 	// update metastore
 	newIndex := &model.Index{IsDeleted: true}
@@ -702,6 +702,12 @@ func (mt *MetaTable) DropIndex(collName, fieldName, indexName string) (typeutil.
 			}
 		}
 	}
+
+	log.Info("drop index finished",
+		zap.String("collName", collName),
+		zap.String("fieldName", fieldName),
+		zap.String("indexName", indexName),
+		zap.Int64("indexID", dropIdxID))
 	return dropIdxID, true, nil
 }
 
@@ -1167,6 +1173,7 @@ func (mt *MetaTable) GetIndexByName(collName, indexName string) (model.Collectio
 	log.Info("======GetIndexByName 1==========",
 		zap.Any("collectionName", collName),
 		zap.Any("collectionID", collID),
+		zap.Any("indexName", indexName),
 		zap.Any("col", mt.collID2Meta),
 		zap.Any("index", mt.indexID2Meta))
 
@@ -1175,6 +1182,13 @@ func (mt *MetaTable) GetIndexByName(collName, indexName string) (model.Collectio
 		indexID := t.Value
 		idxInfo, ok := mt.indexID2Meta[indexID]
 		if !ok {
+			log.Info("======GetIndexByName 1==========",
+				zap.Any("collectionName", collName),
+				zap.Any("collectionID", collID),
+				zap.Any("indexName", indexName),
+				zap.Any("indexID", indexID),
+				zap.Any("FieldIDToIndexID", col.FieldIDToIndexID),
+				zap.Any("index", mt.indexID2Meta))
 			return model.Collection{}, nil, fmt.Errorf("index id = %d not found", indexID)
 		}
 		if idxInfo.IsDeleted {
