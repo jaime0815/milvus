@@ -46,6 +46,7 @@ class TestCompactionParams(TestcaseBase):
         expected: Merge into one segment
         """
         # init collection with one shard, insert into two segments
+        pytest.skip("DataCoord: for A, B -> C, will not compact segment C before A, B GCed, no method to check whether a segment is GCed")
         collection_w = self.collection_insert_multi_segments_one_shard(prefix, nb_of_segment=tmp_nb)
 
         # first compact two segments
@@ -101,8 +102,7 @@ class TestCompactionParams(TestcaseBase):
         start = time()
         while time() - start < cost:
             collection_w.load()
-            segment_info = self.utility_wrap.get_query_segment_info(collection_w.name)[
-                0]
+            segment_info = self.utility_wrap.get_query_segment_info(collection_w.name)[0]
             if len(segment_info) == 1:
                 break
             sleep(1.0)
@@ -323,12 +323,14 @@ class TestCompactionParams(TestcaseBase):
 
         sleep(ct.max_compaction_interval + 1)
 
+        # create index
+        collection_w.create_index(ct.default_float_vec_field_name, ct.default_index)
+
         # verify queryNode load the compacted segments
         collection_w.load()
         replicas = collection_w.get_replicas()[0]
         replica_num = len(replicas.groups)
-        segment_info = self.utility_wrap.get_query_segment_info(collection_w.name)[
-            0]
+        segment_info = self.utility_wrap.get_query_segment_info(collection_w.name)[0]
         assert len(segment_info) == 1*replica_num
 
     @pytest.mark.skip(reason="TODO")
@@ -532,8 +534,7 @@ class TestCompactionOperation(TestcaseBase):
         start = time()
         while True:
             sleep(5)
-            segment_info = self.utility_wrap.get_query_segment_info(collection_w.name)[
-                0]
+            segment_info = self.utility_wrap.get_query_segment_info(collection_w.name)[0]
             if len(segment_info) != 0 and segment_info[0].segmentID == c_plans.plans[0].target:
                 log.debug(segment_info)
                 break
@@ -809,8 +810,7 @@ class TestCompactionOperation(TestcaseBase):
         cost = 60
         while True:
             sleep(5)
-            segments_info = self.utility_wrap.get_query_segment_info(collection_w.name)[
-                0]
+            segments_info = self.utility_wrap.get_query_segment_info(collection_w.name)[0]
 
             # verify segments reaches threshold, auto-merge ten segments into one
             if len(segments_info) == 1:
@@ -835,6 +835,7 @@ class TestCompactionOperation(TestcaseBase):
         collection_w.insert(df)
         assert collection_w.num_entities == tmp_nb
 
+        collection_w.create_index(ct.default_float_vec_field_name, ct.default_index)
         collection_w.load()
 
         seg_before, _ = self.utility_wrap.get_query_segment_info(collection_w.name)
@@ -861,6 +862,7 @@ class TestCompactionOperation(TestcaseBase):
         expected: Verify segments info
         """
         # greater than auto-merge threshold 10
+        pytest.skip("DataCoord: for A, B -> C, will not compact segment C before A, B GCed, no method to check whether a segment is GCed")
         num_of_segment = ct.compact_segment_num_threshold + 1
 
         # create collection shard_num=1, insert 11 segments, each with one entity
@@ -880,8 +882,7 @@ class TestCompactionOperation(TestcaseBase):
         cost = 60
         while True:
             sleep(5)
-            segments_info = self.utility_wrap.get_query_segment_info(collection_w.name)[
-                0]
+            segments_info = self.utility_wrap.get_query_segment_info(collection_w.name)[0]
 
             # verify segments reaches threshold, auto-merge ten segments into one
             if len(segments_info) == 1:
@@ -921,8 +922,7 @@ class TestCompactionOperation(TestcaseBase):
         start = time()
         while True:
             sleep(5)
-            segments_info = self.utility_wrap.get_query_segment_info(collection_w.name)[
-                0]
+            segments_info = self.utility_wrap.get_query_segment_info(collection_w.name)[0]
 
             # verify segments reaches threshold, auto-merge ten segments into one
             if len(segments_info) == 1:
@@ -995,8 +995,7 @@ class TestCompactionOperation(TestcaseBase):
         start = time()
         while True:
             sleep(5)
-            segments_info = self.utility_wrap.get_query_segment_info(collection_w.name)[
-                0]
+            segments_info = self.utility_wrap.get_query_segment_info(collection_w.name)[0]
 
             # verify segments reaches threshold, auto-merge ten segments into one
             if len(segments_info) == 1*replica_num:
@@ -1019,12 +1018,14 @@ class TestCompactionOperation(TestcaseBase):
         # create collection shard_num=1, insert 9 segments, each with one entity
         collection_w = self.collection_insert_multi_segments_one_shard(prefix, num_of_segment=less_threshold)
 
+        # create index
+        collection_w.create_index(ct.default_float_vec_field_name, ct.default_index)
+
         # load and verify no auto-merge
         collection_w.load()
         replicas = collection_w.get_replicas()[0]
         replica_num = len(replicas.groups)
-        segments_info = self.utility_wrap.get_query_segment_info(collection_w.name)[
-            0]
+        segments_info = self.utility_wrap.get_query_segment_info(collection_w.name)[0]
         assert len(segments_info) == less_threshold*replica_num
 
     @pytest.mark.skip(reason="Todo")
@@ -1206,8 +1207,7 @@ class TestCompactionOperation(TestcaseBase):
         collection_w.load()
         replicas = collection_w.get_replicas()[0]
         replica_num = len(replicas.groups)
-        seg_info = self.utility_wrap.get_query_segment_info(collection_w.name)[
-            0]
+        seg_info = self.utility_wrap.get_query_segment_info(collection_w.name)[0]
         assert len(seg_info) == 2*replica_num
 
     @pytest.mark.tags(CaseLabel.L2)
@@ -1235,8 +1235,7 @@ class TestCompactionOperation(TestcaseBase):
         collection_w.load()
         replicas = collection_w.get_replicas()[0]
         replica_num = len(replicas.groups)
-        seg_info = self.utility_wrap.get_query_segment_info(collection_w.name)[
-            0]
+        seg_info = self.utility_wrap.get_query_segment_info(collection_w.name)[0]
         assert len(seg_info) == 1*replica_num
 
     @pytest.mark.tags(CaseLabel.L2)

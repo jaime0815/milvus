@@ -120,8 +120,7 @@ func NewLoadCollectionJob(
 
 func (job *LoadCollectionJob) PreExecute() error {
 	req := job.req
-	log := log.With(
-		zap.Int64("msgID", req.Base.GetMsgID()),
+	log := log.Ctx(job.ctx).With(
 		zap.Int64("collectionID", req.GetCollectionID()),
 	)
 
@@ -134,7 +133,7 @@ func (job *LoadCollectionJob) PreExecute() error {
 	if job.meta.Exist(req.GetCollectionID()) {
 		old := job.meta.GetCollection(req.GetCollectionID())
 		if old == nil {
-			msg := "collection with different load type existed, please release it first"
+			msg := "load the partition after load collection is not supported"
 			log.Warn(msg)
 			return utils.WrapError(msg, ErrLoadParameterMismatched)
 		}
@@ -148,13 +147,18 @@ func (job *LoadCollectionJob) PreExecute() error {
 		return ErrCollectionLoaded
 	}
 
+	if len(job.nodeMgr.GetAll()) < int(job.req.GetReplicaNumber()) {
+		msg := "no enough nodes to create replicas"
+		log.Warn(msg)
+		return utils.WrapError(msg, ErrNoEnoughNode)
+	}
+
 	return nil
 }
 
 func (job *LoadCollectionJob) Execute() error {
 	req := job.req
-	log := log.With(
-		zap.Int64("msgID", req.GetBase().GetMsgID()),
+	log := log.Ctx(job.ctx).With(
 		zap.Int64("collectionID", req.GetCollectionID()),
 	)
 
@@ -249,8 +253,7 @@ func NewReleaseCollectionJob(ctx context.Context,
 
 func (job *ReleaseCollectionJob) Execute() error {
 	req := job.req
-	log := log.With(
-		zap.Int64("msgID", req.GetBase().GetMsgID()),
+	log := log.Ctx(job.ctx).With(
 		zap.Int64("collectionID", req.GetCollectionID()),
 	)
 	if !job.meta.CollectionManager.Exist(req.GetCollectionID()) {
@@ -314,8 +317,7 @@ func NewLoadPartitionJob(
 
 func (job *LoadPartitionJob) PreExecute() error {
 	req := job.req
-	log := log.With(
-		zap.Int64("msgID", req.Base.GetMsgID()),
+	log := log.Ctx(job.ctx).With(
 		zap.Int64("collectionID", req.GetCollectionID()),
 	)
 
@@ -328,7 +330,7 @@ func (job *LoadPartitionJob) PreExecute() error {
 	if job.meta.Exist(req.GetCollectionID()) {
 		old := job.meta.GetCollection(req.GetCollectionID())
 		if old != nil {
-			msg := "collection with different load type existed, please release it first"
+			msg := "load the partition after load collection is not supported"
 			log.Warn(msg)
 			return utils.WrapError(msg, ErrLoadParameterMismatched)
 		}
@@ -352,13 +354,18 @@ func (job *LoadPartitionJob) PreExecute() error {
 		return ErrCollectionLoaded
 	}
 
+	if len(job.nodeMgr.GetAll()) < int(job.req.GetReplicaNumber()) {
+		msg := "no enough nodes to create replicas"
+		log.Warn(msg)
+		return utils.WrapError(msg, ErrNoEnoughNode)
+	}
+
 	return nil
 }
 
 func (job *LoadPartitionJob) Execute() error {
 	req := job.req
-	log := log.With(
-		zap.Int64("msgID", req.GetBase().GetMsgID()),
+	log := log.Ctx(job.ctx).With(
 		zap.Int64("collectionID", req.GetCollectionID()),
 	)
 
@@ -448,6 +455,9 @@ func NewReleasePartitionJob(ctx context.Context,
 }
 
 func (job *ReleasePartitionJob) PreExecute() error {
+	log := log.Ctx(job.ctx).With(
+		zap.Int64("collectionID", job.req.GetCollectionID()),
+	)
 	if job.meta.CollectionManager.GetLoadType(job.req.GetCollectionID()) == querypb.LoadType_LoadCollection {
 		msg := "releasing some partitions after load collection is not supported"
 		log.Warn(msg)
@@ -458,11 +468,9 @@ func (job *ReleasePartitionJob) PreExecute() error {
 
 func (job *ReleasePartitionJob) Execute() error {
 	req := job.req
-	log := log.With(
-		zap.Int64("msgID", req.GetBase().GetMsgID()),
+	log := log.Ctx(job.ctx).With(
 		zap.Int64("collectionID", req.GetCollectionID()),
 	)
-
 	if !job.meta.CollectionManager.Exist(req.GetCollectionID()) {
 		log.Info("release collection end, the collection has not been loaded into QueryNode")
 		return nil

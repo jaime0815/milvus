@@ -13,6 +13,7 @@ package paramtable
 
 import (
 	"math"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -20,8 +21,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/milvus-io/milvus/internal/log"
+	"github.com/shirou/gopsutil/disk"
 	"go.uber.org/zap"
+
+	"github.com/milvus-io/milvus/internal/log"
 )
 
 const (
@@ -720,7 +723,7 @@ func (p *queryCoordConfig) initChannelTaskTimeout() {
 }
 
 func (p *queryCoordConfig) initSegmentTaskTimeout() {
-	timeout := p.Base.LoadWithDefault("queryCoord.segmentTaskTimeout", "15000")
+	timeout := p.Base.LoadWithDefault("queryCoord.segmentTaskTimeout", "120000")
 	taskTimeout, err := strconv.ParseInt(timeout, 10, 64)
 	if err != nil {
 		panic(err)
@@ -797,6 +800,11 @@ type queryNodeConfig struct {
 	LoadMemoryUsageFactor               float64
 	OverloadedMemoryThresholdPercentage float64
 
+	// enable disk
+	EnableDisk             bool
+	DiskCapacityLimit      int64
+	MaxDiskUsagePercentage float64
+
 	// cache limit
 	CacheEnabled     bool
 	CacheMemoryLimit int64
@@ -834,6 +842,9 @@ func (p *queryNodeConfig) init(base *BaseTable) {
 	p.initMaxGroupNQ()
 	p.initTopKMergeRatio()
 	p.initCPURatio()
+	p.initEnableDisk()
+	p.initDiskCapacity()
+	p.initMaxDiskUsagePercentage()
 }
 
 // InitAlias initializes an alias for the QueryNode role.
@@ -969,6 +980,43 @@ func (p *queryNodeConfig) GetNodeID() UniqueID {
 	return 0
 }
 
+func (p *queryNodeConfig) initEnableDisk() {
+	var err error
+	enableDisk := p.Base.LoadWithDefault("queryNode.enableDisk", "false")
+	p.EnableDisk, err = strconv.ParseBool(enableDisk)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (p *queryNodeConfig) initMaxDiskUsagePercentage() {
+	maxDiskUsagePercentageStr := p.Base.LoadWithDefault("queryNode.maxDiskUsagePercentage", "95")
+	maxDiskUsagePercentage, err := strconv.ParseInt(maxDiskUsagePercentageStr, 10, 64)
+	if err != nil {
+		panic(err)
+	}
+	p.MaxDiskUsagePercentage = float64(maxDiskUsagePercentage) / 100
+}
+
+func (p *queryNodeConfig) initDiskCapacity() {
+	diskSizeStr := os.Getenv("LOCAL_STORAGE_SIZE")
+	if len(diskSizeStr) == 0 {
+		diskUsage, err := disk.Usage("/")
+		if err != nil {
+			panic(err)
+		}
+		p.DiskCapacityLimit = int64(diskUsage.Total)
+
+		return
+	}
+
+	diskSize, err := strconv.ParseInt(diskSizeStr, 10, 64)
+	if err != nil {
+		panic(err)
+	}
+	p.DiskCapacityLimit = diskSize * 1024 * 1024 * 1024
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // --- datacoord ---
 type dataCoordConfig struct {
@@ -984,10 +1032,12 @@ type dataCoordConfig struct {
 	ChannelWatchSubPath string
 
 	// --- SEGMENTS ---
-	SegmentMaxSize          float64
-	SegmentSealProportion   float64
-	SegAssignmentExpiration int64
-	SegmentMaxLifetime      time.Duration
+	SegmentMaxSize                 float64
+	SegmentSealProportion          float64
+	SegAssignmentExpiration        int64
+	SegmentMaxLifetime             time.Duration
+	SegmentMaxIdleTime             time.Duration
+	SegmentMinSizeFromIdleToSealed float64
 
 	CreatedTime time.Time
 	UpdatedTime time.Time
@@ -1022,6 +1072,8 @@ func (p *dataCoordConfig) init(base *BaseTable) {
 	p.initSegmentSealProportion()
 	p.initSegAssignmentExpiration()
 	p.initSegmentMaxLifetime()
+	p.initSegmentMaxIdleTime()
+	p.initSegmentMinSizeFromIdleToSealed()
 
 	p.initEnableCompaction()
 	p.initEnableAutoCompaction()
@@ -1057,6 +1109,16 @@ func (p *dataCoordConfig) initSegAssignmentExpiration() {
 
 func (p *dataCoordConfig) initSegmentMaxLifetime() {
 	p.SegmentMaxLifetime = time.Duration(p.Base.ParseInt64WithDefault("dataCoord.segment.maxLife", 24*60*60)) * time.Second
+}
+
+func (p *dataCoordConfig) initSegmentMaxIdleTime() {
+	p.SegmentMaxIdleTime = time.Duration(p.Base.ParseInt64WithDefault("dataCoord.segment.maxIdleTime", 60*60)) * time.Second
+	log.Info("init segment max idle time", zap.String("value", p.SegmentMaxIdleTime.String()))
+}
+
+func (p *dataCoordConfig) initSegmentMinSizeFromIdleToSealed() {
+	p.SegmentMinSizeFromIdleToSealed = p.Base.ParseFloatWithDefault("dataCoord.segment.minSizeFromIdleToSealed", 16.0)
+	log.Info("init segment min size from idle to sealed", zap.Float64("value", p.SegmentMinSizeFromIdleToSealed))
 }
 
 func (p *dataCoordConfig) initChannelWatchPrefix() {
@@ -1290,12 +1352,20 @@ type indexNodeConfig struct {
 
 	CreatedTime time.Time
 	UpdatedTime time.Time
+
+	// enable disk
+	EnableDisk             bool
+	DiskCapacityLimit      int64
+	MaxDiskUsagePercentage float64
 }
 
 func (p *indexNodeConfig) init(base *BaseTable) {
 	p.Base = base
 	p.NodeID.Store(UniqueID(0))
 	p.initBuildParallel()
+	p.initEnableDisk()
+	p.initDiskCapacity()
+	p.initMaxDiskUsagePercentage()
 }
 
 // InitAlias initializes an alias for the IndexNode role.
@@ -1317,4 +1387,41 @@ func (p *indexNodeConfig) GetNodeID() UniqueID {
 		return val.(UniqueID)
 	}
 	return 0
+}
+
+func (p *indexNodeConfig) initEnableDisk() {
+	var err error
+	enableDisk := p.Base.LoadWithDefault("indexNode.enableDisk", "false")
+	p.EnableDisk, err = strconv.ParseBool(enableDisk)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (p *indexNodeConfig) initDiskCapacity() {
+	diskSizeStr := os.Getenv("LOCAL_STORAGE_SIZE")
+	if len(diskSizeStr) == 0 {
+		diskUsage, err := disk.Usage("/")
+		if err != nil {
+			panic(err)
+		}
+
+		p.DiskCapacityLimit = int64(diskUsage.Total)
+		return
+	}
+
+	diskSize, err := strconv.ParseInt(diskSizeStr, 10, 64)
+	if err != nil {
+		panic(err)
+	}
+	p.DiskCapacityLimit = diskSize * 1024 * 1024 * 1024
+}
+
+func (p *indexNodeConfig) initMaxDiskUsagePercentage() {
+	maxDiskUsagePercentageStr := p.Base.LoadWithDefault("indexNode.maxDiskUsagePercentage", "95")
+	maxDiskUsagePercentage, err := strconv.ParseInt(maxDiskUsagePercentageStr, 10, 64)
+	if err != nil {
+		panic(err)
+	}
+	p.MaxDiskUsagePercentage = float64(maxDiskUsagePercentage) / 100
 }
