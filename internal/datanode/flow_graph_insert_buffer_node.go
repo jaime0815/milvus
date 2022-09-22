@@ -615,18 +615,9 @@ func (ibNode *insertBufferNode) getCollectionandPartitionIDbySegID(segmentID Uni
 
 // channel name -> msg count
 var (
-	stats1 = make(map[string]int64)
-	start  = time.Now()
+	counter = atomic.NewUint64(0)
+	start   = time.Now()
 )
-
-func produceStats(channel string, msg *msgstream.MsgPack) {
-	count, ok := stats1[channel]
-	if !ok {
-		stats1[channel] = count
-	} else {
-		stats1[channel] = count + 1
-	}
-}
 
 func newInsertBufferNode(ctx context.Context, collID UniqueID, flushCh <-chan flushMsg, resendTTCh <-chan resendTTMsg,
 	fm flushManager, flushingSegCache *Cache, config *nodeConfig) (*insertBufferNode, error) {
@@ -679,8 +670,6 @@ func newInsertBufferNode(ctx context.Context, collID UniqueID, flushCh <-chan fl
 		pChan := funcutil.ToPhysicalChannel(config.vChannelName)
 		metrics.DataNodeTimeSync.WithLabelValues(fmt.Sprint(Params.DataNodeCfg.GetNodeID()), pChan).Set(float64(pt))
 
-		produceStats(pChan, &msgPack)
-
 		physical, _ := tsoutil.ParseTS(ts)
 		if time.Since(physical).Minutes() > 1 {
 			log.RatedWarn(60.0, "=====time tick lag behind for more than 1 minutes",
@@ -690,19 +679,12 @@ func newInsertBufferNode(ctx context.Context, collID UniqueID, flushCh <-chan fl
 
 		}
 
+		counter.Inc()
 		now := time.Now()
-		if now.Sub(start).Milliseconds() >= 60000 {
-			totalProduce := int64(0)
-			for _, v := range stats1 {
-				totalProduce = totalProduce + v
-			}
-
-			log.RatedDebug(60.0, "===== produce tt stats for per minutes", zap.Int64("ops/min", totalProduce),
-				zap.Int("total", len(stats1)),
-				zap.Any("stats", stats1))
-
-			start = now
-			stats1 = make(map[string]int64)
+		if now.Sub(start).Milliseconds()%60000 == 0 {
+			ops := counter.Load()
+			log.RatedDebug(60.0, "===== produce tt stats for per minutes", zap.Uint64("ops/min", ops))
+			counter.Store(0)
 		}
 
 		return wTtMsgStream.Produce(&msgPack)
