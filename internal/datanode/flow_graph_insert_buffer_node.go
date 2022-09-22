@@ -23,6 +23,7 @@ import (
 	"math"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/opentracing/opentracing-go"
@@ -612,6 +613,21 @@ func (ibNode *insertBufferNode) getCollectionandPartitionIDbySegID(segmentID Uni
 	return ibNode.replica.getCollectionAndPartitionID(segmentID)
 }
 
+// channel name -> msg count
+var (
+	stats1 = make(map[string]int64)
+	start  = time.Now()
+)
+
+func produceStats(channel string, msg *msgstream.MsgPack) {
+	count, ok := stats1[channel]
+	if !ok {
+		stats1[channel] = count
+	} else {
+		stats1[channel] = count + 1
+	}
+}
+
 func newInsertBufferNode(ctx context.Context, collID UniqueID, flushCh <-chan flushMsg, resendTTCh <-chan resendTTMsg,
 	fm flushManager, flushingSegCache *Cache, config *nodeConfig) (*insertBufferNode, error) {
 
@@ -662,6 +678,33 @@ func newInsertBufferNode(ctx context.Context, collID UniqueID, flushCh <-chan fl
 		pt, _ := tsoutil.ParseHybridTs(ts)
 		pChan := funcutil.ToPhysicalChannel(config.vChannelName)
 		metrics.DataNodeTimeSync.WithLabelValues(fmt.Sprint(Params.DataNodeCfg.GetNodeID()), pChan).Set(float64(pt))
+
+		produceStats(pChan, &msgPack)
+
+		physical, _ := tsoutil.ParseTS(ts)
+		if time.Since(physical).Minutes() > 1 {
+			log.RatedWarn(60.0, "=====time tick lag behind for more than 1 minutes",
+				zap.String("channel", pChan), zap.Time("timetick", physical),
+				zap.Int("segLen", len(segmentIDs)),
+				zap.Any("segs", segmentIDs))
+
+		}
+
+		now := time.Now()
+		if now.Sub(start).Milliseconds() >= 60000 {
+			totalProduce := int64(0)
+			for _, v := range stats1 {
+				totalProduce = totalProduce + v
+			}
+
+			log.RatedDebug(60.0, "===== produce tt stats for per minutes", zap.Int64("ops/min", totalProduce),
+				zap.Int("total", len(stats1)),
+				zap.Any("stats", stats1))
+
+			start = now
+			stats1 = make(map[string]int64)
+		}
+
 		return wTtMsgStream.Produce(&msgPack)
 	})
 
