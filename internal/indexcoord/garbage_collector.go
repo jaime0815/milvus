@@ -22,13 +22,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/milvus-io/milvus/api/commonpb"
-	"github.com/milvus-io/milvus/internal/proto/datapb"
-
 	"go.uber.org/zap"
 
+	"github.com/milvus-io/milvus/api/commonpb"
 	"github.com/milvus-io/milvus/internal/common"
 	"github.com/milvus-io/milvus/internal/log"
+	"github.com/milvus-io/milvus/internal/metastore/model"
+	"github.com/milvus-io/milvus/internal/proto/datapb"
 	"github.com/milvus-io/milvus/internal/storage"
 )
 
@@ -106,9 +106,6 @@ func (gc *garbageCollector) recycleUnusedIndexes() {
 							// wait for releasing reference lock
 							continue
 						}
-						if !gc.metaTable.IsExpire(segIdx.BuildID) {
-							continue
-						}
 						if err := gc.metaTable.RemoveSegmentIndex(segIdx.CollectionID, segIdx.PartitionID, segIdx.SegmentID, segIdx.BuildID); err != nil {
 							log.Warn("delete index meta from etcd failed, wait to retry", zap.Int64("buildID", segIdx.BuildID),
 								zap.Int64("nodeID", segIdx.NodeID), zap.Error(err))
@@ -158,7 +155,9 @@ func (gc *garbageCollector) recycleSegIndexesMeta() {
 			if _, ok := flushedSegments[segID]; !ok {
 				log.Debug("segment is already not exist, mark it deleted", zap.Int64("collID", collID),
 					zap.Int64("segID", segID))
-				if err := gc.metaTable.MarkSegmentsIndexAsDeleted([]int64{segID}); err != nil {
+				if err := gc.metaTable.MarkSegmentsIndexAsDeleted(func(segIndex *model.SegmentIndex) bool {
+					return segIndex.SegmentID == segID
+				}); err != nil {
 					continue
 				}
 			}
@@ -169,9 +168,6 @@ func (gc *garbageCollector) recycleSegIndexesMeta() {
 		if meta.IsDeleted || gc.metaTable.IsIndexDeleted(meta.CollectionID, meta.IndexID) {
 			if meta.NodeID != 0 {
 				// wait for releasing reference lock
-				continue
-			}
-			if !gc.metaTable.IsExpire(meta.BuildID) {
 				continue
 			}
 			if err := gc.metaTable.RemoveSegmentIndex(meta.CollectionID, meta.PartitionID, meta.SegmentID, meta.BuildID); err != nil {

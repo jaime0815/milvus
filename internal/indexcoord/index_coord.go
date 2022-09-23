@@ -209,7 +209,7 @@ func (i *IndexCoord) Init() error {
 		// TODO silverxia add Rewatch logic
 		i.eventChan = i.session.WatchServices(typeutil.IndexNodeRole, revision+1, nil)
 
-		chunkManager, err := i.factory.NewVectorStorageChunkManager(i.loopCtx)
+		chunkManager, err := i.factory.NewPersistentStorageChunkManager(i.loopCtx)
 		if err != nil {
 			log.Error("IndexCoord new minio chunkManager failed", zap.Error(err))
 			initErr = err
@@ -614,7 +614,7 @@ func (i *IndexCoord) GetIndexBuildProgress(ctx context.Context, req *indexpb.Get
 // index tasks.
 func (i *IndexCoord) DropIndex(ctx context.Context, req *indexpb.DropIndexRequest) (*commonpb.Status, error) {
 	log.Info("IndexCoord DropIndex", zap.Int64("collectionID", req.CollectionID),
-		zap.Int64("fieldID", req.FieldID), zap.String("indexName", req.IndexName))
+		zap.Int64s("partitionIDs", req.PartitionIDs), zap.String("indexName", req.IndexName))
 	if !i.isHealthy() {
 		log.Warn(msgIndexCoordIsUnhealthy(i.serverID))
 		return &commonpb.Status{
@@ -636,15 +636,37 @@ func (i *IndexCoord) DropIndex(ctx context.Context, req *indexpb.DropIndexReques
 	for indexID := range indexID2CreateTs {
 		indexIDs = append(indexIDs, indexID)
 	}
-	err := i.metaTable.MarkIndexAsDeleted(req.CollectionID, indexIDs)
-	if err != nil {
-		ret.ErrorCode = commonpb.ErrorCode_UnexpectedError
-		ret.Reason = err.Error()
-		return ret, nil
+	if len(req.GetPartitionIDs()) == 0 {
+		// drop collection index
+		err := i.metaTable.MarkIndexAsDeleted(req.CollectionID, indexIDs)
+		if err != nil {
+			log.Error("IndexCoord drop index fail", zap.Int64("collectionID", req.CollectionID),
+				zap.String("indexName", req.IndexName), zap.Error(err))
+			ret.ErrorCode = commonpb.ErrorCode_UnexpectedError
+			ret.Reason = err.Error()
+			return ret, nil
+		}
+	} else {
+		err := i.metaTable.MarkSegmentsIndexAsDeleted(func(segIndex *model.SegmentIndex) bool {
+			for _, partitionID := range req.PartitionIDs {
+				if segIndex.CollectionID == req.CollectionID && segIndex.PartitionID == partitionID {
+					return true
+				}
+			}
+			return false
+		})
+		if err != nil {
+			log.Error("IndexCoord drop index fail", zap.Int64("collectionID", req.CollectionID),
+				zap.Int64s("partitionIDs", req.PartitionIDs), zap.String("indexName", req.IndexName), zap.Error(err))
+			ret.ErrorCode = commonpb.ErrorCode_UnexpectedError
+			ret.Reason = err.Error()
+			return ret, nil
+		}
 	}
 
 	log.Info("IndexCoord DropIndex success", zap.Int64("collID", req.CollectionID),
-		zap.String("indexName", req.IndexName), zap.Int64s("indexIDs", indexIDs))
+		zap.Int64s("partitionIDs", req.PartitionIDs), zap.String("indexName", req.IndexName),
+		zap.Int64s("indexIDs", indexIDs))
 	return ret, nil
 }
 

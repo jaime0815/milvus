@@ -3,7 +3,11 @@ package rootcoord
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
+
+	mocktso "github.com/milvus-io/milvus/internal/tso/mocks"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/stretchr/testify/assert"
 
@@ -31,7 +35,7 @@ func TestGarbageCollectorCtx_ReDropCollection(t *testing.T) {
 			releaseCollectionChan <- struct{}{}
 			return nil
 		}
-		broker.DropCollectionIndexFunc = func(ctx context.Context, collID UniqueID) error {
+		broker.DropCollectionIndexFunc = func(ctx context.Context, collID UniqueID, partIDs []UniqueID) error {
 			return errors.New("error mock DropCollectionIndex")
 		}
 		ticker := newTickerWithMockNormalStream()
@@ -54,7 +58,7 @@ func TestGarbageCollectorCtx_ReDropCollection(t *testing.T) {
 		}
 		dropCollectionIndexCalled := false
 		dropCollectionIndexChan := make(chan struct{}, 1)
-		broker.DropCollectionIndexFunc = func(ctx context.Context, collID UniqueID) error {
+		broker.DropCollectionIndexFunc = func(ctx context.Context, collID UniqueID, partIDs []UniqueID) error {
 			dropCollectionIndexCalled = true
 			dropCollectionIndexChan <- struct{}{}
 			return nil
@@ -88,7 +92,7 @@ func TestGarbageCollectorCtx_ReDropCollection(t *testing.T) {
 		}
 		dropCollectionIndexCalled := false
 		dropCollectionIndexChan := make(chan struct{}, 1)
-		broker.DropCollectionIndexFunc = func(ctx context.Context, collID UniqueID) error {
+		broker.DropCollectionIndexFunc = func(ctx context.Context, collID UniqueID, partIDs []UniqueID) error {
 			dropCollectionIndexCalled = true
 			dropCollectionIndexChan <- struct{}{}
 			return nil
@@ -127,7 +131,7 @@ func TestGarbageCollectorCtx_ReDropCollection(t *testing.T) {
 		}
 		dropCollectionIndexCalled := false
 		dropCollectionIndexChan := make(chan struct{}, 1)
-		broker.DropCollectionIndexFunc = func(ctx context.Context, collID UniqueID) error {
+		broker.DropCollectionIndexFunc = func(ctx context.Context, collID UniqueID, partIDs []UniqueID) error {
 			dropCollectionIndexCalled = true
 			dropCollectionIndexChan <- struct{}{}
 			return nil
@@ -164,45 +168,87 @@ func TestGarbageCollectorCtx_ReDropCollection(t *testing.T) {
 
 func TestGarbageCollectorCtx_RemoveCreatingCollection(t *testing.T) {
 	t.Run("failed to UnwatchChannels", func(t *testing.T) {
-		broker := newMockBroker()
-		broker.UnwatchChannelsFunc = func(ctx context.Context, info *watchInfo) error {
-			return errors.New("error mock UnwatchChannels")
+		defer cleanTestEnv()
+
+		shardNum := 2
+
+		ticker := newRocksMqTtSynchronizer()
+		pchans := ticker.getDmlChannelNames(shardNum)
+
+		tsoAllocator := mocktso.NewAllocator(t)
+		tsoAllocator.
+			On("GenerateTSO", mock.AnythingOfType("uint32")).
+			Return(Timestamp(0), errors.New("error mock GenerateTSO"))
+
+		executed := make(chan struct{}, 1)
+		executor := newMockStepExecutor()
+		executor.AddStepsFunc = func(s *stepStack) {
+			s.Execute(context.Background())
+			executed <- struct{}{}
 		}
-		core := newTestCore(withBroker(broker))
+
+		core := newTestCore(withTtSynchronizer(ticker), withTsoAllocator(tsoAllocator), withStepExecutor(executor))
 		gc := newBgGarbageCollector(core)
+		core.ddlTsLockManager = newDdlTsLockManagerV2(tsoAllocator)
 		core.garbageCollector = gc
-		gc.RemoveCreatingCollection(&model.Collection{})
+
+		gc.RemoveCreatingCollection(&model.Collection{PhysicalChannelNames: pchans})
+		<-executed
 	})
 
 	t.Run("failed to RemoveCollection", func(t *testing.T) {
-		broker := newMockBroker()
-		unwatchChannelsCalled := false
-		unwatchChannelsChan := make(chan struct{}, 1)
-		broker.UnwatchChannelsFunc = func(ctx context.Context, info *watchInfo) error {
-			unwatchChannelsCalled = true
-			unwatchChannelsChan <- struct{}{}
-			return nil
+		defer cleanTestEnv()
+
+		shardNum := 2
+
+		ticker := newRocksMqTtSynchronizer()
+		pchans := ticker.getDmlChannelNames(shardNum)
+
+		tsoAllocator := mocktso.NewAllocator(t)
+		tsoAllocator.
+			On("GenerateTSO", mock.AnythingOfType("uint32")).
+			Return(Timestamp(100), nil)
+
+		for _, pchan := range pchans {
+			ticker.syncedTtHistogram.update(pchan, 101)
 		}
+
 		meta := newMockMetaTable()
+		removeCollectionCalled := false
+		removeCollectionChan := make(chan struct{}, 1)
 		meta.RemoveCollectionFunc = func(ctx context.Context, collectionID UniqueID, ts Timestamp) error {
-			return errors.New("error mock RemoveCollection")
+			removeCollectionCalled = true
+			removeCollectionChan <- struct{}{}
+			return fmt.Errorf("error mock RemoveCollection")
 		}
-		core := newTestCore(withBroker(broker), withMeta(meta))
+
+		core := newTestCore(withTtSynchronizer(ticker), withMeta(meta), withTsoAllocator(tsoAllocator))
 		gc := newBgGarbageCollector(core)
-		gc.RemoveCreatingCollection(&model.Collection{})
-		<-unwatchChannelsChan
-		assert.True(t, unwatchChannelsCalled)
+		core.ddlTsLockManager = newDdlTsLockManagerV2(tsoAllocator)
+		core.garbageCollector = gc
+
+		gc.RemoveCreatingCollection(&model.Collection{PhysicalChannelNames: pchans})
+		<-removeCollectionChan
+		assert.True(t, removeCollectionCalled) // though it fail.
 	})
 
 	t.Run("normal case", func(t *testing.T) {
-		broker := newMockBroker()
-		unwatchChannelsCalled := false
-		unwatchChannelsChan := make(chan struct{}, 1)
-		broker.UnwatchChannelsFunc = func(ctx context.Context, info *watchInfo) error {
-			unwatchChannelsCalled = true
-			unwatchChannelsChan <- struct{}{}
-			return nil
+		defer cleanTestEnv()
+
+		shardNum := 2
+
+		ticker := newRocksMqTtSynchronizer()
+		pchans := ticker.getDmlChannelNames(shardNum)
+
+		tsoAllocator := mocktso.NewAllocator(t)
+		tsoAllocator.
+			On("GenerateTSO", mock.AnythingOfType("uint32")).
+			Return(Timestamp(100), nil)
+
+		for _, pchan := range pchans {
+			ticker.syncedTtHistogram.update(pchan, 101)
 		}
+
 		meta := newMockMetaTable()
 		removeCollectionCalled := false
 		removeCollectionChan := make(chan struct{}, 1)
@@ -211,11 +257,13 @@ func TestGarbageCollectorCtx_RemoveCreatingCollection(t *testing.T) {
 			removeCollectionChan <- struct{}{}
 			return nil
 		}
-		core := newTestCore(withBroker(broker), withMeta(meta))
+
+		core := newTestCore(withTtSynchronizer(ticker), withMeta(meta), withTsoAllocator(tsoAllocator))
 		gc := newBgGarbageCollector(core)
-		gc.RemoveCreatingCollection(&model.Collection{})
-		<-unwatchChannelsChan
-		assert.True(t, unwatchChannelsCalled)
+		core.ddlTsLockManager = newDdlTsLockManagerV2(tsoAllocator)
+		core.garbageCollector = gc
+
+		gc.RemoveCreatingCollection(&model.Collection{PhysicalChannelNames: pchans})
 		<-removeCollectionChan
 		assert.True(t, removeCollectionCalled)
 	})
@@ -230,7 +278,7 @@ func TestGarbageCollectorCtx_ReDropPartition(t *testing.T) {
 		tsoAllocator.GenerateTSOF = func(count uint32) (uint64, error) {
 			return 100, nil
 		}
-		core := newTestCore(withTtSynchronizer(ticker), withTsoAllocator(tsoAllocator))
+		core := newTestCore(withTtSynchronizer(ticker), withTsoAllocator(tsoAllocator), withDropIndex())
 		core.ddlTsLockManager = newDdlTsLockManagerV2(core.tsoAllocator)
 		gc := newBgGarbageCollector(core)
 		core.garbageCollector = gc
@@ -249,7 +297,7 @@ func TestGarbageCollectorCtx_ReDropPartition(t *testing.T) {
 		tsoAllocator.GenerateTSOF = func(count uint32) (uint64, error) {
 			return 100, nil
 		}
-		core := newTestCore(withMeta(meta), withTtSynchronizer(ticker), withTsoAllocator(tsoAllocator))
+		core := newTestCore(withMeta(meta), withTtSynchronizer(ticker), withTsoAllocator(tsoAllocator), withDropIndex())
 		core.ddlTsLockManager = newDdlTsLockManagerV2(core.tsoAllocator)
 		gc := newBgGarbageCollector(core)
 		core.garbageCollector = gc
@@ -272,7 +320,7 @@ func TestGarbageCollectorCtx_ReDropPartition(t *testing.T) {
 		tsoAllocator.GenerateTSOF = func(count uint32) (uint64, error) {
 			return 100, nil
 		}
-		core := newTestCore(withMeta(meta), withTtSynchronizer(ticker), withTsoAllocator(tsoAllocator))
+		core := newTestCore(withMeta(meta), withTtSynchronizer(ticker), withTsoAllocator(tsoAllocator), withDropIndex())
 		core.ddlTsLockManager = newDdlTsLockManagerV2(core.tsoAllocator)
 		gc := newBgGarbageCollector(core)
 		core.garbageCollector = gc

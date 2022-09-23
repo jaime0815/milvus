@@ -111,8 +111,11 @@ type unwatchChannelsStep struct {
 }
 
 func (s *unwatchChannelsStep) Execute(ctx context.Context) ([]nestedStep, error) {
-	err := s.core.broker.UnwatchChannels(ctx, &watchInfo{collectionID: s.collectionID, vChannels: s.channels.virtualChannels})
-	return nil, err
+	unwatchByDropMsg := &deleteCollectionDataStep{
+		baseStep: baseStep{core: s.core},
+		coll:     &model.Collection{CollectionID: s.collectionID, PhysicalChannelNames: s.channels.physicalChannels},
+	}
+	return unwatchByDropMsg.Execute(ctx)
 }
 
 func (s *unwatchChannelsStep) Desc() string {
@@ -198,6 +201,8 @@ type waitForTsSyncedStep struct {
 func (s *waitForTsSyncedStep) Execute(ctx context.Context) ([]nestedStep, error) {
 	syncedTs := s.core.chanTimeTick.getSyncedTimeTick(s.channel)
 	if syncedTs < s.ts {
+		// TODO: there may be frequent log here.
+		// time.Sleep(Params.ProxyCfg.TimeTickInterval)
 		return nil, fmt.Errorf("ts not synced yet, channel: %s, synced: %d, want: %d", s.channel, syncedTs, s.ts)
 	}
 	return nil, nil
@@ -250,11 +255,12 @@ func (s *releaseCollectionStep) Weight() stepPriority {
 
 type dropIndexStep struct {
 	baseStep
-	collID UniqueID
+	collID  UniqueID
+	partIDs []UniqueID
 }
 
 func (s *dropIndexStep) Execute(ctx context.Context) ([]nestedStep, error) {
-	err := s.core.broker.DropCollectionIndex(ctx, s.collID)
+	err := s.core.broker.DropCollectionIndex(ctx, s.collID, s.partIDs)
 	return nil, err
 }
 
