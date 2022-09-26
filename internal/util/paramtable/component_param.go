@@ -617,6 +617,7 @@ type queryCoordConfig struct {
 	//---- Task ---
 	RetryNum      int32
 	RetryInterval int64
+	TaskMergeCap  int32
 
 	//---- Handoff ---
 	AutoHandoff bool
@@ -641,6 +642,7 @@ func (p *queryCoordConfig) init(base *BaseTable) {
 	//---- Task ---
 	p.initTaskRetryNum()
 	p.initTaskRetryInterval()
+	p.initTaskMergeCap()
 
 	//---- Handoff ---
 	p.initAutoHandoff()
@@ -664,6 +666,10 @@ func (p *queryCoordConfig) initTaskRetryNum() {
 
 func (p *queryCoordConfig) initTaskRetryInterval() {
 	p.RetryInterval = p.Base.ParseInt64WithDefault("queryCoord.task.retryinterval", int64(10*time.Second))
+}
+
+func (p *queryCoordConfig) initTaskMergeCap() {
+	p.TaskMergeCap = p.Base.ParseInt32WithDefault("queryCoord.taskMergeCap", 2)
 }
 
 func (p *queryCoordConfig) initAutoHandoff() {
@@ -1042,6 +1048,7 @@ type dataCoordConfig struct {
 
 	// --- SEGMENTS ---
 	SegmentMaxSize                 float64
+	DiskSegmentMaxSize             float64
 	SegmentSealProportion          float64
 	SegAssignmentExpiration        int64
 	SegmentMaxLifetime             time.Duration
@@ -1078,6 +1085,7 @@ func (p *dataCoordConfig) init(base *BaseTable) {
 	p.initChannelWatchPrefix()
 
 	p.initSegmentMaxSize()
+	p.initDiskSegmentMaxSize()
 	p.initSegmentSealProportion()
 	p.initSegAssignmentExpiration()
 	p.initSegmentMaxLifetime()
@@ -1106,6 +1114,10 @@ func (p *dataCoordConfig) init(base *BaseTable) {
 
 func (p *dataCoordConfig) initSegmentMaxSize() {
 	p.SegmentMaxSize = p.Base.ParseFloatWithDefault("dataCoord.segment.maxSize", 512.0)
+}
+
+func (p *dataCoordConfig) initDiskSegmentMaxSize() {
+	p.DiskSegmentMaxSize = p.Base.ParseFloatWithDefault("dataCoord.segment.diskSegmentMaxSize", 512.0*4)
 }
 
 func (p *dataCoordConfig) initSegmentSealProportion() {
