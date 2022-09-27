@@ -78,6 +78,7 @@ type IMetaTable interface {
 	ListCollections(ctx context.Context, ts Timestamp) ([]*model.Collection, error)
 	ListAbnormalCollections(ctx context.Context, ts Timestamp) ([]*model.Collection, error)
 	ListCollectionPhysicalChannels() map[typeutil.UniqueID][]string
+	GetCollectionVirtualChannels(colID int64) []string
 	AddPartition(ctx context.Context, partition *model.Partition) error
 	ChangePartitionState(ctx context.Context, collectionID UniqueID, partitionID UniqueID, state pb.PartitionState, ts Timestamp) error
 	RemovePartition(ctx context.Context, collectionID UniqueID, partitionID UniqueID, ts Timestamp) error
@@ -90,10 +91,9 @@ type IMetaTable interface {
 	ListAliasesByID(collID UniqueID) []string
 
 	// TODO: better to accept ctx.
-	// TODO: should GetCollectionNameByID & GetCollectionIDByName also accept ts?
-	GetCollectionNameByID(collID UniqueID) (string, error)                                    // serve for bulk load.
+	GetCollectionNameByID(collID UniqueID) (string, error)                                    // [Deprecated].
 	GetPartitionNameByID(collID UniqueID, partitionID UniqueID, ts Timestamp) (string, error) // serve for bulk load.
-	GetCollectionIDByName(name string) (UniqueID, error)                                      // serve for bulk load.
+	GetCollectionIDByName(name string) (UniqueID, error)                                      // [Deprecated].
 	GetPartitionByName(collID UniqueID, partitionName string, ts Timestamp) (UniqueID, error) // serve for bulk load.
 
 	// TODO: better to accept ctx.
@@ -360,6 +360,18 @@ func (mt *MetaTable) ListCollectionPhysicalChannels() map[typeutil.UniqueID][]st
 	return chanMap
 }
 
+// GetCollectionVirtualChannels returns virtual channels of a given collection.
+func (mt *MetaTable) GetCollectionVirtualChannels(colID int64) []string {
+	mt.ddLock.RLock()
+	defer mt.ddLock.RUnlock()
+	for id, collInfo := range mt.collID2Meta {
+		if id == colID {
+			return common.CloneStringList(collInfo.VirtualChannelNames)
+		}
+	}
+	return nil
+}
+
 func (mt *MetaTable) AddPartition(ctx context.Context, partition *model.Partition) error {
 	mt.ddLock.Lock()
 	defer mt.ddLock.Unlock()
@@ -567,8 +579,9 @@ func (mt *MetaTable) ListAliasesByID(collID UniqueID) []string {
 }
 
 // GetCollectionNameByID serve for bulk load. TODO: why this didn't accept ts?
+// [Deprecated]
 func (mt *MetaTable) GetCollectionNameByID(collID UniqueID) (string, error) {
-	mt.ddLock.RUnlock()
+	mt.ddLock.RLock()
 	defer mt.ddLock.RUnlock()
 
 	coll, ok := mt.collID2Meta[collID]
@@ -581,7 +594,7 @@ func (mt *MetaTable) GetCollectionNameByID(collID UniqueID) (string, error) {
 
 // GetPartitionNameByID serve for bulk load.
 func (mt *MetaTable) GetPartitionNameByID(collID UniqueID, partitionID UniqueID, ts Timestamp) (string, error) {
-	mt.ddLock.RUnlock()
+	mt.ddLock.RLock()
 	defer mt.ddLock.RUnlock()
 
 	coll, ok := mt.collID2Meta[collID]
@@ -612,6 +625,7 @@ func (mt *MetaTable) GetPartitionNameByID(collID UniqueID, partitionID UniqueID,
 }
 
 // GetCollectionIDByName serve for bulk load. TODO: why this didn't accept ts?
+// [Deprecated]
 func (mt *MetaTable) GetCollectionIDByName(name string) (UniqueID, error) {
 	mt.ddLock.RLock()
 	defer mt.ddLock.RUnlock()
