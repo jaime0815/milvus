@@ -72,7 +72,7 @@ func (merger *Merger[K, R]) schedule(ctx context.Context) {
 	merger.wg.Add(1)
 	go func() {
 		defer merger.wg.Done()
-		ticker := time.NewTicker(500 * time.Millisecond)
+		ticker := time.NewTicker(30 * time.Second)
 		for {
 			select {
 			case <-ctx.Done():
