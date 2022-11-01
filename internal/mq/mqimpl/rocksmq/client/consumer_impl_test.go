@@ -15,7 +15,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/milvus-io/milvus/internal/mq/msgstream/mqwrapper"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -25,7 +24,7 @@ func TestConsumer_newConsumer(t *testing.T) {
 	consumer, err := newConsumer(nil, ConsumerOptions{
 		Topic:                       newTopicName(),
 		SubscriptionName:            newConsumerName(),
-		SubscriptionInitialPosition: mqwrapper.SubscriptionPositionEarliest,
+		SubscriptionInitialPosition: SubscriptionPositionEarliest,
 	})
 	assert.Nil(t, consumer)
 	assert.NotNil(t, err)
@@ -63,7 +62,7 @@ func TestConsumer_newConsumer(t *testing.T) {
 	consumer1, err := newConsumer(client, ConsumerOptions{
 		Topic:                       newTopicName(),
 		SubscriptionName:            consumerName,
-		SubscriptionInitialPosition: mqwrapper.SubscriptionPositionEarliest,
+		SubscriptionInitialPosition: SubscriptionPositionEarliest,
 	})
 	assert.NoError(t, err)
 	assert.NotNil(t, consumer1)
@@ -86,7 +85,7 @@ func TestConsumer_newConsumer(t *testing.T) {
 	consumer4, err := getExistedConsumer(client, ConsumerOptions{
 		Topic:                       newTopicName(),
 		SubscriptionName:            newConsumerName(),
-		SubscriptionInitialPosition: mqwrapper.SubscriptionPositionEarliest,
+		SubscriptionInitialPosition: SubscriptionPositionEarliest,
 	}, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, consumer4)
@@ -100,7 +99,7 @@ func TestConsumer_newConsumer(t *testing.T) {
 	consumer6, err := getExistedConsumer(client, ConsumerOptions{
 		Topic:                       newTopicName(),
 		SubscriptionName:            "",
-		SubscriptionInitialPosition: mqwrapper.SubscriptionPositionEarliest,
+		SubscriptionInitialPosition: SubscriptionPositionEarliest,
 	}, nil)
 	assert.Error(t, err)
 	assert.Nil(t, consumer6)
@@ -112,7 +111,7 @@ func TestConsumer_Subscription(t *testing.T) {
 	consumer, err := newConsumer(newMockClient(), ConsumerOptions{
 		Topic:                       topicName,
 		SubscriptionName:            consumerName,
-		SubscriptionInitialPosition: mqwrapper.SubscriptionPositionEarliest,
+		SubscriptionInitialPosition: SubscriptionPositionEarliest,
 	})
 	assert.Nil(t, consumer)
 	assert.NotNil(t, err)
@@ -136,7 +135,7 @@ func TestConsumer_Seek(t *testing.T) {
 	consumer, err := newConsumer(client, ConsumerOptions{
 		Topic:                       topicName,
 		SubscriptionName:            consumerName,
-		SubscriptionInitialPosition: mqwrapper.SubscriptionPositionEarliest,
+		SubscriptionInitialPosition: SubscriptionPositionEarliest,
 	})
 	assert.NoError(t, err)
 	assert.NotNil(t, consumer)

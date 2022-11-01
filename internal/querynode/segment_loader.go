@@ -36,7 +36,6 @@ import (
 	"github.com/milvus-io/milvus/internal/log"
 	"github.com/milvus-io/milvus/internal/metrics"
 	"github.com/milvus-io/milvus/internal/mq/msgstream"
-	"github.com/milvus-io/milvus/internal/mq/msgstream/mqwrapper"
 	"github.com/milvus-io/milvus/internal/proto/datapb"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
 	"github.com/milvus-io/milvus/internal/proto/querypb"
@@ -704,23 +703,20 @@ func (loader *segmentLoader) FromDmlCPLoadDelete(ctx context.Context, collection
 	pChannelName := funcutil.ToPhysicalChannel(position.ChannelName)
 	position.ChannelName = pChannelName
 
+	stream.AsConsumer([]string{pChannelName}, fmt.Sprintf("querynode-%d-%d", Params.QueryNodeCfg.GetNodeID(), collectionID))
 	ts, _ := tsoutil.ParseTS(position.Timestamp)
 
 	// Random the subname in case we trying to load same delta at the same time
 	subName := fmt.Sprintf("querynode-delta-loader-%d-%d-%d", Params.QueryNodeCfg.GetNodeID(), collectionID, rand.Int())
 	log.Info("from dml check point load delete", zap.Any("position", position), zap.String("subName", subName), zap.Time("positionTs", ts))
-	stream.AsConsumer([]string{pChannelName}, subName, mqwrapper.SubscriptionPositionUnknown)
+	stream.AsConsumer([]string{pChannelName}, subName)
 	// make sure seek position is earlier than
 	lastMsgID, err := stream.GetLatestMsgID(pChannelName)
 	if err != nil {
 		return err
 	}
 
-	reachLatest, err := lastMsgID.Equal(position.MsgID)
-	if err != nil {
-		return err
-	}
-
+	reachLatest, _ := lastMsgID.Equal(position.MsgID)
 	if reachLatest || lastMsgID.AtEarliestPosition() {
 		log.Info("there is no more delta msg", zap.Int64("collectionID", collectionID), zap.String("channel", pChannelName))
 		return nil

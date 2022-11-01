@@ -23,7 +23,6 @@ import (
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/milvus-io/milvus/internal/log"
 	rmqimplserver "github.com/milvus-io/milvus/internal/mq/mqimpl/rocksmq/server"
-	"github.com/milvus-io/milvus/internal/mq/msgstream/mqwrapper"
 	kafkawrapper "github.com/milvus-io/milvus/internal/mq/msgstream/mqwrapper/kafka"
 	puslarmqwrapper "github.com/milvus-io/milvus/internal/mq/msgstream/mqwrapper/pulsar"
 	rmqwrapper "github.com/milvus-io/milvus/internal/mq/msgstream/mqwrapper/rmq"
@@ -104,7 +103,7 @@ func (f *PmsFactory) NewMsgStreamDisposer(ctx context.Context) func([]string, st
 				if err != nil {
 					return err
 				}
-				msgstream.AsConsumer(channels, subname, mqwrapper.SubscriptionPositionUnknown)
+				msgstream.AsConsumer([]string{channel}, subname)
 				msgstream.Close()
 			}
 		}
@@ -153,7 +152,7 @@ func (f *RmsFactory) NewMsgStreamDisposer(ctx context.Context) func([]string, st
 		if err != nil {
 			return err
 		}
-		msgstream.AsConsumer(channels, subname, mqwrapper.SubscriptionPositionUnknown)
+		msgstream.AsConsumer(channels, subname)
 		msgstream.Close()
 		return nil
 	}
@@ -200,7 +199,7 @@ func (f *KmsFactory) NewMsgStreamDisposer(ctx context.Context) func([]string, st
 		if err != nil {
 			return err
 		}
-		msgstream.AsConsumer(channels, subname, mqwrapper.SubscriptionPositionUnknown)
+		msgstream.AsConsumer(channels, subname)
 		msgstream.Close()
 		return nil
 	}

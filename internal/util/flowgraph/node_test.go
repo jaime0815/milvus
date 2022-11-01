@@ -27,7 +27,6 @@ import (
 
 	"github.com/milvus-io/milvus-proto/go-api/commonpb"
 	"github.com/milvus-io/milvus/internal/mq/msgstream"
-	"github.com/milvus-io/milvus/internal/mq/msgstream/mqwrapper"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
 	"github.com/milvus-io/milvus/internal/util/dependency"
 )
@@ -62,7 +61,7 @@ func TestNodeCtx_Start(t *testing.T) {
 
 	msgStream, _ := factory.NewMsgStream(context.TODO())
 	channels := []string{"cc"}
-	msgStream.AsConsumer(channels, "sub", mqwrapper.SubscriptionPositionEarliest)
+	msgStream.AsConsumer(channels, "sub")
 
 	produceStream, _ := factory.NewMsgStream(context.TODO())
 	produceStream.AsProducer(channels)

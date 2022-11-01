@@ -328,7 +328,7 @@ func (w *watchDmChannelsTask) initFlowGraph(ctx context.Context, collectionID Un
 			pos.MsgGroup = consumeSubName
 			// use pChannel to seek
 			pos.ChannelName = VPChannels[channel]
-			err = fg.consumeFlowGraphFromPosition(pos)
+			err = fg.seekQueryNodeFlowGraph(pos)
 			if err != nil {
 				log.Error("msgStream seek failed for dmChannels", zap.Int64("collectionID", collectionID), zap.String("vChannel", channel))
 				break

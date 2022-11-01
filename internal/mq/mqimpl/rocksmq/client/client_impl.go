@@ -16,7 +16,6 @@ import (
 	"sync"
 
 	"github.com/milvus-io/milvus/internal/mq/mqimpl/rocksmq/server"
-	"github.com/milvus-io/milvus/internal/mq/msgstream/mqwrapper"
 
 	"github.com/milvus-io/milvus/internal/log"
 	"go.uber.org/zap"
@@ -84,7 +83,7 @@ func (c *client) Subscribe(options ConsumerOptions) (Consumer, error) {
 		if err != nil {
 			return nil, err
 		}
-		if options.SubscriptionInitialPosition == mqwrapper.SubscriptionPositionLatest {
+		if options.SubscriptionInitialPosition == SubscriptionPositionLatest {
 			err = c.server.SeekToLatest(options.Topic, options.SubscriptionName)
 			if err != nil {
 				return nil, err
@@ -103,7 +102,7 @@ func (c *client) Subscribe(options ConsumerOptions) (Consumer, error) {
 		return nil, err
 	}
 
-	if options.SubscriptionInitialPosition == mqwrapper.SubscriptionPositionLatest {
+	if options.SubscriptionInitialPosition == SubscriptionPositionLatest {
 		err = c.server.SeekToLatest(options.Topic, options.SubscriptionName)
 		if err != nil {
 			return nil, err

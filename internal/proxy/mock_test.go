@@ -256,7 +256,10 @@ func (ms *simpleMockMsgStream) Chan() <-chan *msgstream.MsgPack {
 func (ms *simpleMockMsgStream) AsProducer(channels []string) {
 }
 
-func (ms *simpleMockMsgStream) AsConsumer(channels []string, subName string, position mqwrapper.SubscriptionInitialPosition) {
+func (ms *simpleMockMsgStream) AsConsumer(channels []string, subName string) {
+}
+
+func (ms *simpleMockMsgStream) AsConsumerWithPosition(channels []string, subName string, position mqwrapper.SubscriptionInitialPosition) {
 }
 
 func (ms *simpleMockMsgStream) ComputeProduceChannelIndexes(tsMsgs []msgstream.TsMsg) [][]int32 {

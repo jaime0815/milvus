@@ -22,7 +22,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/milvus-io/milvus/internal/mq/msgstream/mqwrapper"
 	"github.com/milvus-io/milvus/internal/util/dependency"
 )
 
@@ -32,7 +31,7 @@ func TestInputNode(t *testing.T) {
 
 	msgStream, _ := factory.NewMsgStream(context.TODO())
 	channels := []string{"cc"}
-	msgStream.AsConsumer(channels, "sub", mqwrapper.SubscriptionPositionEarliest)
+	msgStream.AsConsumer(channels, "sub")
 	msgStream.Start()
 
 	msgPack := generateMsgPack()

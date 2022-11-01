@@ -65,7 +65,8 @@ type MsgStream interface {
 	Broadcast(*MsgPack) error
 	BroadcastMark(*MsgPack) (map[string][]MessageID, error)
 
-	AsConsumer(channels []string, subName string, position mqwrapper.SubscriptionInitialPosition)
+	AsConsumer(channels []string, subName string)
+	AsConsumerWithPosition(channels []string, subName string, position mqwrapper.SubscriptionInitialPosition)
 	Chan() <-chan *MsgPack
 	Seek(offset []*MsgPosition) error
 
