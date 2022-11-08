@@ -117,13 +117,6 @@ func startSendTT(ctx context.Context, msgStream msgstream.MsgStream, chanName st
 	log.Info("waiting for produce finished")
 	g.Wait()
 
-	msgID, err := msgStream.GetLatestMsgID(chanName)
-	if err != nil {
-		panic(err)
-	}
-	log.Info("produce channel latest msg id",
-		zap.Any("latest msg id", msgID.String()))
-
 	log.Info("produce message finished", zap.Int("msgCount", msgCount), zap.Any("time taken", tr.ElapseSpan()))
 }
 
