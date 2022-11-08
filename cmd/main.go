@@ -20,8 +20,11 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"os"
 	"sync/atomic"
 	"time"
+
+	"github.com/milvus-io/milvus/cmd/milvus"
 
 	"github.com/milvus-io/milvus/internal/util/timerecord"
 
@@ -38,6 +41,8 @@ import (
 	"github.com/milvus-io/milvus/internal/util/dependency"
 	"github.com/milvus-io/milvus/internal/util/paramtable"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
+
+	_ "net/http/pprof"
 )
 
 func ConsumePerfTest(ctx context.Context, msgStream msgstream.MsgStream, chanName string, msgCount int) {
@@ -64,7 +69,7 @@ func ConsumePerfTest(ctx context.Context, msgStream msgstream.MsgStream, chanNam
 			count2++
 		}
 	}
-	log.Info("consumer perf finished", zap.Any("time taken", tr.ElapseSpan()))
+	log.Info("consumer perf finished", zap.Any("consume count", count2), zap.Any("time taken", tr.ElapseSpan()))
 }
 
 func startSendTT(ctx context.Context, msgStream msgstream.MsgStream, chanName string, msgCount int) {
@@ -147,7 +152,6 @@ func (c *count64) get() int64 {
 }
 
 func newStream(ctx context.Context) msgstream.MsgStream {
-	paramtable.Init()
 	factory := dependency.NewFactory(true)
 	Params := paramtable.Get()
 	factory.Init(Params)
@@ -215,6 +219,12 @@ func runProducePerfTest(msgCount int) {
 }
 
 func main() {
-	runConsumePerfTest(500000)
-	runProducePerfTest(100000)
+	milvus.RunMilvus(os.Args)
+
+	go func() {
+		log.Info("start to test mq====")
+		paramtable.Init()
+		runConsumePerfTest(500000)
+		runProducePerfTest(100000)
+	}()
 }
