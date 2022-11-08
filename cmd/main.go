@@ -20,11 +20,8 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"os"
 	"sync/atomic"
 	"time"
-
-	"github.com/milvus-io/milvus/cmd/milvus"
 
 	"github.com/milvus-io/milvus/internal/util/timerecord"
 
@@ -219,12 +216,9 @@ func runProducePerfTest(msgCount int) {
 }
 
 func main() {
-	milvus.RunMilvus(os.Args)
-
-	go func() {
-		log.Info("start to test mq====")
-		paramtable.Init()
-		runConsumePerfTest(500000)
-		runProducePerfTest(100000)
-	}()
+	log.Info("start to test mq====")
+	paramtable.Init()
+	runConsumePerfTest(500000)
+	time.Sleep(5 * time.Second)
+	runProducePerfTest(100000)
 }

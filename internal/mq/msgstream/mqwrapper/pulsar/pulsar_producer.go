@@ -43,5 +43,9 @@ func (pp *pulsarProducer) Send(ctx context.Context, message *mqwrapper.ProducerM
 }
 
 func (pp *pulsarProducer) Close() {
+	err := pp.p.Flush()
+	if err != nil {
+		panic(err)
+	}
 	pp.p.Close()
 }
