@@ -198,8 +198,8 @@ func (kc *Consumer) internalSeek(offset kafka.Offset, inclusive bool) error {
 }
 
 func (kc *Consumer) Ack(message mqwrapper.Message) {
-	//kafkaMsg, _ := message.(*kafkaMessage)
-	//kc.c.CommitMessage(kafkaMsg.msg)
+	kafkaMsg, _ := message.(*kafkaMessage)
+	kc.c.CommitMessage(kafkaMsg.msg)
 }
 
 func (kc *Consumer) GetLatestMsgID() (mqwrapper.MessageID, error) {

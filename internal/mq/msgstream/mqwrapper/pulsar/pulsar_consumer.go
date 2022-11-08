@@ -106,8 +106,8 @@ func (pc *Consumer) Seek(id mqwrapper.MessageID, inclusive bool) error {
 
 // Ack the consumption of a single message
 func (pc *Consumer) Ack(message mqwrapper.Message) {
-	//pm := message.(*pulsarMessage)
-	//pc.c.Ack(pm.msg)
+	pm := message.(*pulsarMessage)
+	pc.c.Ack(pm.msg)
 }
 
 // Close the consumer and stop the broker to push more messages
