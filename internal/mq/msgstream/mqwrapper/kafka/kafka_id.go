@@ -36,3 +36,7 @@ func SerializeKafkaID(messageID int64) []byte {
 func DeserializeKafkaID(messageID []byte) int64 {
 	return int64(common.Endian.Uint64(messageID))
 }
+
+func (kid *kafkaID) String() string {
+	return ""
+}

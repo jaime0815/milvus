@@ -125,6 +125,10 @@ func (m2 mockMsgID) Serialize() []byte {
 	return nil
 }
 
+func (m2 mockMsgID) String() string {
+	return ""
+}
+
 func TestKafkaConsumer_SeekAfterChan(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	groupID := fmt.Sprintf("test-groupid-%d", rand.Int())

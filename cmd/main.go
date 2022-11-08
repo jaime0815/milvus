@@ -46,6 +46,13 @@ func ConsumePerfTest(ctx context.Context, msgStream msgstream.MsgStream, chanNam
 	subName := fmt.Sprintf("subName-%d", rand.Int())
 	msgStream.AsConsumer([]string{chanName}, subName, mqwrapper.SubscriptionPositionEarliest)
 
+	msgID, err := msgStream.GetLatestMsgID(chanName)
+	if err != nil {
+		panic(err)
+	}
+	log.Info("start consume channel latest msg id",
+		zap.Any("latest msg id", msgID.String()))
+
 	tr := timerecord.NewTimeRecorder("produce")
 	ticker := time.Tick(time.Second * 60)
 	count := 0
@@ -55,6 +62,13 @@ func ConsumePerfTest(ctx context.Context, msgStream msgstream.MsgStream, chanNam
 		case <-ctx.Done():
 			return
 		case <-ticker:
+			msgID, err := msgStream.GetLatestMsgID(chanName)
+			if err != nil {
+				panic(err)
+			}
+			log.Info("start consume channel latest msg id",
+				zap.Any("latest msg id", msgID.String()))
+
 			log.Info("consume time ticker",
 				zap.Any("msg count/minutes", count),
 				zap.Any("consume count", count2))
@@ -102,6 +116,14 @@ func startSendTT(ctx context.Context, msgStream msgstream.MsgStream, chanName st
 
 	log.Info("waiting for produce finished")
 	g.Wait()
+
+	msgID, err := msgStream.GetLatestMsgID(chanName)
+	if err != nil {
+		panic(err)
+	}
+	log.Info("produce channel latest msg id",
+		zap.Any("latest msg id", msgID.String()))
+
 	log.Info("produce message finished", zap.Int("msgCount", msgCount), zap.Any("time taken", tr.ElapseSpan()))
 }
 

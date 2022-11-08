@@ -811,6 +811,10 @@ func (m2 *mockMsgID) AtEarliestPosition() bool {
 	return args.Get(0).(bool)
 }
 
+func (m2 *mockMsgID) String() string {
+	return ""
+}
+
 func (m2 *mockMsgID) LessOrEqualThan(msgID []byte) (bool, error) {
 	args := m2.Called()
 	ret := args.Get(0)

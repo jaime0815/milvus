@@ -26,4 +26,6 @@ type MessageID interface {
 	LessOrEqualThan(msgID []byte) (bool, error)
 
 	Equal(msgID []byte) (bool, error)
+
+	String() string
 }

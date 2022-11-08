@@ -17,6 +17,7 @@
 package pulsar
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/milvus-io/milvus/internal/mq/msgstream/mqwrapper"
@@ -73,6 +74,11 @@ func (pid *pulsarID) Equal(msgID []byte) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func (pid *pulsarID) String() string {
+	return fmt.Sprintf("ledgerID:%d, entryID:%d, batchID:%d",
+		pid.messageID.LedgerID(), pid.messageID.EntryID(), pid.messageID.BatchIdx())
 }
 
 // SerializePulsarMsgID returns the serialized message ID

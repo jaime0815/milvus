@@ -49,6 +49,10 @@ func (rid *rmqID) Equal(msgID []byte) (bool, error) {
 	return rid.messageID == rMsgID, nil
 }
 
+func (rid *rmqID) String() string {
+	return ""
+}
+
 // SerializeRmqID is used to serialize a message ID to byte array
 func SerializeRmqID(messageID int64) []byte {
 	b := make([]byte, 8)
