@@ -19,6 +19,9 @@ package pulsar
 import (
 	"context"
 
+	"github.com/milvus-io/milvus/internal/log"
+	"go.uber.org/zap"
+
 	"github.com/milvus-io/milvus/internal/mq/msgstream/mqwrapper"
 
 	"github.com/apache/pulsar-client-go/pulsar"
@@ -39,6 +42,10 @@ func (pp *pulsarProducer) Topic() string {
 func (pp *pulsarProducer) Send(ctx context.Context, message *mqwrapper.ProducerMessage) (mqwrapper.MessageID, error) {
 	ppm := &pulsar.ProducerMessage{Payload: message.Payload, Properties: message.Properties}
 	pmID, err := pp.p.Send(ctx, ppm)
+
+	log.RatedInfo(60.0, "pulsar produce msg", zap.Any("p", pmID.PartitionIdx()),
+		zap.Any("ledger", pmID.LedgerID()), zap.Any("entryID", pmID.EntryID()), zap.Any("batchID", pmID.BatchIdx()))
+
 	return &pulsarID{messageID: pmID}, err
 }
 
