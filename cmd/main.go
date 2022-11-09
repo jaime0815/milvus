@@ -25,8 +25,6 @@ import (
 
 	"github.com/milvus-io/milvus/internal/util/timerecord"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/milvus-io/milvus/internal/log"
 	"go.uber.org/zap"
 
@@ -89,12 +87,11 @@ func startSendTT(ctx context.Context, msgStream msgstream.MsgStream, chanName st
 
 	var count count64 = 0
 	ticker := time.Tick(time.Second * 60)
-	g, gctx := errgroup.WithContext(ctx)
 
 	go func() {
 		for {
 			select {
-			case <-gctx.Done():
+			case <-ctx.Done():
 				log.Info("startSendTT over")
 				return
 			case <-ticker:
@@ -104,19 +101,10 @@ func startSendTT(ctx context.Context, msgStream msgstream.MsgStream, chanName st
 	}()
 
 	tr := timerecord.NewTimeRecorder("produce")
-	for i := 0; i < 100; i++ {
-		g.Go(func() error {
-			for i := 0; i < msgCount/100; i++ {
-				sendTimeTickToChannel(msgStream, uint64(ts))
-				count.inc()
-			}
-			return nil
-		})
+	for i := 0; i < msgCount; i++ {
+		sendTimeTickToChannel(msgStream, uint64(ts))
+		count.inc()
 	}
-
-	log.Info("waiting for produce finished")
-	g.Wait()
-
 	log.Info("produce message finished", zap.Int("msgCount", msgCount), zap.Any("time taken", tr.ElapseSpan()))
 }
 
