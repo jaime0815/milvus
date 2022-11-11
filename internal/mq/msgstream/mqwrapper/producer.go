@@ -45,5 +45,7 @@ type Producer interface {
 	// publish a message
 	Send(ctx context.Context, message *ProducerMessage) (MessageID, error)
 
+	SendBatch(ctx context.Context, messages []*ProducerMessage) ([]MessageID, error)
+
 	Close()
 }

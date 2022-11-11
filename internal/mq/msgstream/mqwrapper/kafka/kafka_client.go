@@ -18,9 +18,15 @@ var once sync.Once
 
 type kafkaClient struct {
 	// more configs you can see https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
-	basicConfig    kafka.ConfigMap
-	consumerConfig kafka.ConfigMap
-	producerConfig kafka.ConfigMap
+	basicConfig            kafka.ConfigMap
+	consumerConfig         kafka.ConfigMap
+	producerConfig         kafka.ConfigMap
+	topicName2deliveryChan sync.Map
+}
+
+type deliveryResult struct {
+	msgOffset int64
+	err       error
 }
 
 func getBasicConfig(address string) kafka.ConfigMap {
@@ -43,7 +49,13 @@ func NewKafkaClientInstanceWithConfigMap(config kafka.ConfigMap, extraConsumerCo
 		zap.String("extraConsumerConfig", fmt.Sprintf("+%v", extraConsumerConfig)),
 		zap.String("extraProducerConfig", fmt.Sprintf("+%v", extraProducerConfig)),
 	)
-	return &kafkaClient{basicConfig: config, consumerConfig: extraConsumerConfig, producerConfig: extraProducerConfig}
+
+	return &kafkaClient{
+		basicConfig:            config,
+		consumerConfig:         extraConsumerConfig,
+		producerConfig:         extraProducerConfig,
+		topicName2deliveryChan: sync.Map{},
+	}
 }
 
 func NewKafkaClientInstanceWithConfig(config *paramtable.KafkaConfig) *kafkaClient {
@@ -90,6 +102,14 @@ func (kc *kafkaClient) getKafkaProducer() (*kafka.Producer, error) {
 		go func() {
 			for e := range Producer.Events() {
 				switch ev := e.(type) {
+				case *kafka.Message:
+					deliveryChan := kc.getOrCreateDeliveryChan(*ev.TopicPartition.Topic)
+					if ev.TopicPartition.Error != nil {
+						log.Error("kafka producer delivery failed,", zap.Error(ev.TopicPartition.Error))
+						deliveryChan <- &deliveryResult{0, ev.TopicPartition.Error}
+					} else {
+						deliveryChan <- &deliveryResult{int64(ev.TopicPartition.Offset), nil}
+					}
 				case kafka.Error:
 					// Generic client instance-level errors, such as broker connection failures,
 					// authentication issues, etc.
@@ -106,21 +126,21 @@ func (kc *kafkaClient) getKafkaProducer() (*kafka.Producer, error) {
 		}()
 	})
 
-	if err != nil {
-		log.Error("create sync kafka producer failed", zap.Error(err))
-		return nil, err
-	}
-
-	return Producer, nil
+	return Producer, err
 }
 
 func (kc *kafkaClient) newProducerConfig() *kafka.ConfigMap {
 	newConf := cloneKafkaConfig(kc.basicConfig)
 	// default max message size 5M
 	newConf.SetKey("message.max.bytes", 10485760)
-	newConf.SetKey("compression.codec", "zstd")
+	newConf.SetKey("compression.codec", "snappy")
 	// we want to ensure tt send out as soon as possible
 	newConf.SetKey("linger.ms", 2)
+	newConf.SetKey("go.batch.producer", true)
+	newConf.SetKey("batch.num.messages", 200)
+	newConf.SetKey("queue.buffering.max.messages", 1000)
+
+	//queue.buffering.max.ms or batch.num.messages (whichever is reached first) to create a batch that is then sent to the broker.
 
 	//special producer config
 	kc.specialExtraConfig(newConf, kc.producerConfig)
@@ -148,9 +168,7 @@ func (kc *kafkaClient) CreateProducer(options mqwrapper.ProducerOptions) (mqwrap
 		return nil, err
 	}
 
-	deliveryChan := make(chan kafka.Event, 128)
-	producer := &kafkaProducer{p: pp, deliveryChan: deliveryChan, topic: options.Topic}
-	return producer, nil
+	return NewKafkaProducer(pp, options.Topic, kc), nil
 }
 
 func (kc *kafkaClient) Subscribe(options mqwrapper.ConsumerOptions) (mqwrapper.Consumer, error) {
@@ -188,6 +206,18 @@ func (kc *kafkaClient) specialExtraConfig(current *kafka.ConfigMap, special kafk
 func (kc *kafkaClient) BytesToMsgID(id []byte) (mqwrapper.MessageID, error) {
 	offset := DeserializeKafkaID(id)
 	return &kafkaID{messageID: offset}, nil
+}
+
+func (kc *kafkaClient) getOrCreateDeliveryChan(topic string) chan *deliveryResult {
+	deliveryChan, _ := kc.topicName2deliveryChan.LoadOrStore(topic, make(chan *deliveryResult, 1000))
+	return deliveryChan.(chan *deliveryResult)
+}
+
+func (kc *kafkaClient) removeDeliveryChan(topic string) {
+	deliveryChan, ok := kc.topicName2deliveryChan.LoadAndDelete(topic)
+	if ok {
+		close(deliveryChan.(chan *deliveryResult))
+	}
 }
 
 func (kc *kafkaClient) Close() {

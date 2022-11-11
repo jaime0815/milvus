@@ -260,9 +260,8 @@ func (ms *mqMsgStream) Produce(msgPack *MsgPack) error {
 	}
 	for k, v := range result {
 		channel := ms.producerChannels[k]
+		msgs := make([]*mqwrapper.ProducerMessage, 0, len(v.Msgs))
 		for i := 0; i < len(v.Msgs); i++ {
-			sp, spanCtx := MsgSpanFromCtx(v.Msgs[i].TraceCtx(), v.Msgs[i])
-
 			mb, err := v.Msgs[i].Marshal(v.Msgs[i])
 			if err != nil {
 				return err
@@ -274,22 +273,16 @@ func (ms *mqMsgStream) Produce(msgPack *MsgPack) error {
 			}
 
 			msg := &mqwrapper.ProducerMessage{Payload: m, Properties: map[string]string{}}
-
-			trace.InjectContextToPulsarMsgProperties(sp.Context(), msg.Properties)
-
-			ms.producerLock.Lock()
-			if _, err := ms.producers[channel].Send(
-				spanCtx,
-				msg,
-			); err != nil {
-				ms.producerLock.Unlock()
-				trace.LogError(sp, err)
-				sp.Finish()
-				return err
-			}
-			sp.Finish()
-			ms.producerLock.Unlock()
+			msgs = append(msgs, msg)
 		}
+
+		ms.producerLock.Lock()
+		_, err = ms.producers[channel].SendBatch(v.Msgs[0].TraceCtx(), msgs)
+		if err != nil {
+			ms.producerLock.Unlock()
+			return err
+		}
+		ms.producerLock.Unlock()
 	}
 	return nil
 }

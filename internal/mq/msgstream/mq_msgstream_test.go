@@ -1847,6 +1847,10 @@ func (p *mockSendFailProducer) Send(_ context.Context, _ *mqwrapper.ProducerMess
 	return nil, errors.New("mocked error")
 }
 
+func (p *mockSendFailProducer) SendBatch(ctx context.Context, messages []*mqwrapper.ProducerMessage) ([]mqwrapper.MessageID, error) {
+	return nil, errors.New("mocked error")
+}
+
 /* ========================== Utility functions ========================== */
 func repackFunc(msgs []TsMsg, hashKeys [][]int32) (map[int32]*MsgPack, error) {
 	result := make(map[int32]*MsgPack)

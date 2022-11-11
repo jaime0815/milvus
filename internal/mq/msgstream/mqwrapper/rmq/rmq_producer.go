@@ -13,6 +13,9 @@ package rmq
 
 import (
 	"context"
+	"errors"
+
+	"github.com/milvus-io/milvus/internal/util/errorutil"
 
 	"github.com/milvus-io/milvus/internal/mq/mqimpl/rocksmq/client"
 
@@ -36,6 +39,26 @@ func (rp *rmqProducer) Send(ctx context.Context, message *mqwrapper.ProducerMess
 	pm := &client.ProducerMessage{Payload: message.Payload}
 	id, err := rp.p.Send(pm)
 	return &rmqID{messageID: id}, err
+}
+
+// SendBatch TODO support batch write
+func (rp *rmqProducer) SendBatch(ctx context.Context, messages []*mqwrapper.ProducerMessage) ([]mqwrapper.MessageID, error) {
+	msgIDs := make([]mqwrapper.MessageID, 0, len(messages))
+	errs := make(errorutil.ErrorList, 0, len(messages))
+
+	for _, message := range messages {
+		pm := &client.ProducerMessage{Payload: message.Payload}
+		id, err := rp.p.Send(pm)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		msgIDs = append(msgIDs, &rmqID{messageID: id})
+	}
+
+	if len(errs) != 0 {
+		return msgIDs, errors.New(errs.Error())
+	}
+	return msgIDs, nil
 }
 
 // Close does nothing currently

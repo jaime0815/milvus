@@ -18,6 +18,10 @@ package pulsar
 
 import (
 	"context"
+	"errors"
+	"sync"
+
+	"github.com/milvus-io/milvus/internal/util/errorutil"
 
 	"github.com/milvus-io/milvus/internal/mq/msgstream/mqwrapper"
 
@@ -40,6 +44,34 @@ func (pp *pulsarProducer) Send(ctx context.Context, message *mqwrapper.ProducerM
 	ppm := &pulsar.ProducerMessage{Payload: message.Payload, Properties: message.Properties}
 	pmID, err := pp.p.Send(ctx, ppm)
 	return &pulsarID{messageID: pmID}, err
+}
+
+func (pp *pulsarProducer) SendBatch(ctx context.Context, messages []*mqwrapper.ProducerMessage) ([]mqwrapper.MessageID, error) {
+	msgIDs := make([]mqwrapper.MessageID, 0, len(messages))
+	errs := make(errorutil.ErrorList, 0, len(messages))
+
+	wg := sync.WaitGroup{}
+	wg.Add(len(messages))
+
+	for _, message := range messages {
+		ppm := &pulsar.ProducerMessage{Payload: message.Payload, Properties: message.Properties}
+		pp.p.SendAsync(ctx, ppm, func(id pulsar.MessageID, message *pulsar.ProducerMessage, err error) {
+			if err != nil {
+				errs = append(errs, err)
+			} else {
+				msgIDs = append(msgIDs, &pulsarID{messageID: id})
+			}
+			wg.Done()
+			return
+		})
+	}
+
+	wg.Wait()
+	if len(errs) != 0 {
+		return msgIDs, errors.New(errs.Error())
+	}
+
+	return msgIDs, nil
 }
 
 func (pp *pulsarProducer) Close() {
