@@ -12,20 +12,16 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"go.uber.org/zap"
 
+	"github.com/milvus-io/milvus/internal/common"
 	"github.com/milvus-io/milvus/internal/log"
 	"github.com/milvus-io/milvus/internal/mq/msgstream/mqwrapper"
 )
 
 type kafkaProducer struct {
-	p         *kafka.Producer
-	topic     string
-	closeOnce sync.Once
-	client    *kafkaClient
-}
-
-func NewKafkaProducer(p *kafka.Producer, topic string, client *kafkaClient) *kafkaProducer {
-	kp := &kafkaProducer{p: p, client: client, topic: topic}
-	return kp
+	p            *kafka.Producer
+	topic        string
+	deliveryChan chan kafka.Event
+	closeOnce    sync.Once
 }
 
 func (kp *kafkaProducer) Topic() string {
@@ -33,45 +29,69 @@ func (kp *kafkaProducer) Topic() string {
 }
 
 func (kp *kafkaProducer) SendBatch(ctx context.Context, messages []*mqwrapper.ProducerMessage) ([]mqwrapper.MessageID, error) {
-	ch := kp.client.getOrCreateDeliveryChan(kp.topic)
+	retCount := len(messages)
+	errs := make(errorutil.ErrorList, 0, retCount)
+
 	for _, message := range messages {
-		kp.p.ProduceChannel() <- &kafka.Message{
+		err := kp.p.Produce(&kafka.Message{
 			TopicPartition: kafka.TopicPartition{Topic: &kp.topic, Partition: mqwrapper.DefaultPartitionIdx},
 			Value:          message.Payload,
+		}, kp.deliveryChan)
+
+		if err != nil {
+			errs = append(errs, err)
 		}
 	}
 
-	retSize := len(messages)
-	msgIDs := make([]mqwrapper.MessageID, 0, retSize)
-	errs := make(errorutil.ErrorList, 0, retSize)
-
-	for ret := range ch {
-		msgIDs = append(msgIDs, &kafkaID{messageID: ret.msgOffset})
-		if ret.err != nil {
-			errs = append(errs, ret.err)
-		}
-
-		if len(msgIDs) == retSize {
-			if len(errs) != 0 {
-				return msgIDs, errors.New(errs.Error())
-			}
-			return msgIDs, nil
-		}
+	if len(errs) != 0 {
+		return nil, errors.New(errs.Error())
 	}
 
-	return nil, fmt.Errorf("kafka send batch failed, topic:%s", kp.topic)
+	rets, err := kp.collectRets(retCount)
+	if err != nil {
+		return nil, err
+	}
+
+	return rets, nil
 }
 
 func (kp *kafkaProducer) Send(ctx context.Context, message *mqwrapper.ProducerMessage) (mqwrapper.MessageID, error) {
-	ch := kp.client.getOrCreateDeliveryChan(kp.topic)
-
-	kp.p.ProduceChannel() <- &kafka.Message{
+	err := kp.p.Produce(&kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &kp.topic, Partition: mqwrapper.DefaultPartitionIdx},
 		Value:          message.Payload,
+	}, kp.deliveryChan)
+
+	if err != nil {
+		return nil, err
 	}
 
-	ret := <-ch
-	return &kafkaID{messageID: ret.msgOffset}, ret.err
+	rets, err := kp.collectRets(1)
+	if err != nil {
+		return nil, err
+	}
+
+	return rets[0], nil
+}
+
+func (kp *kafkaProducer) collectRets(count int) ([]mqwrapper.MessageID, error) {
+	i := 0
+	msgIDs := make([]mqwrapper.MessageID, count)
+	for i != count {
+		e, ok := <-kp.deliveryChan
+		if !ok {
+			log.Error("kafka produce message fail because of delivery chan is closed", zap.String("topic", kp.topic))
+			return nil, common.NewIgnorableError(fmt.Errorf("delivery chan of kafka producer is closed"))
+		}
+
+		m := e.(*kafka.Message)
+		if m.TopicPartition.Error != nil {
+			return nil, m.TopicPartition.Error
+		}
+
+		msgIDs[i] = &kafkaID{messageID: int64(m.TopicPartition.Offset)}
+		i++
+	}
+	return msgIDs, nil
 }
 
 func (kp *kafkaProducer) Close() {
@@ -80,7 +100,7 @@ func (kp *kafkaProducer) Close() {
 		//flush in-flight msg within queue.
 		kp.p.Flush(10000)
 
-		kp.client.removeDeliveryChan(kp.topic)
+		close(kp.deliveryChan)
 
 		cost := time.Since(start).Milliseconds()
 		if cost > 500 {
