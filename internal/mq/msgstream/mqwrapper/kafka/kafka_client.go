@@ -120,7 +120,7 @@ func (kc *kafkaClient) newProducerConfig() *kafka.ConfigMap {
 	newConf.SetKey("message.max.bytes", 10485760)
 	newConf.SetKey("compression.codec", "snappy")
 	// we want to ensure tt send out as soon as possible
-	newConf.SetKey("linger.ms", 2)
+	newConf.SetKey("linger.ms", 0)
 	newConf.SetKey("batch.size", 128)
 	//special producer config
 	kc.specialExtraConfig(newConf, kc.producerConfig)
