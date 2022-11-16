@@ -118,9 +118,10 @@ func (kc *kafkaClient) newProducerConfig() *kafka.ConfigMap {
 	newConf := cloneKafkaConfig(kc.basicConfig)
 	// default max message size 5M
 	newConf.SetKey("message.max.bytes", 10485760)
-	newConf.SetKey("compression.codec", "zstd")
+	newConf.SetKey("compression.codec", "snappy")
 	// we want to ensure tt send out as soon as possible
-	newConf.SetKey("linger.ms", 2)
+	newConf.SetKey("linger.ms", 0)
+	newConf.SetKey("batch.size", 64)
 
 	//special producer config
 	kc.specialExtraConfig(newConf, kc.producerConfig)
