@@ -21,6 +21,7 @@ import java.util.stream.Collectors;
  * Utility functions for param classes
  */
 public class ParamUtils {
+
     public static HashMap<DataType, String> getTypeErrorMsg() {
         final HashMap<DataType, String> typeErrMsg = new HashMap<>();
         typeErrMsg.put(DataType.None, "Type mismatch for field '%s': the field type is illegal");
