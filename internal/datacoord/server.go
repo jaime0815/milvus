@@ -572,6 +572,7 @@ func (s *Server) handleTimetickMessage(ctx context.Context, ttMsg *msgstream.Dat
 	flushableSegments := s.getFlushableSegmentsInfo(flushableIDs)
 
 	if len(flushableSegments) == 0 {
+		log.Info("=== skip flushing segments")
 		return nil
 	}
 
@@ -899,6 +900,8 @@ func (s *Server) loadCollectionFromRootCoord(ctx context.Context, collectionID i
 		StartPositions: resp.GetStartPositions(),
 		Properties:     properties,
 	}
+	log.Info("====loadCollectionFromRootCoord", zap.String("collectionName", resp.Schema.Name),
+		zap.Int64("collectionID", resp.CollectionID))
 	s.meta.AddCollection(collInfo)
 	return nil
 }

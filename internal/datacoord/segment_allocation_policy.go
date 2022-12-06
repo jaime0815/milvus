@@ -18,6 +18,8 @@ package datacoord
 
 import (
 	"errors"
+	"github.com/milvus-io/milvus/internal/log"
+	"go.uber.org/zap"
 	"sort"
 	"time"
 
@@ -184,6 +186,16 @@ type flushPolicy func(segment *SegmentInfo, t Timestamp) bool
 const flushInterval = 2 * time.Second
 
 func flushPolicyV1(segment *SegmentInfo, t Timestamp) bool {
+	log.Info("====flush segment", zap.Any("segID", segment.ID),
+		zap.Any("rows", segment.currRows),
+		zap.Any("state", segment.GetState()),
+		zap.Any("lastExpireTime", segment.GetLastExpireTime()),
+		zap.Any("now_ts", t),
+		zap.Any("segment.GetLastExpireTime() <= t", segment.GetLastExpireTime() <= t),
+		zap.Any("lastFlushTime", segment.lastFlushTime),
+		zap.Any("flushInterval", flushInterval),
+		zap.Any("time.Since(segment.lastFlushTime) >= flushInterval", time.Since(segment.lastFlushTime) >= flushInterval),
+	)
 	return segment.GetState() == commonpb.SegmentState_Sealed &&
 		segment.GetLastExpireTime() <= t &&
 		time.Since(segment.lastFlushTime) >= flushInterval &&
