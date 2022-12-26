@@ -177,8 +177,8 @@ func (mt *MetaTable) initCollectionCache() {
 		}
 		availableColls := make(map[int64]*model.Collection)
 		for _, collection := range collections {
+			availableColls[collection.CollectionID] = collection
 			if collection.Available() {
-				availableColls[collection.CollectionID] = collection
 				collectionNum++
 				partitionNum += int64(collection.GetPartitionNum(true))
 			}

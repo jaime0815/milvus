@@ -1071,8 +1071,8 @@ func TestMetaTable_initCollectionCache(t *testing.T) {
 		mock.AnythingOfType("uint64"),
 	).Return(
 		map[string]*model.Collection{
-			"c1": {CollectionID: 100, Name: "c1"},
-			"c2": {CollectionID: 101, Name: "c2"},
+			"c1": {CollectionID: 100, Name: "c1", State: pb.CollectionState_CollectionDropping},
+			"c2": {CollectionID: 101, Name: "c2", State: pb.CollectionState_CollectionCreated},
 			"c3": {CollectionID: 102, Name: "c3", State: pb.CollectionState_CollectionCreating},
 		}, nil).Times(1)
 	meta := &MetaTable{
@@ -1088,18 +1088,18 @@ func TestMetaTable_initCollectionCache(t *testing.T) {
 	_, ok = meta.collID2Meta.GetIfPresent(101)
 	assert.True(t, ok)
 	_, ok = meta.collID2Meta.GetIfPresent(102)
-	assert.False(t, ok)
+	assert.True(t, ok)
 	col, err := meta.collID2Meta.Get(103)
 	assert.NoError(t, err)
 	assert.NotNil(t, col)
 	time.Sleep(1 * time.Second)
-	assert.Equal(t, uint64(3), meta.collName2ID.Len())
+	assert.Equal(t, uint64(4), meta.collName2ID.Len())
 
 	meta.collID2Meta.Invalidate(103)
 	time.Sleep(1 * time.Second)
 	_, ok = meta.collID2Meta.GetIfPresent(103)
 	assert.False(t, ok)
-	assert.Equal(t, uint64(2), meta.collName2ID.Len())
+	assert.Equal(t, uint64(3), meta.collName2ID.Len())
 }
 
 func TestMetaTable_ChangePartitionState(t *testing.T) {
