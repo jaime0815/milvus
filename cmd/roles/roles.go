@@ -18,15 +18,16 @@ package roles
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strings"
 	"sync"
 	"syscall"
 
-	"github.com/milvus-io/milvus/internal/management"
-	rocksmqimpl "github.com/milvus-io/milvus/internal/mq/mqimpl/rocksmq/server"
-
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 
 	"github.com/milvus-io/milvus/cmd/components"
@@ -35,8 +36,10 @@ import (
 	"github.com/milvus-io/milvus/internal/indexcoord"
 	"github.com/milvus-io/milvus/internal/indexnode"
 	"github.com/milvus-io/milvus/internal/log"
+	"github.com/milvus-io/milvus/internal/management"
 	"github.com/milvus-io/milvus/internal/management/healthz"
 	"github.com/milvus-io/milvus/internal/metrics"
+	rocksmqimpl "github.com/milvus-io/milvus/internal/mq/mqimpl/rocksmq/server"
 	"github.com/milvus-io/milvus/internal/proxy"
 	querycoord "github.com/milvus-io/milvus/internal/querycoordv2"
 	"github.com/milvus-io/milvus/internal/querynode"
@@ -47,7 +50,6 @@ import (
 	"github.com/milvus-io/milvus/internal/util/paramtable"
 	"github.com/milvus-io/milvus/internal/util/trace"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 var Params paramtable.ComponentParam
@@ -189,6 +191,10 @@ func (mr *MilvusRoles) runIndexNode(ctx context.Context, localMsg bool, alias st
 
 // Run Milvus components.
 func (mr *MilvusRoles) Run(local bool, alias string) {
+	go func() {
+		fmt.Println(http.ListenAndServe("localhost:9876", nil))
+	}()
+
 	log.Info("starting running Milvus components")
 	ctx, cancel := context.WithCancel(context.Background())
 	mr.printLDPreLoad()
