@@ -71,7 +71,7 @@ type mockMetaTable struct {
 	RenameCollectionFunc             func(ctx context.Context, oldName string, newName string, ts Timestamp) error
 }
 
-func (m mockMetaTable) ListCollections(ctx context.Context, ts Timestamp) ([]*model.Collection, error) {
+func (m mockMetaTable) ListCollections(ctx context.Context, dbName string, ts Timestamp) ([]*model.Collection, error) {
 	return m.ListCollectionsFunc(ctx, ts)
 }
 
@@ -79,11 +79,11 @@ func (m mockMetaTable) AddCollection(ctx context.Context, coll *model.Collection
 	return m.AddCollectionFunc(ctx, coll)
 }
 
-func (m mockMetaTable) GetCollectionByName(ctx context.Context, collectionName string, ts Timestamp) (*model.Collection, error) {
+func (m mockMetaTable) GetCollectionByName(ctx context.Context, dbName string, collectionName string, ts Timestamp) (*model.Collection, error) {
 	return m.GetCollectionByNameFunc(ctx, collectionName, ts)
 }
 
-func (m mockMetaTable) GetCollectionByID(ctx context.Context, collectionID UniqueID, ts Timestamp, allowUnavailable bool) (*model.Collection, error) {
+func (m mockMetaTable) GetCollectionByID(ctx context.Context, dbName string, collectionID UniqueID, ts Timestamp, allowUnavailable bool) (*model.Collection, error) {
 	return m.GetCollectionByIDFunc(ctx, collectionID, ts, allowUnavailable)
 }
 

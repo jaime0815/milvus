@@ -14,16 +14,16 @@ import (
 //go:generate mockery --name=RootCoordCatalog
 type RootCoordCatalog interface {
 	CreateCollection(ctx context.Context, collectionInfo *model.Collection, ts typeutil.Timestamp) error
-	GetCollectionByID(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*model.Collection, error)
-	GetCollectionByName(ctx context.Context, collectionName string, ts typeutil.Timestamp) (*model.Collection, error)
-	ListCollections(ctx context.Context, ts typeutil.Timestamp) (map[string]*model.Collection, error)
-	CollectionExists(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) bool
+	GetCollectionByID(ctx context.Context, dbName string, ts typeutil.Timestamp, collectionID typeutil.UniqueID) (*model.Collection, error)
+	GetCollectionByName(ctx context.Context, dbName, collectionName string, ts typeutil.Timestamp) (*model.Collection, error)
+	ListCollections(ctx context.Context, dbName string, ts typeutil.Timestamp) (map[string]*model.Collection, error)
+	CollectionExists(ctx context.Context, dbName string, collectionID typeutil.UniqueID, ts typeutil.Timestamp) bool
 	DropCollection(ctx context.Context, collectionInfo *model.Collection, ts typeutil.Timestamp) error
 	AlterCollection(ctx context.Context, oldColl *model.Collection, newColl *model.Collection, alterType AlterType, ts typeutil.Timestamp) error
 
-	CreatePartition(ctx context.Context, partition *model.Partition, ts typeutil.Timestamp) error
-	DropPartition(ctx context.Context, collectionID typeutil.UniqueID, partitionID typeutil.UniqueID, ts typeutil.Timestamp) error
-	AlterPartition(ctx context.Context, oldPart *model.Partition, newPart *model.Partition, alterType AlterType, ts typeutil.Timestamp) error
+	CreatePartition(ctx context.Context, dbName string, partition *model.Partition, ts typeutil.Timestamp) error
+	DropPartition(ctx context.Context, dbName string, collectionID typeutil.UniqueID, partitionID typeutil.UniqueID, ts typeutil.Timestamp) error
+	AlterPartition(ctx context.Context, dbName string, oldPart *model.Partition, newPart *model.Partition, alterType AlterType, ts typeutil.Timestamp) error
 
 	CreateAlias(ctx context.Context, alias *model.Alias, ts typeutil.Timestamp) error
 	DropAlias(ctx context.Context, alias string, ts typeutil.Timestamp) error

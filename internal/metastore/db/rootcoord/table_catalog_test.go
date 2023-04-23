@@ -273,7 +273,7 @@ func TestTableCatalog_GetCollectionByID(t *testing.T) {
 	indexDbMock.On("Get", tenantID, collID1).Return(indexes, nil).Once()
 
 	// actual
-	res, gotErr := mockCatalog.GetCollectionByID(ctx, collID1, ts)
+	res, gotErr := mockCatalog.GetCollectionByID(ctx, "", ts, collID1)
 	// collection basic info
 	require.Equal(t, nil, gotErr)
 	require.Equal(t, coll.TenantID, res.TenantID)
@@ -308,7 +308,7 @@ func TestTableCatalog_GetCollectionByID_UnmarshalStartPositionsError(t *testing.
 	indexDbMock.On("Get", tenantID, collID1).Return(nil, nil).Once()
 
 	// actual
-	res, gotErr := mockCatalog.GetCollectionByID(ctx, collID1, ts)
+	res, gotErr := mockCatalog.GetCollectionByID(ctx, "", ts, collID1)
 	require.Nil(t, res)
 	require.Error(t, gotErr)
 }
@@ -320,7 +320,7 @@ func TestTableCatalog_GetCollectionByID_SelectCollError(t *testing.T) {
 	collDbMock.On("Get", tenantID, collID1, ts).Return(nil, errTest).Once()
 
 	// actual
-	res, gotErr := mockCatalog.GetCollectionByID(ctx, collID1, ts)
+	res, gotErr := mockCatalog.GetCollectionByID(ctx, "", ts, collID1)
 	require.Nil(t, res)
 	require.Error(t, gotErr)
 }
@@ -342,7 +342,7 @@ func TestTableCatalog_GetCollectionByID_SelectFieldError(t *testing.T) {
 	fieldDbMock.On("GetByCollectionID", tenantID, collID1, ts).Return(nil, errTest).Once()
 
 	// actual
-	res, gotErr := mockCatalog.GetCollectionByID(ctx, collID1, ts)
+	res, gotErr := mockCatalog.GetCollectionByID(ctx, "", ts, collID1)
 	require.Nil(t, res)
 	require.Error(t, gotErr)
 }
@@ -365,7 +365,7 @@ func TestTableCatalog_GetCollectionByID_SelectPartitionError(t *testing.T) {
 	partitionDbMock.On("GetByCollectionID", tenantID, collID1, ts).Return(nil, errTest).Once()
 
 	// actual
-	res, gotErr := mockCatalog.GetCollectionByID(ctx, collID1, ts)
+	res, gotErr := mockCatalog.GetCollectionByID(ctx, "", ts, collID1)
 	require.Nil(t, res)
 	require.Error(t, gotErr)
 }
@@ -389,7 +389,7 @@ func TestTableCatalog_GetCollectionByID_SelectChannelError(t *testing.T) {
 	collChannelDbMock.On("GetByCollectionID", tenantID, collID1, ts).Return(nil, errTest).Once()
 
 	// actual
-	res, gotErr := mockCatalog.GetCollectionByID(ctx, collID1, ts)
+	res, gotErr := mockCatalog.GetCollectionByID(ctx, "", ts, collID1)
 	require.Nil(t, res)
 	require.Error(t, gotErr)
 }
@@ -450,7 +450,7 @@ func TestTableCatalog_GetCollectionByName(t *testing.T) {
 	indexDbMock.On("Get", tenantID, collID1).Return(indexes, nil).Once()
 
 	// actual
-	res, gotErr := mockCatalog.GetCollectionByName(ctx, collName1, ts)
+	res, gotErr := mockCatalog.GetCollectionByName(ctx, "", collName1, ts)
 	// collection basic info
 	require.Equal(t, nil, gotErr)
 	require.Equal(t, coll.TenantID, res.TenantID)
@@ -472,7 +472,7 @@ func TestTableCatalog_GetCollectionByName_SelectCollIDError(t *testing.T) {
 	collDbMock.On("GetCollectionIDByName", tenantID, collName1, ts).Return(typeutil.UniqueID(0), errTest).Once()
 
 	// actual
-	res, gotErr := mockCatalog.GetCollectionByName(ctx, collName1, ts)
+	res, gotErr := mockCatalog.GetCollectionByName(ctx, "", collName1, ts)
 	require.Nil(t, res)
 	require.Error(t, gotErr)
 }
@@ -532,7 +532,7 @@ func TestTableCatalog_ListCollections(t *testing.T) {
 	indexDbMock.On("Get", tenantID, collID1).Return(indexes, nil).Once()
 
 	// actual
-	res, gotErr := mockCatalog.ListCollections(ctx, ts)
+	res, gotErr := mockCatalog.ListCollections(ctx, "", ts)
 	// collection basic info
 	require.Equal(t, nil, gotErr)
 	require.Equal(t, 1, len(res))
@@ -562,7 +562,7 @@ func TestTableCatalog_CollectionExists(t *testing.T) {
 	collDbMock.On("Get", tenantID, collID1, resultTs).Return(coll, nil).Once()
 
 	// actual
-	res := mockCatalog.CollectionExists(ctx, collID1, ts)
+	res := mockCatalog.CollectionExists(ctx, "", collID1, ts)
 	require.True(t, res)
 }
 
@@ -580,7 +580,7 @@ func TestTableCatalog_CollectionExists_IsDeletedTrue(t *testing.T) {
 	collDbMock.On("Get", tenantID, collID1, resultTs).Return(coll, nil).Once()
 
 	// actual
-	res := mockCatalog.CollectionExists(ctx, collID1, ts)
+	res := mockCatalog.CollectionExists(ctx, "", collID1, ts)
 	require.False(t, res)
 }
 
@@ -592,7 +592,7 @@ func TestTableCatalog_CollectionExists_CollNotExists(t *testing.T) {
 	collDbMock.On("Get", tenantID, collID1, resultTs).Return(nil, nil).Once()
 
 	// actual
-	res := mockCatalog.CollectionExists(ctx, collID1, ts)
+	res := mockCatalog.CollectionExists(ctx, "", collID1, ts)
 	require.False(t, res)
 }
 
@@ -602,7 +602,7 @@ func TestTableCatalog_CollectionExists_GetCidTsError(t *testing.T) {
 	collDbMock.On("GetCollectionIDTs", tenantID, collID1, ts).Return(nil, errTest).Once()
 
 	// actual
-	res := mockCatalog.CollectionExists(ctx, collID1, ts)
+	res := mockCatalog.CollectionExists(ctx, "", collID1, ts)
 	require.False(t, res)
 }
 
@@ -837,7 +837,7 @@ func TestTableCatalog_CreatePartition(t *testing.T) {
 	partitionDbMock.On("Insert", mock.Anything).Return(nil).Once()
 
 	// actual
-	gotErr := mockCatalog.CreatePartition(ctx, partition, ts)
+	gotErr := mockCatalog.CreatePartition(ctx, "", partition, ts)
 	require.Equal(t, nil, gotErr)
 }
 
@@ -854,7 +854,7 @@ func TestTableCatalog_CreatePartition_InsertPartitionError(t *testing.T) {
 	partitionDbMock.On("Insert", mock.Anything).Return(errTest).Once()
 
 	// actual
-	gotErr := mockCatalog.CreatePartition(ctx, partition, ts)
+	gotErr := mockCatalog.CreatePartition(ctx, "", partition, ts)
 	require.Error(t, gotErr)
 }
 
@@ -863,7 +863,7 @@ func TestTableCatalog_DropPartition_TsNot0(t *testing.T) {
 	partitionDbMock.On("Insert", mock.Anything).Return(nil).Once()
 
 	// actual
-	gotErr := mockCatalog.DropPartition(ctx, collID1, partitionID1, ts)
+	gotErr := mockCatalog.DropPartition(ctx, "", collID1, partitionID1, ts)
 	require.NoError(t, gotErr)
 }
 
@@ -873,7 +873,7 @@ func TestTableCatalog_DropPartition_TsNot0_PartitionInsertError(t *testing.T) {
 	partitionDbMock.On("Insert", mock.Anything).Return(errTest).Once()
 
 	// actual
-	gotErr := mockCatalog.DropPartition(ctx, collID1, partitionID1, ts)
+	gotErr := mockCatalog.DropPartition(ctx, "", collID1, partitionID1, ts)
 	require.Error(t, gotErr)
 }
 
@@ -895,7 +895,7 @@ func TestCatalog_AlterPartition(t *testing.T) {
 
 	partitionDbMock.On("Update", mock.Anything).Return(nil).Once()
 
-	gotErr := mockCatalog.AlterPartition(ctx, partition, newPartition, metastore.MODIFY, ts)
+	gotErr := mockCatalog.AlterPartition(ctx, "", partition, newPartition, metastore.MODIFY, ts)
 	require.NoError(t, gotErr)
 }
 
@@ -908,10 +908,10 @@ func TestCatalog_AlterPartition_TsNot0_AlterTypeError(t *testing.T) {
 		State:                     pb.PartitionState_PartitionCreated,
 	}
 
-	gotErr := mockCatalog.AlterPartition(ctx, partition, partition, metastore.ADD, ts)
+	gotErr := mockCatalog.AlterPartition(ctx, "", partition, partition, metastore.ADD, ts)
 	require.Error(t, gotErr)
 
-	gotErr = mockCatalog.AlterPartition(ctx, partition, partition, metastore.DELETE, ts)
+	gotErr = mockCatalog.AlterPartition(ctx, "", partition, partition, metastore.DELETE, ts)
 	require.Error(t, gotErr)
 }
 
@@ -929,7 +929,7 @@ func TestCatalog_AlterPartition_TsNot0_PartitionInsertError(t *testing.T) {
 	partitionDbMock.On("Update", mock.Anything).Return(errTest).Once()
 
 	// actual
-	gotErr := mockCatalog.AlterPartition(ctx, partition, partition, metastore.MODIFY, ts)
+	gotErr := mockCatalog.AlterPartition(ctx, "", partition, partition, metastore.MODIFY, ts)
 	require.Error(t, gotErr)
 }
 

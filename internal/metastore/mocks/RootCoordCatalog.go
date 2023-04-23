@@ -7,6 +7,7 @@ import (
 
 	milvuspb "github.com/milvus-io/milvus-proto/go-api/milvuspb"
 	metastore "github.com/milvus-io/milvus/internal/metastore"
+	"github.com/milvus-io/milvus/internal/util/typeutil"
 
 	mock "github.com/stretchr/testify/mock"
 
@@ -75,7 +76,7 @@ func (_m *RootCoordCatalog) AlterGrant(ctx context.Context, tenant string, entit
 }
 
 // AlterPartition provides a mock function with given fields: ctx, oldPart, newPart, alterType, ts
-func (_m *RootCoordCatalog) AlterPartition(ctx context.Context, oldPart *model.Partition, newPart *model.Partition, alterType metastore.AlterType, ts uint64) error {
+func (_m *RootCoordCatalog) AlterPartition(ctx context.Context, dbName string, oldPart *model.Partition, newPart *model.Partition, alterType metastore.AlterType, ts typeutil.Timestamp) error {
 	ret := _m.Called(ctx, oldPart, newPart, alterType, ts)
 
 	var r0 error
@@ -108,7 +109,7 @@ func (_m *RootCoordCatalog) Close() {
 }
 
 // CollectionExists provides a mock function with given fields: ctx, collectionID, ts
-func (_m *RootCoordCatalog) CollectionExists(ctx context.Context, collectionID int64, ts uint64) bool {
+func (_m *RootCoordCatalog) CollectionExists(ctx context.Context, dbName string, collectionID typeutil.UniqueID, ts typeutil.Timestamp) bool {
 	ret := _m.Called(ctx, collectionID, ts)
 
 	var r0 bool
@@ -164,7 +165,7 @@ func (_m *RootCoordCatalog) CreateCredential(ctx context.Context, credential *mo
 }
 
 // CreatePartition provides a mock function with given fields: ctx, partition, ts
-func (_m *RootCoordCatalog) CreatePartition(ctx context.Context, partition *model.Partition, ts uint64) error {
+func (_m *RootCoordCatalog) CreatePartition(ctx context.Context, dbName string, partition *model.Partition, ts typeutil.Timestamp) error {
 	ret := _m.Called(ctx, partition, ts)
 
 	var r0 error
@@ -248,7 +249,7 @@ func (_m *RootCoordCatalog) DropCredential(ctx context.Context, username string)
 }
 
 // DropPartition provides a mock function with given fields: ctx, collectionID, partitionID, ts
-func (_m *RootCoordCatalog) DropPartition(ctx context.Context, collectionID int64, partitionID int64, ts uint64) error {
+func (_m *RootCoordCatalog) DropPartition(ctx context.Context, dbName string, collectionID typeutil.UniqueID, partitionID typeutil.UniqueID, ts typeutil.Timestamp) error {
 	ret := _m.Called(ctx, collectionID, partitionID, ts)
 
 	var r0 error
@@ -276,7 +277,7 @@ func (_m *RootCoordCatalog) DropRole(ctx context.Context, tenant string, roleNam
 }
 
 // GetCollectionByID provides a mock function with given fields: ctx, collectionID, ts
-func (_m *RootCoordCatalog) GetCollectionByID(ctx context.Context, collectionID int64, ts uint64) (*model.Collection, error) {
+func (_m *RootCoordCatalog) GetCollectionByID(ctx context.Context, dbName string, ts typeutil.Timestamp, collectionID typeutil.UniqueID) (*model.Collection, error) {
 	ret := _m.Called(ctx, collectionID, ts)
 
 	var r0 *model.Collection
@@ -299,7 +300,7 @@ func (_m *RootCoordCatalog) GetCollectionByID(ctx context.Context, collectionID 
 }
 
 // GetCollectionByName provides a mock function with given fields: ctx, collectionName, ts
-func (_m *RootCoordCatalog) GetCollectionByName(ctx context.Context, collectionName string, ts uint64) (*model.Collection, error) {
+func (_m *RootCoordCatalog) GetCollectionByName(ctx context.Context, dbName, collectionName string, ts typeutil.Timestamp) (*model.Collection, error) {
 	ret := _m.Called(ctx, collectionName, ts)
 
 	var r0 *model.Collection
@@ -368,7 +369,7 @@ func (_m *RootCoordCatalog) ListAliases(ctx context.Context, ts uint64) ([]*mode
 }
 
 // ListCollections provides a mock function with given fields: ctx, ts
-func (_m *RootCoordCatalog) ListCollections(ctx context.Context, ts uint64) (map[string]*model.Collection, error) {
+func (_m *RootCoordCatalog) ListCollections(ctx context.Context, dbName string, ts typeutil.Timestamp) (map[string]*model.Collection, error) {
 	ret := _m.Called(ctx, ts)
 
 	var r0 map[string]*model.Collection

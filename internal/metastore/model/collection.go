@@ -10,6 +10,7 @@ import (
 
 type Collection struct {
 	TenantID             string
+	DBName				 string
 	CollectionID         int64
 	Partitions           []*Partition
 	Name                 string
@@ -34,6 +35,7 @@ func (c Collection) Available() bool {
 func (c Collection) Clone() *Collection {
 	return &Collection{
 		TenantID:             c.TenantID,
+		DBName:				  c.DBName,
 		CollectionID:         c.CollectionID,
 		Name:                 c.Name,
 		Description:          c.Description,
@@ -61,6 +63,7 @@ func (c Collection) GetPartitionNum(filterUnavailable bool) int {
 
 func (c Collection) Equal(other Collection) bool {
 	return c.TenantID == other.TenantID &&
+		c.DBName == other.DBName &&
 		CheckPartitionsEqual(c.Partitions, other.Partitions) &&
 		c.Name == other.Name &&
 		c.Description == other.Description &&
@@ -87,6 +90,7 @@ func UnmarshalCollectionModel(coll *pb.CollectionInfo) *Collection {
 
 	return &Collection{
 		CollectionID:         coll.ID,
+		DBName: 			  coll.DbName,
 		Name:                 coll.Schema.Name,
 		Description:          coll.Schema.Description,
 		AutoID:               coll.Schema.AutoID,
@@ -150,6 +154,7 @@ func marshalCollectionModelWithConfig(coll *Collection, c *config) *pb.Collectio
 
 	collectionPb := &pb.CollectionInfo{
 		ID:                   coll.CollectionID,
+		DbName: 			  coll.DBName,
 		Schema:               collSchema,
 		CreateTime:           coll.CreateTime,
 		VirtualChannelNames:  coll.VirtualChannelNames,

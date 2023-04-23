@@ -729,6 +729,18 @@ func GetCurUserFromContext(ctx context.Context) (string, error) {
 	return username, nil
 }
 
+func GetCurDatabaseFromContext(ctx context.Context) (string, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return "", fmt.Errorf("fail to get md from the context")
+	}
+	header := md[strings.ToLower(util.HeaderDatabase)]
+	if len(header) < 1 {
+		return "", nil
+	}
+	return header[0], nil
+}
+
 func GetRole(username string) ([]string, error) {
 	if globalMetaCache == nil {
 		return []string{}, ErrProxyNotReady()

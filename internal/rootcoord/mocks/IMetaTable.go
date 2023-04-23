@@ -7,6 +7,7 @@ import (
 
 	etcdpb "github.com/milvus-io/milvus/internal/proto/etcdpb"
 	internalpb "github.com/milvus-io/milvus/internal/proto/internalpb"
+	"github.com/milvus-io/milvus/internal/rootcoord"
 
 	milvuspb "github.com/milvus-io/milvus-proto/go-api/milvuspb"
 
@@ -217,7 +218,7 @@ func (_m *IMetaTable) DropRole(tenant string, roleName string) error {
 }
 
 // GetCollectionByID provides a mock function with given fields: ctx, collectionID, ts, allowUnavailable
-func (_m *IMetaTable) GetCollectionByID(ctx context.Context, collectionID int64, ts uint64, allowUnavailable bool) (*model.Collection, error) {
+func (_m *IMetaTable) GetCollectionByID(ctx context.Context, dbName string, collectionID rootcoord.UniqueID, ts rootcoord.Timestamp, allowUnavailable bool) (*model.Collection, error) {
 	ret := _m.Called(ctx, collectionID, ts, allowUnavailable)
 
 	var r0 *model.Collection
@@ -240,7 +241,7 @@ func (_m *IMetaTable) GetCollectionByID(ctx context.Context, collectionID int64,
 }
 
 // GetCollectionByName provides a mock function with given fields: ctx, collectionName, ts
-func (_m *IMetaTable) GetCollectionByName(ctx context.Context, collectionName string, ts uint64) (*model.Collection, error) {
+func (_m *IMetaTable) GetCollectionByName(ctx context.Context, dbName string, collectionName string, ts rootcoord.Timestamp) (*model.Collection, error) {
 	ret := _m.Called(ctx, collectionName, ts)
 
 	var r0 *model.Collection
@@ -413,7 +414,7 @@ func (_m *IMetaTable) ListCollectionPhysicalChannels() map[int64][]string {
 }
 
 // ListCollections provides a mock function with given fields: ctx, ts
-func (_m *IMetaTable) ListCollections(ctx context.Context, ts uint64) ([]*model.Collection, error) {
+func (_m *IMetaTable) ListCollections(ctx context.Context, dbName string, ts rootcoord.Timestamp) ([]*model.Collection, error) {
 	ret := _m.Called(ctx, ts)
 
 	var r0 []*model.Collection

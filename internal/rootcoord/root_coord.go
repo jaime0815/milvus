@@ -612,7 +612,7 @@ func (c *Core) restore(ctx context.Context) error {
 		}
 	}
 
-	colls, err = c.meta.ListCollections(ctx, typeutil.MaxTimestamp)
+	colls, err = c.meta.ListCollections(ctx, "", typeutil.MaxTimestamp)
 	if err != nil {
 		return err
 	}
@@ -930,9 +930,9 @@ func (c *Core) HasCollection(ctx context.Context, in *milvuspb.HasCollectionRequ
 func (c *Core) describeCollection(ctx context.Context, in *milvuspb.DescribeCollectionRequest, allowUnavailable bool) (*model.Collection, error) {
 	ts := getTravelTs(in)
 	if in.GetCollectionName() != "" {
-		return c.meta.GetCollectionByName(ctx, in.GetCollectionName(), ts)
+		return c.meta.GetCollectionByName(ctx, "", in.GetCollectionName(), ts)
 	}
-	return c.meta.GetCollectionByID(ctx, in.GetCollectionID(), ts, allowUnavailable)
+	return c.meta.GetCollectionByID(ctx, "", in.GetCollectionID(), ts, allowUnavailable)
 }
 
 func convertModelToDesc(collInfo *model.Collection, aliases []string) *milvuspb.DescribeCollectionResponse {
@@ -1679,7 +1679,7 @@ func (c *Core) Import(ctx context.Context, req *milvuspb.ImportRequest) (*milvus
 	// Get collection/partition ID from collection/partition name.
 	var colInfo *model.Collection
 	var err error
-	if colInfo, err = c.meta.GetCollectionByName(ctx, req.GetCollectionName(), typeutil.MaxTimestamp); err != nil {
+	if colInfo, err = c.meta.GetCollectionByName(ctx, "", req.GetCollectionName(), typeutil.MaxTimestamp); err != nil {
 		log.Error("failed to find collection ID from its name",
 			zap.String("collection name", req.GetCollectionName()),
 			zap.Error(err))
@@ -1732,7 +1732,7 @@ func (c *Core) ListImportTasks(ctx context.Context, req *milvuspb.ListImportTask
 	if len(collectionName) != 0 {
 		// if the collection name is specified but not found, user may input a wrong name, the collection doesn't exist or has been dropped.
 		// we will return error to notify user the name is incorrect.
-		colInfo, err := c.meta.GetCollectionByName(ctx, req.GetCollectionName(), typeutil.MaxTimestamp)
+		colInfo, err := c.meta.GetCollectionByName(ctx, "", req.GetCollectionName(), typeutil.MaxTimestamp)
 		if err != nil {
 			err = fmt.Errorf("failed to find collection ID from its name: '%s', error: %w", req.GetCollectionName(), err)
 			log.Error("ListImportTasks failed", zap.Error(err))

@@ -424,7 +424,7 @@ func TestMetaTable_getCollectionByIDInternal(t *testing.T) {
 			collID2Meta: map[typeutil.UniqueID]*model.Collection{},
 		}
 		ctx := context.Background()
-		_, err := meta.getCollectionByIDInternal(ctx, 100, 101, false)
+		_, err := meta.getCollectionByIDInternal(ctx, "", 100, 101, false)
 		assert.Error(t, err)
 	})
 
@@ -440,10 +440,10 @@ func TestMetaTable_getCollectionByIDInternal(t *testing.T) {
 			collID2Meta: map[typeutil.UniqueID]*model.Collection{},
 		}
 		ctx := context.Background()
-		_, err := meta.getCollectionByIDInternal(ctx, 100, 101, false)
+		_, err := meta.getCollectionByIDInternal(ctx, "", 100, 101, false)
 		assert.Error(t, err)
 		assert.True(t, common.IsCollectionNotExistError(err))
-		coll, err := meta.getCollectionByIDInternal(ctx, 100, 101, true)
+		coll, err := meta.getCollectionByIDInternal(ctx, "", 100, 101, true)
 		assert.NoError(t, err)
 		assert.False(t, coll.Available())
 	})
@@ -463,7 +463,7 @@ func TestMetaTable_getCollectionByIDInternal(t *testing.T) {
 			},
 		}
 		ctx := context.Background()
-		coll, err := meta.getCollectionByIDInternal(ctx, 100, 101, false)
+		coll, err := meta.getCollectionByIDInternal(ctx, "", 100, 101, false)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(coll.Partitions))
 		assert.Equal(t, UniqueID(11), coll.Partitions[0].PartitionID)
@@ -485,7 +485,7 @@ func TestMetaTable_getCollectionByIDInternal(t *testing.T) {
 			},
 		}
 		ctx := context.Background()
-		coll, err := meta.getCollectionByIDInternal(ctx, 100, typeutil.MaxTimestamp, false)
+		coll, err := meta.getCollectionByIDInternal(ctx, "", 100, typeutil.MaxTimestamp, false)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(coll.Partitions))
 		assert.Equal(t, UniqueID(11), coll.Partitions[0].PartitionID)
@@ -511,7 +511,7 @@ func TestMetaTable_GetCollectionByName(t *testing.T) {
 			},
 		}
 		ctx := context.Background()
-		coll, err := meta.GetCollectionByName(ctx, "alias", 101)
+		coll, err := meta.GetCollectionByName(ctx, "", "alias", 101)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(coll.Partitions))
 		assert.Equal(t, UniqueID(11), coll.Partitions[0].PartitionID)
@@ -535,7 +535,7 @@ func TestMetaTable_GetCollectionByName(t *testing.T) {
 			},
 		}
 		ctx := context.Background()
-		coll, err := meta.GetCollectionByName(ctx, "name", 101)
+		coll, err := meta.GetCollectionByName(ctx, "", "name", 101)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(coll.Partitions))
 		assert.Equal(t, UniqueID(11), coll.Partitions[0].PartitionID)
@@ -551,7 +551,7 @@ func TestMetaTable_GetCollectionByName(t *testing.T) {
 		).Return(nil, errors.New("error mock GetCollectionByName"))
 		meta := &MetaTable{catalog: catalog}
 		ctx := context.Background()
-		_, err := meta.GetCollectionByName(ctx, "name", 101)
+		_, err := meta.GetCollectionByName(ctx, "", "name", 101)
 		assert.Error(t, err)
 	})
 
@@ -564,7 +564,7 @@ func TestMetaTable_GetCollectionByName(t *testing.T) {
 		).Return(&model.Collection{State: pb.CollectionState_CollectionDropped}, nil)
 		meta := &MetaTable{catalog: catalog}
 		ctx := context.Background()
-		_, err := meta.GetCollectionByName(ctx, "name", 101)
+		_, err := meta.GetCollectionByName(ctx, "", "name", 101)
 		assert.Error(t, err)
 		assert.True(t, common.IsCollectionNotExistError(err))
 	})
@@ -585,7 +585,7 @@ func TestMetaTable_GetCollectionByName(t *testing.T) {
 		}, nil)
 		meta := &MetaTable{catalog: catalog}
 		ctx := context.Background()
-		coll, err := meta.GetCollectionByName(ctx, "name", 101)
+		coll, err := meta.GetCollectionByName(ctx, "", "name", 101)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(coll.Partitions))
 		assert.Equal(t, UniqueID(11), coll.Partitions[0].PartitionID)
@@ -595,7 +595,7 @@ func TestMetaTable_GetCollectionByName(t *testing.T) {
 	t.Run("get latest version", func(t *testing.T) {
 		ctx := context.Background()
 		meta := &MetaTable{collName2ID: nil}
-		_, err := meta.GetCollectionByName(ctx, "not_exist", typeutil.MaxTimestamp)
+		_, err := meta.GetCollectionByName(ctx, "", "not_exist", typeutil.MaxTimestamp)
 		assert.Error(t, err)
 		assert.True(t, common.IsCollectionNotExistError(err))
 	})

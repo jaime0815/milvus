@@ -40,7 +40,7 @@ func (meta *TtCollectionsMeta220) GenerateSaves(sourceVersion semver.Version) (m
 
 	for collectionID := range *meta {
 		for ts := range (*meta)[collectionID] {
-			ckey := rootcoord.BuildCollectionKey(collectionID)
+			ckey := rootcoord.BuildCollectionKey("", collectionID)
 			key := rootcoord.ComposeSnapshotKey(rootcoord.SnapshotPrefix, ckey, rootcoord.SnapshotsSep, ts)
 			collection := (*meta)[collectionID][ts]
 			var value string
@@ -87,7 +87,7 @@ func (meta *CollectionsMeta220) GenerateSaves(sourceVersion semver.Version) (map
 	}
 
 	for collectionID := range *meta {
-		ckey := rootcoord.BuildCollectionKey(collectionID)
+		ckey := rootcoord.BuildCollectionKey("", collectionID)
 		collection := (*meta)[collectionID]
 		var value string
 		if collection == nil {
