@@ -19,11 +19,15 @@ package rootcoord
 import (
 	"context"
 
+	"github.com/milvus-io/milvus-proto/go-api/commonpb"
+	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 
 type listDatabaseTask struct {
 	baseTask
+	Req *milvuspb.ListDatabasesRequest
+	Resp *milvuspb.ListDatabasesResponse
 }
 
 func (t *listDatabaseTask) Prepare(ctx context.Context) error {
@@ -33,10 +37,13 @@ func (t *listDatabaseTask) Prepare(ctx context.Context) error {
 
 func (t *listDatabaseTask) Execute(ctx context.Context) error {
 	t.SetStep(typeutil.TaskStepExecute)
-	_, err :=  t.core.meta.ListDatabases(ctx, t.GetTs())
+	t.Resp.Status = succStatus()
+	ret, err :=  t.core.meta.ListDatabases(ctx, t.GetTs())
 	if err != nil {
+		t.Resp.Status = failStatus(commonpb.ErrorCode_UnexpectedError, err.Error())
 		return err
 	}
 
+	t.Resp.DbName = ret
 	return nil
 }

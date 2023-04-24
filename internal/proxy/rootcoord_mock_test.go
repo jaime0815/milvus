@@ -1225,6 +1225,18 @@ func (m *mockRootCoord) CheckHealth(ctx context.Context, req *milvuspb.CheckHeal
 	}, nil
 }
 
+func (m *mockRootCoord) CreateDatabase(ctx context.Context, in *milvuspb.CreateDatabaseRequest) (*commonpb.Status, error) {
+	return &commonpb.Status{}, nil
+}
+
+func (m *mockRootCoord) DropDatabase(ctx context.Context, in *milvuspb.DropDatabaseRequest) (*commonpb.Status, error) {
+	return &commonpb.Status{}, nil
+}
+
+func (m *mockRootCoord) ListDatabases(ctx context.Context, in *milvuspb.ListDatabasesRequest) (*milvuspb.ListDatabasesResponse, error) {
+	return &milvuspb.ListDatabasesResponse{}, nil
+}
+
 func newMockRootCoord() *mockRootCoord {
 	return &mockRootCoord{}
 }

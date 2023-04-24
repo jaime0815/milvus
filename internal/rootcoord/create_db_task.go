@@ -19,23 +19,21 @@ package rootcoord
 import (
 	"context"
 
+	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 
 type createDatabaseTask struct {
 	baseTask
+	Req *milvuspb.CreateDatabaseRequest
 }
 
 func (t *createDatabaseTask) Prepare(ctx context.Context) error {
 	t.SetStep(typeutil.TaskStepPreExecute)
-
 	return nil
 }
 
 func (t *createDatabaseTask) Execute(ctx context.Context) error {
 	t.SetStep(typeutil.TaskStepExecute)
-	//if err := t.core.ExpireMetaCache(ctx, []string{t.Req.GetCollectionName()}, InvalidCollectionID, t.GetTs()); err != nil {
-	//	return err
-	//}
-	return t.core.meta.CreateDatabase(ctx,  "", t.GetTs())
+	return t.core.meta.CreateDatabase(ctx,  t.Req.GetDbName(), t.GetTs())
 }

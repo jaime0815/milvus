@@ -19,11 +19,13 @@ package rootcoord
 import (
 	"context"
 
+	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 
 type dropDatabaseTask struct {
 	baseTask
+	Req *milvuspb.DropDatabaseRequest
 }
 
 func (t *dropDatabaseTask) Prepare(ctx context.Context) error {
@@ -33,8 +35,5 @@ func (t *dropDatabaseTask) Prepare(ctx context.Context) error {
 
 func (t *dropDatabaseTask) Execute(ctx context.Context) error {
 	t.SetStep(typeutil.TaskStepExecute)
-	//if err := t.core.ExpireMetaCache(ctx, []string{t.Req.GetAlias(), t.Req.GetCollectionName()}, InvalidCollectionID, t.GetTs()); err != nil {
-	//	return err
-	//}
-	return t.core.meta.DropDatabase(ctx, "", t.GetTs())
+	return t.core.meta.DropDatabase(ctx, t.Req.GetDbName(), t.GetTs())
 }
