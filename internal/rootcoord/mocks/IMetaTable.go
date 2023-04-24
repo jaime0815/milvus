@@ -7,7 +7,6 @@ import (
 
 	etcdpb "github.com/milvus-io/milvus/internal/proto/etcdpb"
 	internalpb "github.com/milvus-io/milvus/internal/proto/internalpb"
-	"github.com/milvus-io/milvus/internal/rootcoord"
 
 	milvuspb "github.com/milvus-io/milvus-proto/go-api/milvuspb"
 
@@ -147,6 +146,20 @@ func (_m *IMetaTable) CreateAlias(ctx context.Context, alias string, collectionN
 	return r0
 }
 
+// CreateDatabase provides a mock function with given fields: ctx, dbName, ts
+func (_m *IMetaTable) CreateDatabase(ctx context.Context, dbName string, ts uint64) error {
+	ret := _m.Called(ctx, dbName, ts)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, uint64) error); ok {
+		r0 = rf(ctx, dbName, ts)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // CreateRole provides a mock function with given fields: tenant, entity
 func (_m *IMetaTable) CreateRole(tenant string, entity *milvuspb.RoleEntity) error {
 	ret := _m.Called(tenant, entity)
@@ -189,6 +202,20 @@ func (_m *IMetaTable) DropAlias(ctx context.Context, alias string, ts uint64) er
 	return r0
 }
 
+// DropDatabase provides a mock function with given fields: ctx, dbName, ts
+func (_m *IMetaTable) DropDatabase(ctx context.Context, dbName string, ts uint64) error {
+	ret := _m.Called(ctx, dbName, ts)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, uint64) error); ok {
+		r0 = rf(ctx, dbName, ts)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // DropGrant provides a mock function with given fields: tenant, role
 func (_m *IMetaTable) DropGrant(tenant string, role *milvuspb.RoleEntity) error {
 	ret := _m.Called(tenant, role)
@@ -217,13 +244,13 @@ func (_m *IMetaTable) DropRole(tenant string, roleName string) error {
 	return r0
 }
 
-// GetCollectionByID provides a mock function with given fields: ctx, collectionID, ts, allowUnavailable
-func (_m *IMetaTable) GetCollectionByID(ctx context.Context, dbName string, collectionID rootcoord.UniqueID, ts rootcoord.Timestamp, allowUnavailable bool) (*model.Collection, error) {
-	ret := _m.Called(ctx, collectionID, ts, allowUnavailable)
+// GetCollectionByID provides a mock function with given fields: ctx, dbName, collectionID, ts, allowUnavailable
+func (_m *IMetaTable) GetCollectionByID(ctx context.Context, dbName string, collectionID int64, ts uint64, allowUnavailable bool) (*model.Collection, error) {
+	ret := _m.Called(ctx, dbName, collectionID, ts, allowUnavailable)
 
 	var r0 *model.Collection
-	if rf, ok := ret.Get(0).(func(context.Context, int64, uint64, bool) *model.Collection); ok {
-		r0 = rf(ctx, collectionID, ts, allowUnavailable)
+	if rf, ok := ret.Get(0).(func(context.Context, string, int64, uint64, bool) *model.Collection); ok {
+		r0 = rf(ctx, dbName, collectionID, ts, allowUnavailable)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*model.Collection)
@@ -231,8 +258,8 @@ func (_m *IMetaTable) GetCollectionByID(ctx context.Context, dbName string, coll
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, int64, uint64, bool) error); ok {
-		r1 = rf(ctx, collectionID, ts, allowUnavailable)
+	if rf, ok := ret.Get(1).(func(context.Context, string, int64, uint64, bool) error); ok {
+		r1 = rf(ctx, dbName, collectionID, ts, allowUnavailable)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -240,13 +267,13 @@ func (_m *IMetaTable) GetCollectionByID(ctx context.Context, dbName string, coll
 	return r0, r1
 }
 
-// GetCollectionByName provides a mock function with given fields: ctx, collectionName, ts
-func (_m *IMetaTable) GetCollectionByName(ctx context.Context, dbName string, collectionName string, ts rootcoord.Timestamp) (*model.Collection, error) {
-	ret := _m.Called(ctx, collectionName, ts)
+// GetCollectionByName provides a mock function with given fields: ctx, dbName, collectionName, ts
+func (_m *IMetaTable) GetCollectionByName(ctx context.Context, dbName string, collectionName string, ts uint64) (*model.Collection, error) {
+	ret := _m.Called(ctx, dbName, collectionName, ts)
 
 	var r0 *model.Collection
-	if rf, ok := ret.Get(0).(func(context.Context, string, uint64) *model.Collection); ok {
-		r0 = rf(ctx, collectionName, ts)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, uint64) *model.Collection); ok {
+		r0 = rf(ctx, dbName, collectionName, ts)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*model.Collection)
@@ -254,8 +281,8 @@ func (_m *IMetaTable) GetCollectionByName(ctx context.Context, dbName string, co
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, string, uint64) error); ok {
-		r1 = rf(ctx, collectionName, ts)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, uint64) error); ok {
+		r1 = rf(ctx, dbName, collectionName, ts)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -413,13 +440,13 @@ func (_m *IMetaTable) ListCollectionPhysicalChannels() map[int64][]string {
 	return r0
 }
 
-// ListCollections provides a mock function with given fields: ctx, ts
-func (_m *IMetaTable) ListCollections(ctx context.Context, dbName string, ts rootcoord.Timestamp) ([]*model.Collection, error) {
-	ret := _m.Called(ctx, ts)
+// ListCollections provides a mock function with given fields: ctx, dbName, ts
+func (_m *IMetaTable) ListCollections(ctx context.Context, dbName string, ts uint64) ([]*model.Collection, error) {
+	ret := _m.Called(ctx, dbName, ts)
 
 	var r0 []*model.Collection
-	if rf, ok := ret.Get(0).(func(context.Context, uint64) []*model.Collection); ok {
-		r0 = rf(ctx, ts)
+	if rf, ok := ret.Get(0).(func(context.Context, string, uint64) []*model.Collection); ok {
+		r0 = rf(ctx, dbName, ts)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*model.Collection)
@@ -427,8 +454,8 @@ func (_m *IMetaTable) ListCollections(ctx context.Context, dbName string, ts roo
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, uint64) error); ok {
-		r1 = rf(ctx, ts)
+	if rf, ok := ret.Get(1).(func(context.Context, string, uint64) error); ok {
+		r1 = rf(ctx, dbName, ts)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -452,6 +479,29 @@ func (_m *IMetaTable) ListCredentialUsernames() (*milvuspb.ListCredUsersResponse
 	var r1 error
 	if rf, ok := ret.Get(1).(func() error); ok {
 		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// ListDatabases provides a mock function with given fields: ctx, ts
+func (_m *IMetaTable) ListDatabases(ctx context.Context, ts uint64) ([]string, error) {
+	ret := _m.Called(ctx, ts)
+
+	var r0 []string
+	if rf, ok := ret.Get(0).(func(context.Context, uint64) []string); ok {
+		r0 = rf(ctx, ts)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, uint64) error); ok {
+		r1 = rf(ctx, ts)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -561,13 +611,13 @@ func (_m *IMetaTable) RemovePartition(ctx context.Context, collectionID int64, p
 	return r0
 }
 
-// RenameCollection provides a mock function with given fields: ctx, oldName, newName, ts
-func (_m *IMetaTable) RenameCollection(ctx context.Context, oldName string, newName string, ts uint64) error {
-	ret := _m.Called(ctx, oldName, newName, ts)
+// RenameCollection provides a mock function with given fields: ctx, dbName, oldName, newName, ts
+func (_m *IMetaTable) RenameCollection(ctx context.Context, dbName string, oldName string, newName string, ts uint64) error {
+	ret := _m.Called(ctx, dbName, oldName, newName, ts)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, uint64) error); ok {
-		r0 = rf(ctx, oldName, newName, ts)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, uint64) error); ok {
+		r0 = rf(ctx, dbName, oldName, newName, ts)
 	} else {
 		r0 = ret.Error(0)
 	}

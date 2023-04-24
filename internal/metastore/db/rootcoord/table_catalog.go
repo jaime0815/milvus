@@ -37,6 +37,23 @@ func NewTableCatalog(txImpl dbmodel.ITransaction, metaDomain dbmodel.IMetaDomain
 	}
 }
 
+func (tc *Catalog) CreateDatabase(ctx context.Context, dbName string, ts typeutil.Timestamp) error {
+	//TODO
+	return nil
+}
+
+func (tc *Catalog) DropDatabase(ctx context.Context, dbName string, ts typeutil.Timestamp) error {
+	//TODO
+	return nil
+
+}
+
+func (tc *Catalog) ListDatabases(ctx context.Context, ts typeutil.Timestamp) ([]string, error) {
+	//TODO
+	return []string{}, nil
+}
+
+
 func (tc *Catalog) CreateCollection(ctx context.Context, collection *model.Collection, ts typeutil.Timestamp) error {
 	tenantID := contextutil.TenantID(ctx)
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/milvus-io/milvus/internal/metastore"
 
@@ -83,6 +84,31 @@ func batchMultiSaveAndRemoveWithPrefix(snapshot kv.SnapShotKV, maxTxnNum int, sa
 		return snapshot.MultiSaveAndRemoveWithPrefix(nil, partialKeys, ts)
 	}
 	return etcd.RemoveByBatch(removals, removeFn)
+}
+
+func (kc *Catalog) CreateDatabase(ctx context.Context, dbName string, ts typeutil.Timestamp) error {
+	key := BuildDatabasePrefix(dbName)
+	return kc.Snapshot.Save(key, "", ts)
+}
+
+func (kc *Catalog) DropDatabase(ctx context.Context, dbName string, ts typeutil.Timestamp) error {
+	key := BuildDatabasePrefix(dbName)
+	return kc.Snapshot.MultiSaveAndRemoveWithPrefix(nil, []string{key}, ts)
+}
+
+func (kc *Catalog) ListDatabases(ctx context.Context, ts typeutil.Timestamp) ([]string, error) {
+	keys, _, err := kc.Snapshot.LoadWithPrefix(DatabaseMetaPrefix, ts)
+	if err != nil {
+		return nil, err
+	}
+
+	ret := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts := strings.Split(k, "/")
+		ret = append(ret, parts[len(parts) - 1])
+	}
+
+	return ret, nil
 }
 
 func (kc *Catalog) CreateCollection(ctx context.Context, coll *model.Collection, ts typeutil.Timestamp) error {
@@ -484,7 +510,7 @@ func (kc *Catalog) DropAlias(ctx context.Context, alias string, ts typeutil.Time
 func (kc *Catalog) GetCollectionByName(ctx context.Context, dbName, collectionName string, ts typeutil.Timestamp) (*model.Collection, error) {
 	prefix := ""
 	if dbName != "" {
-		prefix = DatabaseMetaPrefix
+		prefix = BuildDatabasePrefix(dbName)
 	} else {
 		prefix = CollectionMetaPrefix
 	}
@@ -513,7 +539,7 @@ func (kc *Catalog) GetCollectionByName(ctx context.Context, dbName, collectionNa
 func (kc *Catalog) ListCollections(ctx context.Context, dbName string, ts typeutil.Timestamp) (map[string]*model.Collection, error) {
 	prefix := ""
 	if dbName != "" {
-		prefix = DatabaseMetaPrefix
+		prefix = BuildDatabasePrefix(dbName)
 	} else {
 		prefix = CollectionMetaPrefix
 	}

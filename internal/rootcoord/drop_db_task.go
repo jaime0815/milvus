@@ -19,25 +19,22 @@ package rootcoord
 import (
 	"context"
 
-	"github.com/milvus-io/milvus-proto/go-api/commonpb"
-	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
+	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 
-type renameCollectionTask struct {
+type dropDatabaseTask struct {
 	baseTask
-	Req *milvuspb.RenameCollectionRequest
 }
 
-func (t *renameCollectionTask) Prepare(ctx context.Context) error {
-	if err := CheckMsgType(t.Req.GetBase().GetMsgType(), commonpb.MsgType_RenameCollection); err != nil {
-		return err
-	}
+func (t *dropDatabaseTask) Prepare(ctx context.Context) error {
+	t.SetStep(typeutil.TaskStepPreExecute)
 	return nil
 }
 
-func (t *renameCollectionTask) Execute(ctx context.Context) error {
-	if err := t.core.ExpireMetaCache(ctx, []string{t.Req.GetOldName()}, InvalidCollectionID, t.GetTs()); err != nil {
-		return err
-	}
-	return t.core.meta.RenameCollection(ctx, t.Req.GetDb(), t.Req.GetOldName(), t.Req.GetNewName(), t.GetTs())
+func (t *dropDatabaseTask) Execute(ctx context.Context) error {
+	t.SetStep(typeutil.TaskStepExecute)
+	//if err := t.core.ExpireMetaCache(ctx, []string{t.Req.GetAlias(), t.Req.GetCollectionName()}, InvalidCollectionID, t.GetTs()); err != nil {
+	//	return err
+	//}
+	return t.core.meta.DropDatabase(ctx, "", t.GetTs())
 }

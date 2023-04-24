@@ -922,13 +922,13 @@ func TestMetaTable_RenameCollection(t *testing.T) {
 				"alias": 1,
 			},
 		}
-		err := meta.RenameCollection(context.TODO(), "alias", "new", typeutil.MaxTimestamp)
+		err := meta.RenameCollection(context.TODO(), "", "alias", "new", typeutil.MaxTimestamp)
 		assert.Error(t, err)
 	})
 
 	t.Run("collection name not exist", func(t *testing.T) {
 		meta := &MetaTable{}
-		err := meta.RenameCollection(context.TODO(), "non-exists", "new", typeutil.MaxTimestamp)
+		err := meta.RenameCollection(context.TODO(), "", "non-exists", "new", typeutil.MaxTimestamp)
 		assert.Error(t, err)
 	})
 
@@ -938,7 +938,7 @@ func TestMetaTable_RenameCollection(t *testing.T) {
 				"old": 1,
 			},
 		}
-		err := meta.RenameCollection(context.TODO(), "old", "new", typeutil.MaxTimestamp)
+		err := meta.RenameCollection(context.TODO(), "", "old", "new", typeutil.MaxTimestamp)
 		assert.Error(t, err)
 	})
 
@@ -956,7 +956,7 @@ func TestMetaTable_RenameCollection(t *testing.T) {
 				},
 			},
 		}
-		err := meta.RenameCollection(context.TODO(), "old", "new", 1000)
+		err := meta.RenameCollection(context.TODO(), "", "old", "new", 1000)
 		assert.Error(t, err)
 	})
 
@@ -974,7 +974,7 @@ func TestMetaTable_RenameCollection(t *testing.T) {
 				"new": 2,
 			},
 		}
-		err := meta.RenameCollection(context.TODO(), "old", "new", 1000)
+		err := meta.RenameCollection(context.TODO(), "", "old", "new", 1000)
 		assert.Error(t, err)
 	})
 
@@ -1005,7 +1005,7 @@ func TestMetaTable_RenameCollection(t *testing.T) {
 				},
 			},
 		}
-		err := meta.RenameCollection(context.TODO(), "old", "new", 1000)
+		err := meta.RenameCollection(context.TODO(), "", "old", "new", 1000)
 		assert.Error(t, err)
 	})
 
@@ -1035,7 +1035,7 @@ func TestMetaTable_RenameCollection(t *testing.T) {
 				},
 			},
 		}
-		err := meta.RenameCollection(context.TODO(), "old", "new", 1000)
+		err := meta.RenameCollection(context.TODO(), "", "old", "new", 1000)
 		assert.NoError(t, err)
 
 		id, ok := meta.collName2ID["new"]

@@ -7,7 +7,6 @@ import (
 
 	milvuspb "github.com/milvus-io/milvus-proto/go-api/milvuspb"
 	metastore "github.com/milvus-io/milvus/internal/metastore"
-	"github.com/milvus-io/milvus/internal/util/typeutil"
 
 	mock "github.com/stretchr/testify/mock"
 
@@ -75,13 +74,13 @@ func (_m *RootCoordCatalog) AlterGrant(ctx context.Context, tenant string, entit
 	return r0
 }
 
-// AlterPartition provides a mock function with given fields: ctx, oldPart, newPart, alterType, ts
-func (_m *RootCoordCatalog) AlterPartition(ctx context.Context, dbName string, oldPart *model.Partition, newPart *model.Partition, alterType metastore.AlterType, ts typeutil.Timestamp) error {
-	ret := _m.Called(ctx, oldPart, newPart, alterType, ts)
+// AlterPartition provides a mock function with given fields: ctx, dbName, oldPart, newPart, alterType, ts
+func (_m *RootCoordCatalog) AlterPartition(ctx context.Context, dbName string, oldPart *model.Partition, newPart *model.Partition, alterType metastore.AlterType, ts uint64) error {
+	ret := _m.Called(ctx, dbName, oldPart, newPart, alterType, ts)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, *model.Partition, *model.Partition, metastore.AlterType, uint64) error); ok {
-		r0 = rf(ctx, oldPart, newPart, alterType, ts)
+	if rf, ok := ret.Get(0).(func(context.Context, string, *model.Partition, *model.Partition, metastore.AlterType, uint64) error); ok {
+		r0 = rf(ctx, dbName, oldPart, newPart, alterType, ts)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -108,13 +107,13 @@ func (_m *RootCoordCatalog) Close() {
 	_m.Called()
 }
 
-// CollectionExists provides a mock function with given fields: ctx, collectionID, ts
-func (_m *RootCoordCatalog) CollectionExists(ctx context.Context, dbName string, collectionID typeutil.UniqueID, ts typeutil.Timestamp) bool {
-	ret := _m.Called(ctx, collectionID, ts)
+// CollectionExists provides a mock function with given fields: ctx, dbName, collectionID, ts
+func (_m *RootCoordCatalog) CollectionExists(ctx context.Context, dbName string, collectionID int64, ts uint64) bool {
+	ret := _m.Called(ctx, dbName, collectionID, ts)
 
 	var r0 bool
-	if rf, ok := ret.Get(0).(func(context.Context, int64, uint64) bool); ok {
-		r0 = rf(ctx, collectionID, ts)
+	if rf, ok := ret.Get(0).(func(context.Context, string, int64, uint64) bool); ok {
+		r0 = rf(ctx, dbName, collectionID, ts)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
@@ -164,13 +163,27 @@ func (_m *RootCoordCatalog) CreateCredential(ctx context.Context, credential *mo
 	return r0
 }
 
-// CreatePartition provides a mock function with given fields: ctx, partition, ts
-func (_m *RootCoordCatalog) CreatePartition(ctx context.Context, dbName string, partition *model.Partition, ts typeutil.Timestamp) error {
-	ret := _m.Called(ctx, partition, ts)
+// CreateDatabase provides a mock function with given fields: ctx, dbName, ts
+func (_m *RootCoordCatalog) CreateDatabase(ctx context.Context, dbName string, ts uint64) error {
+	ret := _m.Called(ctx, dbName, ts)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, *model.Partition, uint64) error); ok {
-		r0 = rf(ctx, partition, ts)
+	if rf, ok := ret.Get(0).(func(context.Context, string, uint64) error); ok {
+		r0 = rf(ctx, dbName, ts)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// CreatePartition provides a mock function with given fields: ctx, dbName, partition, ts
+func (_m *RootCoordCatalog) CreatePartition(ctx context.Context, dbName string, partition *model.Partition, ts uint64) error {
+	ret := _m.Called(ctx, dbName, partition, ts)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, *model.Partition, uint64) error); ok {
+		r0 = rf(ctx, dbName, partition, ts)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -248,13 +261,27 @@ func (_m *RootCoordCatalog) DropCredential(ctx context.Context, username string)
 	return r0
 }
 
-// DropPartition provides a mock function with given fields: ctx, collectionID, partitionID, ts
-func (_m *RootCoordCatalog) DropPartition(ctx context.Context, dbName string, collectionID typeutil.UniqueID, partitionID typeutil.UniqueID, ts typeutil.Timestamp) error {
-	ret := _m.Called(ctx, collectionID, partitionID, ts)
+// DropDatabase provides a mock function with given fields: ctx, dbName, ts
+func (_m *RootCoordCatalog) DropDatabase(ctx context.Context, dbName string, ts uint64) error {
+	ret := _m.Called(ctx, dbName, ts)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, int64, int64, uint64) error); ok {
-		r0 = rf(ctx, collectionID, partitionID, ts)
+	if rf, ok := ret.Get(0).(func(context.Context, string, uint64) error); ok {
+		r0 = rf(ctx, dbName, ts)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// DropPartition provides a mock function with given fields: ctx, dbName, collectionID, partitionID, ts
+func (_m *RootCoordCatalog) DropPartition(ctx context.Context, dbName string, collectionID int64, partitionID int64, ts uint64) error {
+	ret := _m.Called(ctx, dbName, collectionID, partitionID, ts)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, int64, int64, uint64) error); ok {
+		r0 = rf(ctx, dbName, collectionID, partitionID, ts)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -276,13 +303,13 @@ func (_m *RootCoordCatalog) DropRole(ctx context.Context, tenant string, roleNam
 	return r0
 }
 
-// GetCollectionByID provides a mock function with given fields: ctx, collectionID, ts
-func (_m *RootCoordCatalog) GetCollectionByID(ctx context.Context, dbName string, ts typeutil.Timestamp, collectionID typeutil.UniqueID) (*model.Collection, error) {
-	ret := _m.Called(ctx, collectionID, ts)
+// GetCollectionByID provides a mock function with given fields: ctx, dbName, ts, collectionID
+func (_m *RootCoordCatalog) GetCollectionByID(ctx context.Context, dbName string, ts uint64, collectionID int64) (*model.Collection, error) {
+	ret := _m.Called(ctx, dbName, ts, collectionID)
 
 	var r0 *model.Collection
-	if rf, ok := ret.Get(0).(func(context.Context, int64, uint64) *model.Collection); ok {
-		r0 = rf(ctx, collectionID, ts)
+	if rf, ok := ret.Get(0).(func(context.Context, string, uint64, int64) *model.Collection); ok {
+		r0 = rf(ctx, dbName, ts, collectionID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*model.Collection)
@@ -290,8 +317,8 @@ func (_m *RootCoordCatalog) GetCollectionByID(ctx context.Context, dbName string
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, int64, uint64) error); ok {
-		r1 = rf(ctx, collectionID, ts)
+	if rf, ok := ret.Get(1).(func(context.Context, string, uint64, int64) error); ok {
+		r1 = rf(ctx, dbName, ts, collectionID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -299,13 +326,13 @@ func (_m *RootCoordCatalog) GetCollectionByID(ctx context.Context, dbName string
 	return r0, r1
 }
 
-// GetCollectionByName provides a mock function with given fields: ctx, collectionName, ts
-func (_m *RootCoordCatalog) GetCollectionByName(ctx context.Context, dbName, collectionName string, ts typeutil.Timestamp) (*model.Collection, error) {
-	ret := _m.Called(ctx, collectionName, ts)
+// GetCollectionByName provides a mock function with given fields: ctx, dbName, collectionName, ts
+func (_m *RootCoordCatalog) GetCollectionByName(ctx context.Context, dbName string, collectionName string, ts uint64) (*model.Collection, error) {
+	ret := _m.Called(ctx, dbName, collectionName, ts)
 
 	var r0 *model.Collection
-	if rf, ok := ret.Get(0).(func(context.Context, string, uint64) *model.Collection); ok {
-		r0 = rf(ctx, collectionName, ts)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, uint64) *model.Collection); ok {
+		r0 = rf(ctx, dbName, collectionName, ts)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*model.Collection)
@@ -313,8 +340,8 @@ func (_m *RootCoordCatalog) GetCollectionByName(ctx context.Context, dbName, col
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, string, uint64) error); ok {
-		r1 = rf(ctx, collectionName, ts)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, uint64) error); ok {
+		r1 = rf(ctx, dbName, collectionName, ts)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -368,13 +395,13 @@ func (_m *RootCoordCatalog) ListAliases(ctx context.Context, ts uint64) ([]*mode
 	return r0, r1
 }
 
-// ListCollections provides a mock function with given fields: ctx, ts
-func (_m *RootCoordCatalog) ListCollections(ctx context.Context, dbName string, ts typeutil.Timestamp) (map[string]*model.Collection, error) {
-	ret := _m.Called(ctx, ts)
+// ListCollections provides a mock function with given fields: ctx, dbName, ts
+func (_m *RootCoordCatalog) ListCollections(ctx context.Context, dbName string, ts uint64) (map[string]*model.Collection, error) {
+	ret := _m.Called(ctx, dbName, ts)
 
 	var r0 map[string]*model.Collection
-	if rf, ok := ret.Get(0).(func(context.Context, uint64) map[string]*model.Collection); ok {
-		r0 = rf(ctx, ts)
+	if rf, ok := ret.Get(0).(func(context.Context, string, uint64) map[string]*model.Collection); ok {
+		r0 = rf(ctx, dbName, ts)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(map[string]*model.Collection)
@@ -382,8 +409,8 @@ func (_m *RootCoordCatalog) ListCollections(ctx context.Context, dbName string, 
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, uint64) error); ok {
-		r1 = rf(ctx, ts)
+	if rf, ok := ret.Get(1).(func(context.Context, string, uint64) error); ok {
+		r1 = rf(ctx, dbName, ts)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -407,6 +434,29 @@ func (_m *RootCoordCatalog) ListCredentials(ctx context.Context) ([]string, erro
 	var r1 error
 	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
 		r1 = rf(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// ListDatabases provides a mock function with given fields: ctx, ts
+func (_m *RootCoordCatalog) ListDatabases(ctx context.Context, ts uint64) ([]string, error) {
+	ret := _m.Called(ctx, ts)
+
+	var r0 []string
+	if rf, ok := ret.Get(0).(func(context.Context, uint64) []string); ok {
+		r0 = rf(ctx, ts)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, uint64) error); ok {
+		r1 = rf(ctx, ts)
 	} else {
 		r1 = ret.Error(1)
 	}

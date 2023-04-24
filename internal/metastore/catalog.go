@@ -13,6 +13,10 @@ import (
 
 //go:generate mockery --name=RootCoordCatalog
 type RootCoordCatalog interface {
+	CreateDatabase(ctx context.Context, dbName string, ts typeutil.Timestamp) error
+	DropDatabase(ctx context.Context, dbName string, ts typeutil.Timestamp) error
+	ListDatabases(ctx context.Context, ts typeutil.Timestamp) ([]string, error)
+
 	CreateCollection(ctx context.Context, collectionInfo *model.Collection, ts typeutil.Timestamp) error
 	GetCollectionByID(ctx context.Context, dbName string, ts typeutil.Timestamp, collectionID typeutil.UniqueID) (*model.Collection, error)
 	GetCollectionByName(ctx context.Context, dbName, collectionName string, ts typeutil.Timestamp) (*model.Collection, error)
