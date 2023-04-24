@@ -10,7 +10,7 @@ import (
 
 type Collection struct {
 	TenantID             string
-	DBName				 string
+	DBName               string
 	CollectionID         int64
 	Partitions           []*Partition
 	Name                 string
@@ -35,7 +35,7 @@ func (c Collection) Available() bool {
 func (c Collection) Clone() *Collection {
 	return &Collection{
 		TenantID:             c.TenantID,
-		DBName:				  c.DBName,
+		DBName:               c.DBName,
 		CollectionID:         c.CollectionID,
 		Name:                 c.Name,
 		Description:          c.Description,
@@ -90,7 +90,7 @@ func UnmarshalCollectionModel(coll *pb.CollectionInfo) *Collection {
 
 	return &Collection{
 		CollectionID:         coll.ID,
-		DBName: 			  coll.DbName,
+		DBName:               coll.DbName,
 		Name:                 coll.Schema.Name,
 		Description:          coll.Schema.Description,
 		AutoID:               coll.Schema.AutoID,
@@ -154,7 +154,7 @@ func marshalCollectionModelWithConfig(coll *Collection, c *config) *pb.Collectio
 
 	collectionPb := &pb.CollectionInfo{
 		ID:                   coll.CollectionID,
-		DbName: 			  coll.DBName,
+		DbName:               coll.DBName,
 		Schema:               collSchema,
 		CreateTime:           coll.CreateTime,
 		VirtualChannelNames:  coll.VirtualChannelNames,

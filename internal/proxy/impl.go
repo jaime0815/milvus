@@ -120,7 +120,7 @@ func (node *Proxy) InvalidateCollectionMetaCache(ctx context.Context, request *p
 	var aliasName []string
 	if globalMetaCache != nil {
 		if collectionName != "" {
-			globalMetaCache.RemoveCollection(ctx, collectionName) // no need to return error, though collection may be not cached
+			globalMetaCache.RemoveCollection(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName) // no need to return error, though collection may be not cached
 		}
 		if request.CollectionID != UniqueID(0) {
 			aliasName = globalMetaCache.RemoveCollectionsByID(ctx, collectionID)
@@ -1834,7 +1834,7 @@ func (node *Proxy) GetLoadingProgress(ctx context.Context, request *milvuspb.Get
 	if err := validateCollectionName(request.CollectionName); err != nil {
 		return getErrResponse(err), nil
 	}
-	collectionID, err := globalMetaCache.GetCollectionID(ctx, request.CollectionName)
+	collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), request.CollectionName)
 	if err != nil {
 		return getErrResponse(err), nil
 	}
@@ -1933,7 +1933,7 @@ func (node *Proxy) GetLoadState(ctx context.Context, request *milvuspb.GetLoadSt
 		metrics.ProxyReqLatency.WithLabelValues(strconv.FormatInt(Params.ProxyCfg.GetNodeID(), 10), method).Observe(float64(tr.ElapseSpan().Milliseconds()))
 	}()
 
-	collectionID, err := globalMetaCache.GetCollectionID(ctx, request.CollectionName)
+	collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), request.CollectionName)
 	if err != nil {
 		successResponse.State = commonpb.LoadState_LoadStateNotExist
 		return successResponse, nil
@@ -3624,7 +3624,7 @@ func (node *Proxy) GetPersistentSegmentInfo(ctx context.Context, req *milvuspb.G
 		metrics.TotalLabel).Inc()
 
 	// list segments
-	collectionID, err := globalMetaCache.GetCollectionID(ctx, req.GetCollectionName())
+	collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), req.GetCollectionName())
 	if err != nil {
 		metrics.ProxyFunctionCall.WithLabelValues(strconv.FormatInt(Params.ProxyCfg.GetNodeID(), 10), method, metrics.FailLabel).Inc()
 		resp.Status.Reason = fmt.Errorf("getCollectionID failed, err:%w", err).Error()
@@ -3707,7 +3707,7 @@ func (node *Proxy) GetQuerySegmentInfo(ctx context.Context, req *milvuspb.GetQue
 	metrics.ProxyFunctionCall.WithLabelValues(strconv.FormatInt(Params.ProxyCfg.GetNodeID(), 10), method,
 		metrics.TotalLabel).Inc()
 
-	collID, err := globalMetaCache.GetCollectionID(ctx, req.CollectionName)
+	collID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), req.CollectionName)
 	if err != nil {
 		metrics.ProxyFunctionCall.WithLabelValues(strconv.FormatInt(Params.ProxyCfg.GetNodeID(), 10), method, metrics.FailLabel).Inc()
 		resp.Status.Reason = err.Error()
@@ -3993,7 +3993,7 @@ func (node *Proxy) LoadBalance(ctx context.Context, req *milvuspb.LoadBalanceReq
 		ErrorCode: commonpb.ErrorCode_UnexpectedError,
 	}
 
-	collectionID, err := globalMetaCache.GetCollectionID(ctx, req.GetCollectionName())
+	collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), req.GetCollectionName())
 	if err != nil {
 		log.Warn("failed to get collection id",
 			zap.String("collection name", req.GetCollectionName()),
@@ -4047,7 +4047,7 @@ func (node *Proxy) GetReplicas(ctx context.Context, req *milvuspb.GetReplicasReq
 	)
 
 	if req.GetCollectionName() != "" {
-		req.CollectionID, _ = globalMetaCache.GetCollectionID(ctx, req.GetCollectionName())
+		req.CollectionID, _ = globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), req.GetCollectionName())
 	}
 
 	r, err := node.queryCoord.GetReplicas(ctx, req)
