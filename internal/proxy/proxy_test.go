@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/mock"
+
 	"github.com/golang/protobuf/proto"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	ot "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
@@ -873,7 +875,7 @@ func TestProxy(t *testing.T) {
 	wg.Add(1)
 	t.Run("describe collection", func(t *testing.T) {
 		defer wg.Done()
-		collectionID, err := globalMetaCache.GetCollectionID(ctx, collectionName)
+		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.DescribeCollection(ctx, &milvuspb.DescribeCollectionRequest{
@@ -1050,7 +1052,7 @@ func TestProxy(t *testing.T) {
 	wg.Add(1)
 	t.Run("show partitions", func(t *testing.T) {
 		defer wg.Done()
-		collectionID, err := globalMetaCache.GetCollectionID(ctx, collectionName)
+		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.ShowPartitions(ctx, &milvuspb.ShowPartitionsRequest{
@@ -1357,7 +1359,7 @@ func TestProxy(t *testing.T) {
 	t.Run("get replicas", func(t *testing.T) {
 		defer wg.Done()
 
-		collectionID, err := globalMetaCache.GetCollectionID(ctx, collectionName)
+		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.GetReplicas(ctx, &milvuspb.GetReplicasRequest{
@@ -1606,7 +1608,7 @@ func TestProxy(t *testing.T) {
 	wg.Add(1)
 	t.Run("release collection", func(t *testing.T) {
 		defer wg.Done()
-		_, err := globalMetaCache.GetCollectionID(ctx, collectionName)
+		_, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.ReleaseCollection(ctx, &milvuspb.ReleaseCollectionRequest{
@@ -1647,7 +1649,7 @@ func TestProxy(t *testing.T) {
 	wg.Add(1)
 	t.Run("load partitions", func(t *testing.T) {
 		defer wg.Done()
-		collectionID, err := globalMetaCache.GetCollectionID(ctx, collectionName)
+		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.LoadPartitions(ctx, &milvuspb.LoadPartitionsRequest{
@@ -1720,7 +1722,7 @@ func TestProxy(t *testing.T) {
 	wg.Add(1)
 	t.Run("show in-memory partitions", func(t *testing.T) {
 		defer wg.Done()
-		collectionID, err := globalMetaCache.GetCollectionID(ctx, collectionName)
+		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.ShowPartitions(ctx, &milvuspb.ShowPartitionsRequest{
@@ -1877,7 +1879,7 @@ func TestProxy(t *testing.T) {
 	wg.Add(1)
 	t.Run("show in-memory partitions after release partition", func(t *testing.T) {
 		defer wg.Done()
-		collectionID, err := globalMetaCache.GetCollectionID(ctx, collectionName)
+		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.ShowPartitions(ctx, &milvuspb.ShowPartitionsRequest{
@@ -1955,7 +1957,7 @@ func TestProxy(t *testing.T) {
 	wg.Add(1)
 	t.Run("show partitions after drop partition", func(t *testing.T) {
 		defer wg.Done()
-		collectionID, err := globalMetaCache.GetCollectionID(ctx, collectionName)
+		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.ShowPartitions(ctx, &milvuspb.ShowPartitionsRequest{
@@ -2002,7 +2004,7 @@ func TestProxy(t *testing.T) {
 	wg.Add(1)
 	t.Run("drop collection", func(t *testing.T) {
 		defer wg.Done()
-		_, err := globalMetaCache.GetCollectionID(ctx, collectionName)
+		_, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.DropCollection(ctx, &milvuspb.DropCollectionRequest{
@@ -3742,8 +3744,6 @@ func TestProxy_Import(t *testing.T) {
 		defer wg.Done()
 		proxy := &Proxy{}
 		proxy.UpdateStateCode(commonpb.StateCode_Healthy)
-		cache := newMockCache()
-		globalMetaCache = cache
 		chMgr := newMockChannelsMgr()
 		proxy.chMgr = chMgr
 		rc := newMockRootCoord()
@@ -3764,8 +3764,6 @@ func TestProxy_Import(t *testing.T) {
 		defer wg.Done()
 		proxy := &Proxy{}
 		proxy.UpdateStateCode(commonpb.StateCode_Healthy)
-		cache := newMockCache()
-		globalMetaCache = cache
 		chMgr := newMockChannelsMgr()
 		proxy.chMgr = chMgr
 		rc := newMockRootCoord()
@@ -3786,8 +3784,6 @@ func TestProxy_Import(t *testing.T) {
 		defer wg.Done()
 		proxy := &Proxy{}
 		proxy.UpdateStateCode(commonpb.StateCode_Healthy)
-		cache := newMockCache()
-		globalMetaCache = cache
 		chMgr := newMockChannelsMgr()
 		proxy.chMgr = chMgr
 		rc := newMockRootCoord()
@@ -3865,13 +3861,18 @@ func TestProxy_GetStatistics(t *testing.T) {
 
 func TestProxy_GetLoadState(t *testing.T) {
 	originCache := globalMetaCache
-	m := newMockCache()
-	m.setGetIDFunc(func(ctx context.Context, collectionName string) (typeutil.UniqueID, error) {
-		return 1, nil
-	})
-	m.setGetPartitionIDFunc(func(ctx context.Context, collectionName string, partitionName string) (typeutil.UniqueID, error) {
-		return 2, nil
-	})
+	m := NewMockCache(t)
+	m.On("GetCollectionID",
+		mock.Anything, // context.Context
+		mock.AnythingOfType("string"),
+		mock.AnythingOfType("string"),
+	).Return(UniqueID(1), nil)
+	m.On("GetPartitionID",
+		mock.Anything, // context.Context
+		mock.AnythingOfType("string"),
+		mock.AnythingOfType("string"),
+		mock.AnythingOfType("string"),
+	).Return(UniqueID(2), nil)
 	globalMetaCache = m
 	defer func() {
 		globalMetaCache = originCache

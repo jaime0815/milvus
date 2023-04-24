@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/mock"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/milvus-io/milvus/internal/util/autoindex"
 	"github.com/milvus-io/milvus/internal/util/indexparamcheck"
@@ -203,7 +205,7 @@ func TestSearchTask_PreExecute(t *testing.T) {
 	t.Run("invalid IgnoreGrowing param", func(t *testing.T) {
 		collName := "test_invalid_param" + funcutil.GenRandomStr()
 		createColl(t, collName, rc)
-		collID, err := globalMetaCache.GetCollectionID(context.TODO(), collName)
+		collID, err := globalMetaCache.GetCollectionID(context.TODO(), GetCurDatabaseFromContextOrEmpty(ctx), collName)
 		require.NoError(t, err)
 		status, err := qc.LoadCollection(ctx, &querypb.LoadCollectionRequest{
 			Base: &commonpb.MsgBase{
@@ -264,7 +266,7 @@ func TestSearchTask_PreExecute(t *testing.T) {
 	t.Run("test checkIfLoaded error", func(t *testing.T) {
 		collName := "test_checkIfLoaded_error" + funcutil.GenRandomStr()
 		createColl(t, collName, rc)
-		_, err := globalMetaCache.GetCollectionID(context.TODO(), collName)
+		_, err := globalMetaCache.GetCollectionID(context.TODO(), GetCurDatabaseFromContextOrEmpty(ctx), collName)
 		require.NoError(t, err)
 		task := getSearchTask(t, collName)
 		task.collectionName = collName
@@ -290,7 +292,7 @@ func TestSearchTask_PreExecute(t *testing.T) {
 	t.Run("search with timeout", func(t *testing.T) {
 		collName := "search_with_timeout" + funcutil.GenRandomStr()
 		createColl(t, collName, rc)
-		collID, err := globalMetaCache.GetCollectionID(context.TODO(), collName)
+		collID, err := globalMetaCache.GetCollectionID(context.TODO(), GetCurDatabaseFromContextOrEmpty(ctx), collName)
 		require.NoError(t, err)
 		status, err := qc.LoadCollection(ctx, &querypb.LoadCollectionRequest{
 			Base: &commonpb.MsgBase{
@@ -1602,10 +1604,12 @@ func TestTaskSearch_reduceSearchResultData(t *testing.T) {
 
 func Test_checkIfLoaded(t *testing.T) {
 	t.Run("failed to get collection info", func(t *testing.T) {
-		cache := newMockCache()
-		cache.setGetInfoFunc(func(ctx context.Context, collectionName string) (*collectionInfo, error) {
-			return nil, errors.New("mock")
-		})
+		cache := NewMockCache(t)
+		cache.On("GetCollectionInfo",
+			mock.Anything, // context.Context
+			mock.AnythingOfType("string"),
+			mock.AnythingOfType("string"),
+		).Return(nil, errors.New("error mock GetCollectionInfo"))
 		globalMetaCache = cache
 		var qc types.QueryCoord
 		_, err := checkIfLoaded(context.Background(), qc, "test", []UniqueID{})
@@ -1613,10 +1617,12 @@ func Test_checkIfLoaded(t *testing.T) {
 	})
 
 	t.Run("collection loaded", func(t *testing.T) {
-		cache := newMockCache()
-		cache.setGetInfoFunc(func(ctx context.Context, collectionName string) (*collectionInfo, error) {
-			return &collectionInfo{isLoaded: true}, nil
-		})
+		cache := NewMockCache(t)
+		cache.On("GetCollectionInfo",
+			mock.Anything, // context.Context
+			mock.AnythingOfType("string"),
+			mock.AnythingOfType("string"),
+		).Return(&collectionInfo{isLoaded: true}, nil)
 		globalMetaCache = cache
 		var qc types.QueryCoord
 		loaded, err := checkIfLoaded(context.Background(), qc, "test", []UniqueID{})
@@ -1625,10 +1631,12 @@ func Test_checkIfLoaded(t *testing.T) {
 	})
 
 	t.Run("show partitions failed", func(t *testing.T) {
-		cache := newMockCache()
-		cache.setGetInfoFunc(func(ctx context.Context, collectionName string) (*collectionInfo, error) {
-			return &collectionInfo{isLoaded: false}, nil
-		})
+		cache := NewMockCache(t)
+		cache.On("GetCollectionInfo",
+			mock.Anything, // context.Context
+			mock.AnythingOfType("string"),
+			mock.AnythingOfType("string"),
+		).Return(&collectionInfo{isLoaded: false}, nil)
 		globalMetaCache = cache
 		qc := NewQueryCoordMock()
 		qc.SetShowPartitionsFunc(func(ctx context.Context, request *querypb.ShowPartitionsRequest) (*querypb.ShowPartitionsResponse, error) {
@@ -1639,10 +1647,12 @@ func Test_checkIfLoaded(t *testing.T) {
 	})
 
 	t.Run("show partitions but didn't success", func(t *testing.T) {
-		cache := newMockCache()
-		cache.setGetInfoFunc(func(ctx context.Context, collectionName string) (*collectionInfo, error) {
-			return &collectionInfo{isLoaded: false}, nil
-		})
+		cache := NewMockCache(t)
+		cache.On("GetCollectionInfo",
+			mock.Anything, // context.Context
+			mock.AnythingOfType("string"),
+			mock.AnythingOfType("string"),
+		).Return(&collectionInfo{isLoaded: false}, nil)
 		globalMetaCache = cache
 		qc := NewQueryCoordMock()
 		qc.SetShowPartitionsFunc(func(ctx context.Context, request *querypb.ShowPartitionsRequest) (*querypb.ShowPartitionsResponse, error) {
@@ -1653,10 +1663,12 @@ func Test_checkIfLoaded(t *testing.T) {
 	})
 
 	t.Run("partitions loaded", func(t *testing.T) {
-		cache := newMockCache()
-		cache.setGetInfoFunc(func(ctx context.Context, collectionName string) (*collectionInfo, error) {
-			return &collectionInfo{isLoaded: false}, nil
-		})
+		cache := NewMockCache(t)
+		cache.On("GetCollectionInfo",
+			mock.Anything, // context.Context
+			mock.AnythingOfType("string"),
+			mock.AnythingOfType("string"),
+		).Return(&collectionInfo{isLoaded: false}, nil)
 		globalMetaCache = cache
 		qc := NewQueryCoordMock()
 		qc.SetShowPartitionsFunc(func(ctx context.Context, request *querypb.ShowPartitionsRequest) (*querypb.ShowPartitionsResponse, error) {
@@ -1668,10 +1680,12 @@ func Test_checkIfLoaded(t *testing.T) {
 	})
 
 	t.Run("partitions loaded, some patitions not fully loaded", func(t *testing.T) {
-		cache := newMockCache()
-		cache.setGetInfoFunc(func(ctx context.Context, collectionName string) (*collectionInfo, error) {
-			return &collectionInfo{isLoaded: false}, nil
-		})
+		cache := NewMockCache(t)
+		cache.On("GetCollectionInfo",
+			mock.Anything, // context.Context
+			mock.AnythingOfType("string"),
+			mock.AnythingOfType("string"),
+		).Return(&collectionInfo{isLoaded: false}, nil)
 		globalMetaCache = cache
 		qc := NewQueryCoordMock()
 		qc.SetShowPartitionsFunc(func(ctx context.Context, request *querypb.ShowPartitionsRequest) (*querypb.ShowPartitionsResponse, error) {
@@ -1683,10 +1697,12 @@ func Test_checkIfLoaded(t *testing.T) {
 	})
 
 	t.Run("no specified partitions, show partitions failed", func(t *testing.T) {
-		cache := newMockCache()
-		cache.setGetInfoFunc(func(ctx context.Context, collectionName string) (*collectionInfo, error) {
-			return &collectionInfo{isLoaded: false}, nil
-		})
+		cache := NewMockCache(t)
+		cache.On("GetCollectionInfo",
+			mock.Anything, // context.Context
+			mock.AnythingOfType("string"),
+			mock.AnythingOfType("string"),
+		).Return(&collectionInfo{isLoaded: false}, nil)
 		globalMetaCache = cache
 		qc := NewQueryCoordMock()
 		qc.SetShowPartitionsFunc(func(ctx context.Context, request *querypb.ShowPartitionsRequest) (*querypb.ShowPartitionsResponse, error) {
@@ -1697,10 +1713,12 @@ func Test_checkIfLoaded(t *testing.T) {
 	})
 
 	t.Run("no specified partitions, show partitions but didn't succeed", func(t *testing.T) {
-		cache := newMockCache()
-		cache.setGetInfoFunc(func(ctx context.Context, collectionName string) (*collectionInfo, error) {
-			return &collectionInfo{isLoaded: false}, nil
-		})
+		cache := NewMockCache(t)
+		cache.On("GetCollectionInfo",
+			mock.Anything, // context.Context
+			mock.AnythingOfType("string"),
+			mock.AnythingOfType("string"),
+		).Return(&collectionInfo{isLoaded: false}, nil)
 		globalMetaCache = cache
 		qc := NewQueryCoordMock()
 		qc.SetShowPartitionsFunc(func(ctx context.Context, request *querypb.ShowPartitionsRequest) (*querypb.ShowPartitionsResponse, error) {
@@ -1711,10 +1729,12 @@ func Test_checkIfLoaded(t *testing.T) {
 	})
 
 	t.Run("not fully loaded", func(t *testing.T) {
-		cache := newMockCache()
-		cache.setGetInfoFunc(func(ctx context.Context, collectionName string) (*collectionInfo, error) {
-			return &collectionInfo{isLoaded: false}, nil
-		})
+		cache := NewMockCache(t)
+		cache.On("GetCollectionInfo",
+			mock.Anything, // context.Context
+			mock.AnythingOfType("string"),
+			mock.AnythingOfType("string"),
+		).Return(&collectionInfo{isLoaded: false}, nil)
 		globalMetaCache = cache
 		qc := NewQueryCoordMock()
 		qc.SetShowPartitionsFunc(func(ctx context.Context, request *querypb.ShowPartitionsRequest) (*querypb.ShowPartitionsResponse, error) {
@@ -1726,10 +1746,12 @@ func Test_checkIfLoaded(t *testing.T) {
 	})
 
 	t.Run("not loaded", func(t *testing.T) {
-		cache := newMockCache()
-		cache.setGetInfoFunc(func(ctx context.Context, collectionName string) (*collectionInfo, error) {
-			return &collectionInfo{isLoaded: false}, nil
-		})
+		cache := NewMockCache(t)
+		cache.On("GetCollectionInfo",
+			mock.Anything, // context.Context
+			mock.AnythingOfType("string"),
+			mock.AnythingOfType("string"),
+		).Return(&collectionInfo{isLoaded: false}, nil)
 		globalMetaCache = cache
 		qc := NewQueryCoordMock()
 		qc.SetShowPartitionsFunc(func(ctx context.Context, request *querypb.ShowPartitionsRequest) (*querypb.ShowPartitionsResponse, error) {
@@ -1805,7 +1827,7 @@ func TestSearchTask_ErrExecute(t *testing.T) {
 	require.NoError(t, createColT.Execute(ctx))
 	require.NoError(t, createColT.PostExecute(ctx))
 
-	collectionID, err := globalMetaCache.GetCollectionID(ctx, collectionName)
+	collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
 	assert.NoError(t, err)
 
 	status, err := qc.LoadCollection(ctx, &querypb.LoadCollectionRequest{

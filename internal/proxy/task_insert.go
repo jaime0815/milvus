@@ -75,7 +75,7 @@ func (it *insertTask) getChannels() ([]pChan, error) {
 	if len(it.pChannels) != 0 {
 		return it.pChannels, nil
 	}
-	collID, err := globalMetaCache.GetCollectionID(it.ctx, it.CollectionName)
+	collID, err := globalMetaCache.GetCollectionID(it.ctx, GetCurDatabaseFromContextOrEmpty(it.ctx), it.CollectionName)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +182,7 @@ func (it *insertTask) PreExecute(ctx context.Context) error {
 		return err
 	}
 
-	collSchema, err := globalMetaCache.GetCollectionSchema(ctx, collectionName)
+	collSchema, err := globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
 	if err != nil {
 		log.Error("get collection schema from global meta cache failed", zap.String("collection name", collectionName), zap.Error(err))
 		return err
@@ -400,19 +400,19 @@ func (it *insertTask) Execute(ctx context.Context) error {
 	tr := timerecord.NewTimeRecorder(fmt.Sprintf("proxy execute insert %d", it.ID()))
 
 	collectionName := it.CollectionName
-	collID, err := globalMetaCache.GetCollectionID(ctx, collectionName)
+	collID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
 	if err != nil {
 		return err
 	}
 	it.CollectionID = collID
 	var partitionID UniqueID
 	if len(it.PartitionName) > 0 {
-		partitionID, err = globalMetaCache.GetPartitionID(ctx, collectionName, it.PartitionName)
+		partitionID, err = globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName, it.PartitionName)
 		if err != nil {
 			return err
 		}
 	} else {
-		partitionID, err = globalMetaCache.GetPartitionID(ctx, collectionName, Params.CommonCfg.DefaultPartitionName)
+		partitionID, err = globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName, Params.CommonCfg.DefaultPartitionName)
 		if err != nil {
 			return err
 		}
