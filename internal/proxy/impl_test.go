@@ -33,7 +33,6 @@ import (
 	"github.com/milvus-io/milvus/internal/types"
 	"github.com/milvus-io/milvus/internal/util/dependency"
 	"github.com/milvus-io/milvus/internal/util/sessionutil"
-	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 
 func TestProxy_InvalidateCollectionMetaCache_remove_stream(t *testing.T) {
@@ -363,11 +362,12 @@ func TestProxy_FlushAll(t *testing.T) {
 	node.rootCoord = mocks.NewRootCoord(t)
 
 	// set expectations
-	cache := newMockCache()
-	getIDFunc := func(ctx context.Context, collectionName string) (typeutil.UniqueID, error) {
-		return UniqueID(0), nil
-	}
-	cache.getIDFunc = getIDFunc
+	cache := NewMockCache(t)
+	cache.On("GetCollectionID",
+		mock.Anything, // context.Context
+		mock.AnythingOfType("string"),
+		mock.AnythingOfType("string"),
+	).Return(UniqueID(0), nil)
 	globalMetaCache = cache
 	successStatus := &commonpb.Status{ErrorCode: commonpb.ErrorCode_Success}
 	node.dataCoord.(*mocks.DataCoord).EXPECT().Flush(mock.Anything, mock.Anything).
@@ -390,13 +390,19 @@ func TestProxy_FlushAll(t *testing.T) {
 	})
 
 	t.Run("FlushAll failed, get id failed", func(t *testing.T) {
-		globalMetaCache.(*mockCache).getIDFunc = func(ctx context.Context, collectionName string) (typeutil.UniqueID, error) {
-			return 0, errors.New("mock error")
-		}
+		globalMetaCache.(*MockCache).On("GetCollectionID",
+			mock.Anything, // context.Context
+			mock.AnythingOfType("string"),
+			mock.AnythingOfType("string"),
+		).Return(UniqueID(0), errors.New("mock error"))
 		resp, err := node.FlushAll(ctx, &milvuspb.FlushAllRequest{})
 		assert.NoError(t, err)
 		assert.Equal(t, resp.GetStatus().GetErrorCode(), commonpb.ErrorCode_UnexpectedError)
-		globalMetaCache.(*mockCache).getIDFunc = getIDFunc
+		globalMetaCache.(*MockCache).On("GetCollectionID",
+			mock.Anything, // context.Context
+			mock.AnythingOfType("string"),
+			mock.AnythingOfType("string"),
+		).Return(UniqueID(0), nil)
 	})
 
 	t.Run("FlushAll failed, DataCoord flush failed", func(t *testing.T) {

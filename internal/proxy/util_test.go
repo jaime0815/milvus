@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/mock"
+
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/metadata"
 
@@ -742,14 +744,16 @@ func TestGetRole(t *testing.T) {
 	globalMetaCache = nil
 	_, err := GetRole("foo")
 	assert.NotNil(t, err)
-	globalMetaCache = &mockCache{
-		getUserRoleFunc: func(username string) []string {
-			if username == "root" {
-				return []string{"role1", "admin", "role2"}
-			}
-			return []string{"role1"}
-		},
-	}
+	mockCache := NewMockCache(t)
+	mockCache.On("GetUserRole",
+		mock.AnythingOfType("string"),
+	).Return(func(username string) []string {
+		if username == "root" {
+			return []string{"role1", "admin", "role2"}
+		}
+		return []string{"role1"}
+	})
+	globalMetaCache = mockCache
 	roles, err := GetRole("root")
 	assert.Nil(t, err)
 	assert.Equal(t, 3, len(roles))

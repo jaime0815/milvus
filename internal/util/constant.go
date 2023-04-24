@@ -51,7 +51,6 @@ const (
 	PrivilegeWord = "Privilege"
 	AnyWord       = "*"
 
-
 	HeaderDatabase = "database"
 )
 
