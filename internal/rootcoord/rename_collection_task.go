@@ -39,5 +39,5 @@ func (t *renameCollectionTask) Execute(ctx context.Context) error {
 	if err := t.core.ExpireMetaCache(ctx, []string{t.Req.GetOldName()}, InvalidCollectionID, t.GetTs()); err != nil {
 		return err
 	}
-	return t.core.meta.RenameCollection(ctx, t.Req.GetDb(), t.Req.GetOldName(), t.Req.GetNewName(), t.GetTs())
+	return t.core.meta.RenameCollection(ctx, t.Req.GetDbName(), t.Req.GetOldName(), t.Req.GetNewName(), t.GetTs())
 }

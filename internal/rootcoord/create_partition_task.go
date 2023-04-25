@@ -42,7 +42,7 @@ func (t *createPartitionTask) Prepare(ctx context.Context) error {
 	if err := CheckMsgType(t.Req.GetBase().GetMsgType(), commonpb.MsgType_CreatePartition); err != nil {
 		return err
 	}
-	collMeta, err := t.core.meta.GetCollectionByName(ctx, "", t.Req.GetCollectionName(), t.GetTs())
+	collMeta, err := t.core.meta.GetCollectionByName(ctx, t.Req.GetDbName(), t.Req.GetCollectionName(), t.GetTs())
 	if err != nil {
 		return err
 	}

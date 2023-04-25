@@ -1083,12 +1083,12 @@ func TestImportManager_setCollectionPartitionName(t *testing.T) {
 		},
 		CreateTs: time.Now().Unix() - 100,
 	}
-	err := mgr.setCollectionPartitionName(1, 2, info)
+	err := mgr.setCollectionPartitionName("", 1, 2, info)
 	assert.Nil(t, err)
 	assert.Equal(t, "c1", info.GetCollectionName())
 	assert.Equal(t, "p1", info.GetPartitionName())
 
-	err = mgr.setCollectionPartitionName(0, 0, info)
+	err = mgr.setCollectionPartitionName("", 0, 0, info)
 	assert.Error(t, err)
 }
 

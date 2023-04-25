@@ -17,33 +17,21 @@
 package rootcoord
 
 import (
-	"context"
-	"fmt"
-
-	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
-	"github.com/milvus-io/milvus/internal/util/typeutil"
+	"testing"
 )
 
-type createDatabaseTask struct {
-	baseTask
-	Req *milvuspb.CreateDatabaseRequest
+func Test_CreateDBTask_Prepare(t *testing.T) {
+	t.Run("pre check fail", func(t *testing.T) {
+
+	})
+
+	t.Run("normal case", func(t *testing.T) {
+
+	})
 }
 
-func (t *createDatabaseTask) Prepare(ctx context.Context) error {
-	t.SetStep(typeutil.TaskStepPreExecute)
-	dbs, err := t.core.meta.ListDatabases(ctx, t.GetTs())
-	if err != nil {
-		return err
-	}
+func Test_CreateDBTask_Execute(t *testing.T) {
+	t.Run("normal case", func(t *testing.T) {
 
-	cfgMaxDatabaseNum := Params.RootCoordCfg.MaxDatabaseNum
-	if int64(len(dbs)) >= cfgMaxDatabaseNum {
-		return fmt.Errorf("database number (%d) exceeds max configuration (%d)", len(dbs), cfgMaxDatabaseNum)
-	}
-	return nil
-}
-
-func (t *createDatabaseTask) Execute(ctx context.Context) error {
-	t.SetStep(typeutil.TaskStepExecute)
-	return t.core.meta.CreateDatabase(ctx,  t.Req.GetDbName(), t.GetTs())
+	})
 }

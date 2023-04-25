@@ -299,7 +299,7 @@ func (t *createCollectionTask) Execute(ctx context.Context) error {
 	clone := collInfo.Clone()
 	clone.Partitions = []*model.Partition{{PartitionName: Params.CommonCfg.DefaultPartitionName}}
 	// need double check in meta table if we can't promise the sequence execution.
-	existedCollInfo, err := t.core.meta.GetCollectionByName(ctx, t.Req.DbName, t.Req.GetCollectionName(), typeutil.MaxTimestamp)
+	existedCollInfo, err := t.core.meta.GetCollectionByName(ctx, t.Req.GetDbName(), t.Req.GetCollectionName(), typeutil.MaxTimestamp)
 	if err == nil {
 		equal := existedCollInfo.Equal(*clone)
 		if !equal {
@@ -310,7 +310,7 @@ func (t *createCollectionTask) Execute(ctx context.Context) error {
 		return nil
 	}
 
-	existedCollInfos, err := t.core.meta.ListCollections(ctx, t.Req.DbName, typeutil.MaxTimestamp)
+	existedCollInfos, err := t.core.meta.ListCollections(ctx, t.Req.GetDbName(), typeutil.MaxTimestamp)
 	if err != nil {
 		log.Warn("fail to list collections for checking the collection count", zap.Error(err))
 		return fmt.Errorf("fail to list collections for checking the collection count")

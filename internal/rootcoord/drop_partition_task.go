@@ -46,7 +46,7 @@ func (t *dropPartitionTask) Prepare(ctx context.Context) error {
 	if t.Req.GetPartitionName() == Params.CommonCfg.DefaultPartitionName {
 		return fmt.Errorf("default partition cannot be deleted")
 	}
-	collMeta, err := t.core.meta.GetCollectionByName(ctx, "", t.Req.GetCollectionName(), t.GetTs())
+	collMeta, err := t.core.meta.GetCollectionByName(ctx, t.Req.GetDbName(), t.Req.GetCollectionName(), t.GetTs())
 	if err != nil {
 		// Is this idempotent?
 		return err

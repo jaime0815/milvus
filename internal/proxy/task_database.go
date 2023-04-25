@@ -57,9 +57,7 @@ func (cdt *createDatabaseTask) OnEnqueue() error {
 }
 
 func (cdt *createDatabaseTask) PreExecute(ctx context.Context) error {
-	cdt.Base.MsgType = commonpb.MsgType_CreateDatabase
-	cdt.Base.SourceID = Params.ProxyCfg.GetNodeID()
-	return nil
+	return ValidateDatabaseName(cdt.GetDbName())
 }
 
 func (cdt *createDatabaseTask) Execute(ctx context.Context) error {
@@ -120,9 +118,7 @@ func (ddt *dropDatabaseTask) OnEnqueue() error {
 }
 
 func (ddt *dropDatabaseTask) PreExecute(ctx context.Context) error {
-	ddt.Base.MsgType = commonpb.MsgType_DropDatabase
-	ddt.Base.SourceID = Params.ProxyCfg.GetNodeID()
-	return nil
+	return ValidateDatabaseName(ddt.GetDbName())
 }
 
 func (ddt *dropDatabaseTask) Execute(ctx context.Context) error {
@@ -183,8 +179,6 @@ func (ldt *listDatabaseTask) OnEnqueue() error {
 }
 
 func (ldt *listDatabaseTask) PreExecute(ctx context.Context) error {
-	ldt.Base.MsgType = commonpb.MsgType_ListDatabases
-	ldt.Base.SourceID = Params.ProxyCfg.GetNodeID()
 	return nil
 }
 

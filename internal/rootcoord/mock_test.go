@@ -50,6 +50,7 @@ const (
 
 type mockMetaTable struct {
 	IMetaTable
+	ListDatabasesFunc              	  func(ctx context.Context, ts Timestamp) ([]string, error)
 	ListCollectionsFunc              func(ctx context.Context, ts Timestamp) ([]*model.Collection, error)
 	AddCollectionFunc                func(ctx context.Context, coll *model.Collection) error
 	GetCollectionByNameFunc          func(ctx context.Context, collectionName string, ts Timestamp) (*model.Collection, error)
@@ -69,6 +70,11 @@ type mockMetaTable struct {
 	GetCollectionVirtualChannelsFunc func(colID int64) []string
 	AlterCollectionFunc              func(ctx context.Context, oldColl *model.Collection, newColl *model.Collection, ts Timestamp) error
 	RenameCollectionFunc             func(ctx context.Context, oldName string, newName string, ts Timestamp) error
+}
+
+
+func (m mockMetaTable)  ListDatabases(ctx context.Context, ts typeutil.Timestamp) ([]string, error) {
+	return m.ListDatabasesFunc(ctx, ts)
 }
 
 func (m mockMetaTable) ListCollections(ctx context.Context, dbName string, ts Timestamp) ([]*model.Collection, error) {
@@ -375,6 +381,9 @@ func withMeta(meta IMetaTable) Opt {
 
 func withInvalidMeta() Opt {
 	meta := newMockMetaTable()
+	meta.ListDatabasesFunc = func(ctx context.Context, ts Timestamp) ([]string, error) {
+		return nil, errors.New("error mock ListDatabases")
+	}
 	meta.ListCollectionsFunc = func(ctx context.Context, ts Timestamp) ([]*model.Collection, error) {
 		return nil, errors.New("error mock ListCollections")
 	}

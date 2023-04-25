@@ -135,6 +135,31 @@ func ValidateResourceGroupName(entity string) error {
 	return nil
 }
 
+func ValidateDatabaseName(dbName string) error {
+	if dbName == "" {
+		return errors.New("database name couldn't be empty")
+	}
+
+	invalidMsg := fmt.Sprintf("Invalid database name %s.", dbName)
+	if int64(len(dbName)) > Params.ProxyCfg.MaxNameLength {
+		return fmt.Errorf("%s the length of a database name must be less than %d characters",
+			invalidMsg, Params.ProxyCfg.MaxNameLength)
+	}
+
+	firstChar := dbName[0]
+	if firstChar != '_' && !isAlpha(firstChar) {
+		return fmt.Errorf("%s the first character of a database name must be an underscore or letter", invalidMsg)
+	}
+
+	for i := 1; i < len(dbName); i++ {
+		c := dbName[i]
+		if c != '_' && !isAlpha(c) && !isNumber(c) {
+			return fmt.Errorf("%s database name can only contain numbers, letters and underscores", invalidMsg)
+		}
+	}
+	return nil
+}
+
 // ValidateCollectionAlias returns true if collAlias is a valid alias name for collection, otherwise returns false.
 func ValidateCollectionAlias(collAlias string) error {
 	return validateCollectionNameOrAlias(collAlias, "alias")
