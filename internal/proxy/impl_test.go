@@ -528,3 +528,172 @@ func TestProxy_GetReplicas(t *testing.T) {
 		assert.Equal(t, resp.GetStatus().GetErrorCode(), commonpb.ErrorCode_UnexpectedError)
 	})
 }
+
+func TestProxyCreateDatabase(t *testing.T) {
+	Params.InitOnce()
+
+	t.Run("not healthy", func(t *testing.T) {
+		node := &Proxy{session: &sessionutil.Session{ServerID: 1}}
+		node.stateCode.Store(commonpb.StateCode_Abnormal)
+		ctx := context.Background()
+		resp, err := node.CreateDatabase(ctx, &milvuspb.CreateDatabaseRequest{})
+		assert.NoError(t, err)
+		assert.Equal(t, commonpb.ErrorCode_UnexpectedError, resp.GetErrorCode())
+	})
+
+	factory := dependency.NewDefaultFactory(true)
+	ctx := context.Background()
+
+	node, err := NewProxy(ctx, factory)
+	assert.NoError(t, err)
+	node.tsoAllocator = &timestampAllocator{
+		tso: newMockTimestampAllocatorInterface(),
+	}
+	node.multiRateLimiter = NewMultiRateLimiter()
+	node.stateCode.Store(commonpb.StateCode_Healthy)
+	node.sched, err = newTaskScheduler(ctx, node.tsoAllocator, node.factory)
+	node.sched.ddQueue.setMaxTaskNum(10)
+	assert.NoError(t, err)
+	err = node.sched.Start()
+	assert.NoError(t, err)
+	defer node.sched.Close()
+
+	t.Run("create database fail", func(t *testing.T) {
+		rc := mocks.NewRootCoord(t)
+		rc.On("CreateDatabase", mock.Anything, mock.Anything).
+			Return(nil, errors.New("fail"))
+		node.rootCoord = rc
+		ctx := context.Background()
+		resp, err := node.CreateDatabase(ctx, &milvuspb.CreateDatabaseRequest{DbName: "db"})
+		assert.NoError(t, err)
+		assert.Equal(t, commonpb.ErrorCode_UnexpectedError, resp.GetErrorCode())
+	})
+
+	t.Run("create database ok", func(t *testing.T) {
+		rc := mocks.NewRootCoord(t)
+		rc.On("CreateDatabase", mock.Anything, mock.Anything).
+			Return(&commonpb.Status{
+				ErrorCode: commonpb.ErrorCode_Success,
+			}, nil)
+		node.rootCoord = rc
+		node.stateCode.Store(commonpb.StateCode_Healthy)
+		ctx := context.Background()
+
+		resp, err := node.CreateDatabase(ctx, &milvuspb.CreateDatabaseRequest{DbName: "db"})
+		assert.NoError(t, err)
+		assert.Equal(t, commonpb.ErrorCode_Success, resp.GetErrorCode())
+	})
+}
+
+func TestProxyDropDatabase(t *testing.T) {
+	Params.InitOnce()
+
+	t.Run("not healthy", func(t *testing.T) {
+		node := &Proxy{session: &sessionutil.Session{ServerID: 1}}
+		node.stateCode.Store(commonpb.StateCode_Abnormal)
+		ctx := context.Background()
+		resp, err := node.DropDatabase(ctx, &milvuspb.DropDatabaseRequest{})
+		assert.NoError(t, err)
+		assert.Equal(t, commonpb.ErrorCode_UnexpectedError, resp.GetErrorCode())
+	})
+
+	factory := dependency.NewDefaultFactory(true)
+	ctx := context.Background()
+
+	node, err := NewProxy(ctx, factory)
+	assert.NoError(t, err)
+	node.tsoAllocator = &timestampAllocator{
+		tso: newMockTimestampAllocatorInterface(),
+	}
+	node.multiRateLimiter = NewMultiRateLimiter()
+	node.stateCode.Store(commonpb.StateCode_Healthy)
+	node.sched, err = newTaskScheduler(ctx, node.tsoAllocator, node.factory)
+	node.sched.ddQueue.setMaxTaskNum(10)
+	assert.NoError(t, err)
+	err = node.sched.Start()
+	assert.NoError(t, err)
+	defer node.sched.Close()
+
+	t.Run("drop database fail", func(t *testing.T) {
+		rc := mocks.NewRootCoord(t)
+		rc.On("DropDatabase", mock.Anything, mock.Anything).
+			Return(nil, errors.New("fail"))
+		node.rootCoord = rc
+		ctx := context.Background()
+		resp, err := node.DropDatabase(ctx, &milvuspb.DropDatabaseRequest{DbName: "db"})
+		assert.NoError(t, err)
+		assert.Equal(t, commonpb.ErrorCode_UnexpectedError, resp.GetErrorCode())
+	})
+
+	t.Run("drop database ok", func(t *testing.T) {
+		rc := mocks.NewRootCoord(t)
+		rc.On("DropDatabase", mock.Anything, mock.Anything).
+			Return(&commonpb.Status{
+				ErrorCode: commonpb.ErrorCode_Success,
+			}, nil)
+		node.rootCoord = rc
+		node.stateCode.Store(commonpb.StateCode_Healthy)
+		ctx := context.Background()
+
+		resp, err := node.DropDatabase(ctx, &milvuspb.DropDatabaseRequest{DbName: "db"})
+		assert.NoError(t, err)
+		assert.Equal(t, commonpb.ErrorCode_Success, resp.GetErrorCode())
+	})
+}
+
+func TestProxyListDatabase(t *testing.T) {
+	Params.InitOnce()
+
+	t.Run("not healthy", func(t *testing.T) {
+		node := &Proxy{session: &sessionutil.Session{ServerID: 1}}
+		node.stateCode.Store(commonpb.StateCode_Abnormal)
+		ctx := context.Background()
+		resp, err := node.ListDatabases(ctx, &milvuspb.ListDatabasesRequest{})
+		assert.NoError(t, err)
+		assert.Equal(t, commonpb.ErrorCode_UnexpectedError, resp.GetStatus().GetErrorCode())
+	})
+
+	factory := dependency.NewDefaultFactory(true)
+	ctx := context.Background()
+
+	node, err := NewProxy(ctx, factory)
+	assert.NoError(t, err)
+	node.tsoAllocator = &timestampAllocator{
+		tso: newMockTimestampAllocatorInterface(),
+	}
+	node.multiRateLimiter = NewMultiRateLimiter()
+	node.stateCode.Store(commonpb.StateCode_Healthy)
+	node.sched, err = newTaskScheduler(ctx, node.tsoAllocator, node.factory)
+	node.sched.ddQueue.setMaxTaskNum(10)
+	assert.NoError(t, err)
+	err = node.sched.Start()
+	assert.NoError(t, err)
+	defer node.sched.Close()
+
+	t.Run("list database fail", func(t *testing.T) {
+		rc := mocks.NewRootCoord(t)
+		rc.On("ListDatabases", mock.Anything, mock.Anything).
+			Return(nil, errors.New("fail"))
+		node.rootCoord = rc
+		ctx := context.Background()
+		resp, err := node.ListDatabases(ctx, &milvuspb.ListDatabasesRequest{})
+		assert.NoError(t, err)
+		assert.Equal(t, commonpb.ErrorCode_UnexpectedError, resp.GetStatus().GetErrorCode())
+	})
+
+	t.Run("list database ok", func(t *testing.T) {
+		rc := mocks.NewRootCoord(t)
+		rc.On("ListDatabases", mock.Anything, mock.Anything).
+			Return(&milvuspb.ListDatabasesResponse{
+				Status: &commonpb.Status{
+					ErrorCode: commonpb.ErrorCode_Success,
+			}}, nil)
+		node.rootCoord = rc
+		node.stateCode.Store(commonpb.StateCode_Healthy)
+		ctx := context.Background()
+
+		resp, err := node.ListDatabases(ctx, &milvuspb.ListDatabasesRequest{})
+		assert.NoError(t, err)
+		assert.Equal(t, commonpb.ErrorCode_Success, resp.GetStatus().GetErrorCode())
+	})
+}

@@ -140,7 +140,7 @@ func ValidateDatabaseName(dbName string) error {
 		return errors.New("database name couldn't be empty")
 	}
 
-	invalidMsg := fmt.Sprintf("Invalid database name %s.", dbName)
+	invalidMsg := fmt.Sprintf("Invalid database name %s,", dbName)
 	if int64(len(dbName)) > Params.ProxyCfg.MaxNameLength {
 		return fmt.Errorf("%s the length of a database name must be less than %d characters",
 			invalidMsg, Params.ProxyCfg.MaxNameLength)
