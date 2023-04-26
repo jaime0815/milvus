@@ -917,7 +917,7 @@ func (c *Core) ListDatabases(ctx context.Context, in *milvuspb.ListDatabasesRequ
 	metrics.RootCoordDDLReqLatency.WithLabelValues(method).Observe(float64(tr.ElapseSpan().Milliseconds()))
 	metrics.RootCoordDDLReqLatencyInQueue.WithLabelValues(method).Observe(float64(t.queueDur.Milliseconds()))
 
-	log.Info("done to list databases", zap.Int("num of databases", len(t.Resp.GetDbName())))
+	log.Info("done to list databases", zap.Int("num of databases", len(t.Resp.GetDbNames())))
 	return t.Resp, nil
 }
 

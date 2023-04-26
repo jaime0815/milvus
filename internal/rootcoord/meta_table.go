@@ -192,20 +192,9 @@ func (mt *MetaTable) listAllCollections() (map[string]*model.Collection, error) 
 func (mt *MetaTable) CreateDatabase(ctx context.Context, dbName string, ts typeutil.Timestamp) error {
 	mt.ddLock.Lock()
 	defer mt.ddLock.Unlock()
-
-	if dbName == "" {
-		return  errors.New("database name should not be empty")
-	}
-
-	_, ok := mt.db2CollIDs[dbName]
-	if ok {
-		return fmt.Errorf("database:%s already exists", dbName)
-	}
-
 	if err := mt.catalog.CreateDatabase(ctx, dbName, ts); err != nil {
 		return err
 	}
-
 	mt.db2CollIDs[dbName] = typeutil.NewUniqueSet()
 	return nil
 }

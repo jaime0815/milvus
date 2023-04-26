@@ -17,21 +17,102 @@
 package rootcoord
 
 import (
+	"context"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+
+	"github.com/milvus-io/milvus-proto/go-api/commonpb"
+	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
+	mockrootcoord "github.com/milvus-io/milvus/internal/rootcoord/mocks"
 )
 
 func Test_CreateDBTask_Prepare(t *testing.T) {
-	t.Run("pre check fail", func(t *testing.T) {
-
+	t.Run("list database fail", func(t *testing.T) {
+		core := newTestCore(withInvalidMeta())
+		task := &createDatabaseTask{
+			baseTask: newBaseTask(context.TODO(), core),
+			Req: &milvuspb.CreateDatabaseRequest{
+				Base: &commonpb.MsgBase{
+					MsgType: commonpb.MsgType_CreateDatabase,
+				},
+				DbName: "db",
+			},
+		}
+		err := task.Prepare(context.Background())
+		assert.Error(t, err)
 	})
 
-	t.Run("normal case", func(t *testing.T) {
+	t.Run("check database number fail", func(t *testing.T) {
+		meta := mockrootcoord.NewIMetaTable(t)
+		cfgMaxDatabaseNum := Params.RootCoordCfg.MaxDatabaseNum
+		len := int(cfgMaxDatabaseNum) + 1
+		dbNames := make([]string, 0, len)
+		for i := 0; i < len; i++ {
+			dbNames = append(dbNames, "db")
+		}
+		meta.On("ListDatabases",
+			mock.Anything,
+			mock.Anything).
+			Return(dbNames, nil)
 
+		core := newTestCore(withMeta(meta))
+
+		task := &createDatabaseTask{
+			baseTask: newBaseTask(context.TODO(), core),
+			Req: &milvuspb.CreateDatabaseRequest{
+				Base: &commonpb.MsgBase{
+					MsgType: commonpb.MsgType_CreateDatabase,
+				},
+				DbName: "db",
+			},
+		}
+		err := task.Prepare(context.Background())
+		assert.Error(t, err)
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		meta := mockrootcoord.NewIMetaTable(t)
+		meta.On("ListDatabases",
+			mock.Anything,
+			mock.Anything).
+			Return([]string{"db1"}, nil)
+
+		core := newTestCore(withMeta(meta))
+		Params.RootCoordCfg.MaxDatabaseNum = 10
+		task := &createDatabaseTask{
+			baseTask: newBaseTask(context.TODO(), core),
+			Req: &milvuspb.CreateDatabaseRequest{
+				Base: &commonpb.MsgBase{
+					MsgType: commonpb.MsgType_CreateDatabase,
+				},
+				DbName: "db",
+			},
+		}
+		err := task.Prepare(context.Background())
+		assert.NoError(t, err)
 	})
 }
 
 func Test_CreateDBTask_Execute(t *testing.T) {
-	t.Run("normal case", func(t *testing.T) {
+	meta := mockrootcoord.NewIMetaTable(t)
+	meta.On("CreateDatabase",
+		mock.Anything,
+		mock.Anything,
+		mock.Anything).
+		Return(nil)
 
-	})
+	core := newTestCore(withMeta(meta))
+	task := &createDatabaseTask{
+		baseTask: newBaseTask(context.TODO(), core),
+		Req: &milvuspb.CreateDatabaseRequest{
+			Base: &commonpb.MsgBase{
+				MsgType: commonpb.MsgType_CreateDatabase,
+			},
+			DbName: "db",
+		},
+	}
+	err := task.Execute(context.Background())
+	assert.NoError(t, err)
 }

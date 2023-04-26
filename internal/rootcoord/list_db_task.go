@@ -44,6 +44,6 @@ func (t *listDatabaseTask) Execute(ctx context.Context) error {
 		return err
 	}
 
-	t.Resp.DbName = ret
+	t.Resp.DbNames = ret
 	return nil
 }

@@ -929,7 +929,8 @@ func TestImportManager_ListAllTasks(t *testing.T) {
 	partID2 := int64(201)
 	partName1 := "p1"
 	partName2 := "p2"
-	getCollectionName := func(collID, partitionID typeutil.UniqueID) (string, string, error) {
+	getCollectionName := func(dbName string, collID, partitionID typeutil.UniqueID) (string, string, error) {
+		dbName = ""
 		collectionName := "unknow"
 		if collID == colID1 {
 			collectionName = colName1
@@ -1068,7 +1069,7 @@ func TestImportManager_ListAllTasks(t *testing.T) {
 
 func TestImportManager_setCollectionPartitionName(t *testing.T) {
 	mgr := &importManager{
-		getCollectionName: func(collID, partitionID typeutil.UniqueID) (string, string, error) {
+		getCollectionName: func(dbName string, collID, partitionID typeutil.UniqueID) (string, string, error) {
 			if collID == 1 && partitionID == 2 {
 				return "c1", "p1", nil
 			}

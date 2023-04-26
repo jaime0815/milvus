@@ -18,32 +18,38 @@ package rootcoord
 
 import (
 	"context"
-	"fmt"
+	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+
+	"github.com/milvus-io/milvus-proto/go-api/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
-	"github.com/milvus-io/milvus/internal/util/typeutil"
+	mockrootcoord "github.com/milvus-io/milvus/internal/rootcoord/mocks"
 )
 
-type createDatabaseTask struct {
-	baseTask
-	Req *milvuspb.CreateDatabaseRequest
-}
+func Test_DropDBTask(t *testing.T) {
+	meta := mockrootcoord.NewIMetaTable(t)
+	meta.On("DropDatabase",
+		mock.Anything,
+		mock.Anything,
+		mock.Anything).
+		Return(nil)
 
-func (t *createDatabaseTask) Prepare(ctx context.Context) error {
-	t.SetStep(typeutil.TaskStepPreExecute)
-	dbs, err := t.core.meta.ListDatabases(ctx, t.GetTs())
-	if err != nil {
-		return err
+	core := newTestCore(withMeta(meta))
+	task := &dropDatabaseTask{
+		baseTask: newBaseTask(context.TODO(), core),
+		Req: &milvuspb.DropDatabaseRequest{
+			Base: &commonpb.MsgBase{
+				MsgType: commonpb.MsgType_DropDatabase,
+			},
+			DbName: "db",
+		},
 	}
 
-	cfgMaxDatabaseNum := Params.RootCoordCfg.MaxDatabaseNum
-	if int64(len(dbs)) > cfgMaxDatabaseNum {
-		return fmt.Errorf("database number (%d) exceeds max configuration (%d)", len(dbs), cfgMaxDatabaseNum)
-	}
-	return nil
-}
+	err := task.Prepare(context.Background())
+	assert.NoError(t, err)
 
-func (t *createDatabaseTask) Execute(ctx context.Context) error {
-	t.SetStep(typeutil.TaskStepExecute)
-	return t.core.meta.CreateDatabase(ctx,  t.Req.GetDbName(), t.GetTs())
+	err = task.Execute(context.Background())
+	assert.NoError(t, err)
 }
