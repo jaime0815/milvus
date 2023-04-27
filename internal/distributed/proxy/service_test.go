@@ -1508,6 +1508,20 @@ func Test_NewServer(t *testing.T) {
 		assert.Nil(t, err)
 	})
 
+	t.Run("CreateDatabase", func(t *testing.T) {
+		_, err := server.CreateDatabase(ctx, nil)
+		assert.Nil(t, err)
+	})
+
+	t.Run("DropDatabase", func(t *testing.T) {
+		_, err := server.DropDatabase(ctx, nil)
+		assert.Nil(t, err)
+	})
+
+	t.Run("ListDatabase", func(t *testing.T) {
+		_, err := server.ListDatabases(ctx, nil)
+		assert.Nil(t, err)
+	})
 	err = server.Stop()
 	assert.Nil(t, err)
 

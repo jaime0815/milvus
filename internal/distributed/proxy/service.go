@@ -929,3 +929,15 @@ func (s *Server) TransferReplica(ctx context.Context, req *milvuspb.TransferRepl
 func (s *Server) ListResourceGroups(ctx context.Context, req *milvuspb.ListResourceGroupsRequest) (*milvuspb.ListResourceGroupsResponse, error) {
 	return s.proxy.ListResourceGroups(ctx, req)
 }
+
+func (s *Server) CreateDatabase(ctx context.Context, request *milvuspb.CreateDatabaseRequest) (*commonpb.Status, error) {
+	return s.proxy.CreateDatabase(ctx, request)
+}
+
+func (s *Server) DropDatabase(ctx context.Context, request *milvuspb.DropDatabaseRequest) (*commonpb.Status, error) {
+	return s.proxy.DropDatabase(ctx, request)
+}
+
+func (s *Server) ListDatabases(ctx context.Context, request *milvuspb.ListDatabasesRequest) (*milvuspb.ListDatabasesResponse, error) {
+	return s.proxy.ListDatabases(ctx, request)
+}
