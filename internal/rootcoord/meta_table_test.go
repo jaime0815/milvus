@@ -1164,3 +1164,109 @@ func TestMetaTable_ChangePartitionState(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+func TestMetaTable_CreateDatabase(t *testing.T) {
+	t.Run("database already exist", func(t *testing.T) {
+		meta := &MetaTable{
+			names: newNameDb(),
+		}
+		meta.names.insert("exist", "collection", 100)
+		err := meta.CreateDatabase(context.TODO(), "exist", 10000)
+		assert.Error(t, err)
+	})
+
+	t.Run("database not persistent", func(t *testing.T) {
+		catalog := mocks.NewRootCoordCatalog(t)
+		catalog.On("CreateDatabase",
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+		).Return(errors.New("error mock CreateDatabase"))
+		meta := &MetaTable{
+			names:   newNameDb(),
+			aliases: newNameDb(),
+			catalog: catalog,
+		}
+		err := meta.CreateDatabase(context.TODO(), "exist", 10000)
+		assert.Error(t, err)
+	})
+
+	t.Run("normal case", func(t *testing.T) {
+		catalog := mocks.NewRootCoordCatalog(t)
+		catalog.On("CreateDatabase",
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+		).Return(nil)
+		meta := &MetaTable{
+			names:   newNameDb(),
+			aliases: newNameDb(),
+			catalog: catalog,
+		}
+		err := meta.CreateDatabase(context.TODO(), "exist", 10000)
+		assert.NoError(t, err)
+		assert.True(t, meta.names.exist("exist"))
+		assert.True(t, meta.aliases.exist("exist"))
+		assert.True(t, meta.names.empty("exist"))
+		assert.True(t, meta.aliases.empty("exist"))
+	})
+}
+
+func TestMetaTable_DropDatabase(t *testing.T) {
+	t.Run("database not exist", func(t *testing.T) {
+		mt := &MetaTable{
+			names:   newNameDb(),
+			aliases: newNameDb(),
+		}
+		err := mt.DropDatabase(context.TODO(), "not_exist", 10000)
+		assert.Error(t, err)
+	})
+
+	t.Run("database not empty", func(t *testing.T) {
+		mt := &MetaTable{
+			names:   newNameDb(),
+			aliases: newNameDb(),
+		}
+		mt.names.insert("not_empty", "collection", 10000000)
+		err := mt.DropDatabase(context.TODO(), "not_empty", 10000)
+		assert.Error(t, err)
+	})
+
+	t.Run("not commit", func(t *testing.T) {
+		catalog := mocks.NewRootCoordCatalog(t)
+		catalog.On("DropDatabase",
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+		).Return(errors.New("error mock DropDatabase"))
+		mt := &MetaTable{
+			names:   newNameDb(),
+			aliases: newNameDb(),
+			catalog: catalog,
+		}
+		mt.names.createDbIfNotExist("not_commit")
+		mt.aliases.createDbIfNotExist("not_commit")
+		err := mt.DropDatabase(context.TODO(), "not_commit", 10000)
+		assert.Error(t, err)
+	})
+
+	t.Run("normal case", func(t *testing.T) {
+		catalog := mocks.NewRootCoordCatalog(t)
+		catalog.On("DropDatabase",
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+		).Return(nil)
+		mt := &MetaTable{
+			names:   newNameDb(),
+			aliases: newNameDb(),
+			catalog: catalog,
+		}
+		mt.names.createDbIfNotExist("not_commit")
+		mt.aliases.createDbIfNotExist("not_commit")
+		err := mt.DropDatabase(context.TODO(), "not_commit", 10000)
+		assert.NoError(t, err)
+		assert.False(t, mt.names.exist("not_commit"))
+		assert.False(t, mt.aliases.exist("not_commit"))
+	})
+}
