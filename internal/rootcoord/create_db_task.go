@@ -45,5 +45,5 @@ func (t *createDatabaseTask) Prepare(ctx context.Context) error {
 
 func (t *createDatabaseTask) Execute(ctx context.Context) error {
 	t.SetStep(typeutil.TaskStepExecute)
-	return t.core.meta.CreateDatabase(ctx,  t.Req.GetDbName(), t.GetTs())
+	return t.core.meta.CreateDatabase(ctx, t.Req.GetDbName(), t.GetTs())
 }

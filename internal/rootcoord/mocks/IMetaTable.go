@@ -62,13 +62,13 @@ func (_m *IMetaTable) AddPartition(ctx context.Context, partition *model.Partiti
 	return r0
 }
 
-// AlterAlias provides a mock function with given fields: ctx, alias, collectionName, ts
-func (_m *IMetaTable) AlterAlias(ctx context.Context, alias string, collectionName string, ts uint64) error {
-	ret := _m.Called(ctx, alias, collectionName, ts)
+// AlterAlias provides a mock function with given fields: ctx, dbName, alias, collectionName, ts
+func (_m *IMetaTable) AlterAlias(ctx context.Context, dbName string, alias string, collectionName string, ts uint64) error {
+	ret := _m.Called(ctx, dbName, alias, collectionName, ts)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, uint64) error); ok {
-		r0 = rf(ctx, alias, collectionName, ts)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, uint64) error); ok {
+		r0 = rf(ctx, dbName, alias, collectionName, ts)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -132,13 +132,13 @@ func (_m *IMetaTable) ChangePartitionState(ctx context.Context, collectionID int
 	return r0
 }
 
-// CreateAlias provides a mock function with given fields: ctx, alias, collectionName, ts
-func (_m *IMetaTable) CreateAlias(ctx context.Context, alias string, collectionName string, ts uint64) error {
-	ret := _m.Called(ctx, alias, collectionName, ts)
+// CreateAlias provides a mock function with given fields: ctx, dbName, alias, collectionName, ts
+func (_m *IMetaTable) CreateAlias(ctx context.Context, dbName string, alias string, collectionName string, ts uint64) error {
+	ret := _m.Called(ctx, dbName, alias, collectionName, ts)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, uint64) error); ok {
-		r0 = rf(ctx, alias, collectionName, ts)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, uint64) error); ok {
+		r0 = rf(ctx, dbName, alias, collectionName, ts)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -188,13 +188,13 @@ func (_m *IMetaTable) DeleteCredential(username string) error {
 	return r0
 }
 
-// DropAlias provides a mock function with given fields: ctx, alias, ts
-func (_m *IMetaTable) DropAlias(ctx context.Context, alias string, ts uint64) error {
-	ret := _m.Called(ctx, alias, ts)
+// DropAlias provides a mock function with given fields: ctx, dbName, alias, ts
+func (_m *IMetaTable) DropAlias(ctx context.Context, dbName string, alias string, ts uint64) error {
+	ret := _m.Called(ctx, dbName, alias, ts)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, uint64) error); ok {
-		r0 = rf(ctx, alias, ts)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, uint64) error); ok {
+		r0 = rf(ctx, dbName, alias, ts)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -371,13 +371,13 @@ func (_m *IMetaTable) GetPartitionNameByID(collID int64, partitionID int64, ts u
 	return r0, r1
 }
 
-// IsAlias provides a mock function with given fields: name
-func (_m *IMetaTable) IsAlias(name string) bool {
-	ret := _m.Called(name)
+// IsAlias provides a mock function with given fields: db, name
+func (_m *IMetaTable) IsAlias(db string, name string) bool {
+	ret := _m.Called(db, name)
 
 	var r0 bool
-	if rf, ok := ret.Get(0).(func(string) bool); ok {
-		r0 = rf(name)
+	if rf, ok := ret.Get(0).(func(string, string) bool); ok {
+		r0 = rf(db, name)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}

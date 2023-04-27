@@ -930,7 +930,6 @@ func TestImportManager_ListAllTasks(t *testing.T) {
 	partName1 := "p1"
 	partName2 := "p2"
 	getCollectionName := func(dbName string, collID, partitionID typeutil.UniqueID) (string, string, error) {
-		dbName = ""
 		collectionName := "unknow"
 		if collID == colID1 {
 			collectionName = colName1

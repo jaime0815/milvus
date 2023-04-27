@@ -79,9 +79,9 @@ const (
 	ListResourceGroupsTaskName    = "ListResourceGroupsTask"
 	DescribeResourceGroupTaskName = "DescribeResourceGroupTask"
 
-	CreateDatabaseTaskName      = "CreateCollectionTask"
-	DropDatabaseTaskName      = "DropDatabaseTaskName"
-	ListDatabaseTaskName      = "ListDatabaseTaskName"
+	CreateDatabaseTaskName = "CreateCollectionTask"
+	DropDatabaseTaskName   = "DropDatabaseTaskName"
+	ListDatabaseTaskName   = "ListDatabaseTaskName"
 
 	// minFloat32 minimum float.
 	minFloat32 = -1 * float32(math.MaxFloat32)

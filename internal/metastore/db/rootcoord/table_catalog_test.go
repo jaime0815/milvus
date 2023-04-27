@@ -37,6 +37,8 @@ const (
 	segmentID1    = typeutil.UniqueID(2000)
 	indexBuildID1 = typeutil.UniqueID(3000)
 
+	testDb = ""
+
 	collName1  = "test_collection_name_1"
 	collAlias1 = "test_collection_alias_1"
 	collAlias2 = "test_collection_alias_2"
@@ -968,7 +970,7 @@ func TestTableCatalog_DropAlias_TsNot0(t *testing.T) {
 	aliasDbMock.On("Insert", mock.Anything).Return(nil).Once()
 
 	// actual
-	gotErr := mockCatalog.DropAlias(ctx, collAlias1, ts)
+	gotErr := mockCatalog.DropAlias(ctx, testDb, collAlias1, ts)
 	require.NoError(t, gotErr)
 }
 
@@ -978,7 +980,7 @@ func TestTableCatalog_DropAlias_TsNot0_SelectCollectionIDByAliasError(t *testing
 	aliasDbMock.On("GetCollectionIDByAlias", tenantID, collAlias1, ts).Return(typeutil.UniqueID(0), errTest).Once()
 
 	// actual
-	gotErr := mockCatalog.DropAlias(ctx, collAlias1, ts)
+	gotErr := mockCatalog.DropAlias(ctx, testDb, collAlias1, ts)
 	require.Error(t, gotErr)
 }
 
@@ -989,7 +991,7 @@ func TestTableCatalog_DropAlias_TsNot0_InsertIndexError(t *testing.T) {
 	aliasDbMock.On("Insert", mock.Anything).Return(errTest).Once()
 
 	// actual
-	gotErr := mockCatalog.DropAlias(ctx, collAlias1, ts)
+	gotErr := mockCatalog.DropAlias(ctx, testDb, collAlias1, ts)
 	require.Error(t, gotErr)
 }
 
@@ -1027,7 +1029,7 @@ func TestTableCatalog_ListAliases(t *testing.T) {
 	aliasDbMock.On("List", tenantID, cidTsPairs).Return(collAliases, nil).Once()
 
 	// actual
-	res, gotErr := mockCatalog.ListAliases(ctx, ts)
+	res, gotErr := mockCatalog.ListAliases(ctx, testDb, ts)
 	require.Equal(t, nil, gotErr)
 	require.Equal(t, out, res)
 }
@@ -1037,7 +1039,7 @@ func TestTableCatalog_ListAliases_NoResult(t *testing.T) {
 	aliasDbMock.On("ListCollectionIDTs", tenantID, ts).Return(nil, nil).Once()
 
 	// actual
-	res, gotErr := mockCatalog.ListAliases(ctx, ts)
+	res, gotErr := mockCatalog.ListAliases(ctx, testDb, ts)
 	require.Equal(t, nil, gotErr)
 	require.Empty(t, res)
 }
@@ -1048,7 +1050,7 @@ func TestTableCatalog_ListAliases_ListCidTsError(t *testing.T) {
 	aliasDbMock.On("ListCollectionIDTs", tenantID, ts).Return(nil, errTest).Once()
 
 	// actual
-	res, gotErr := mockCatalog.ListAliases(ctx, ts)
+	res, gotErr := mockCatalog.ListAliases(ctx, testDb, ts)
 	require.Nil(t, res)
 	require.Error(t, gotErr)
 }
@@ -1061,7 +1063,7 @@ func TestTableCatalog_ListAliases_SelectAliasError(t *testing.T) {
 	aliasDbMock.On("List", tenantID, mock.Anything).Return(nil, errTest).Once()
 
 	// actual
-	res, gotErr := mockCatalog.ListAliases(ctx, ts)
+	res, gotErr := mockCatalog.ListAliases(ctx, testDb, ts)
 	require.Nil(t, res)
 	require.Error(t, gotErr)
 }

@@ -48,7 +48,6 @@ func Test_ListDBTask(t *testing.T) {
 		assert.Equal(t, commonpb.ErrorCode_UnexpectedError, task.Resp.Status.ErrorCode)
 	})
 
-
 	t.Run("ok", func(t *testing.T) {
 		ret := []string{"db1", "db2"}
 		meta := mockrootcoord.NewIMetaTable(t)

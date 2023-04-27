@@ -276,14 +276,18 @@ func TestGarbageCollectorCtx_RemoveCreatingCollection(t *testing.T) {
 			ticker.syncedTtHistogram.update(pchan, 101)
 		}
 
-		meta := newMockMetaTable()
 		removeCollectionCalled := false
 		removeCollectionChan := make(chan struct{}, 1)
-		meta.RemoveCollectionFunc = func(ctx context.Context, collectionID UniqueID, ts Timestamp) error {
+		meta := mockrootcoord.NewIMetaTable(t)
+		meta.On("RemoveCollection",
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+		).Return(func(ctx context.Context, collectionID UniqueID, ts Timestamp) error {
 			removeCollectionCalled = true
 			removeCollectionChan <- struct{}{}
 			return fmt.Errorf("error mock RemoveCollection")
-		}
+		})
 
 		core := newTestCore(withTtSynchronizer(ticker), withMeta(meta), withTsoAllocator(tsoAllocator))
 		gc := newBgGarbageCollector(core)
@@ -312,14 +316,18 @@ func TestGarbageCollectorCtx_RemoveCreatingCollection(t *testing.T) {
 			ticker.syncedTtHistogram.update(pchan, 101)
 		}
 
-		meta := newMockMetaTable()
 		removeCollectionCalled := false
 		removeCollectionChan := make(chan struct{}, 1)
-		meta.RemoveCollectionFunc = func(ctx context.Context, collectionID UniqueID, ts Timestamp) error {
+		meta := mockrootcoord.NewIMetaTable(t)
+		meta.On("RemoveCollection",
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+		).Return(func(ctx context.Context, collectionID UniqueID, ts Timestamp) error {
 			removeCollectionCalled = true
 			removeCollectionChan <- struct{}{}
 			return nil
-		}
+		})
 
 		core := newTestCore(withTtSynchronizer(ticker), withMeta(meta), withTsoAllocator(tsoAllocator))
 		gc := newBgGarbageCollector(core)
@@ -352,10 +360,21 @@ func TestGarbageCollectorCtx_ReDropPartition(t *testing.T) {
 		ticker := newTickerWithMockNormalStream()
 		shardsNum := 2
 		pchans := ticker.getDmlChannelNames(shardsNum)
-		meta := newMockMetaTable()
-		meta.RemovePartitionFunc = func(ctx context.Context, collectionID UniqueID, partitionID UniqueID, ts Timestamp) error {
+
+		meta := mockrootcoord.NewIMetaTable(t)
+		removePartitionCalled := false
+		removePartitionChan := make(chan struct{}, 1)
+		meta.On("RemovePartition",
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+		).Return(func(ctx context.Context, collectionID UniqueID, partitionID UniqueID, ts Timestamp) error {
+			removePartitionCalled = true
+			removePartitionChan <- struct{}{}
 			return errors.New("error mock RemovePartition")
-		}
+		})
+
 		tsoAllocator := newMockTsoAllocator()
 		tsoAllocator.GenerateTSOF = func(count uint32) (uint64, error) {
 			return 100, nil
@@ -365,20 +384,29 @@ func TestGarbageCollectorCtx_ReDropPartition(t *testing.T) {
 		gc := newBgGarbageCollector(core)
 		core.garbageCollector = gc
 		gc.ReDropPartition(pchans, &model.Partition{}, 100000)
+		<-removePartitionChan
+		assert.True(t, removePartitionCalled)
 	})
 
 	t.Run("normal case", func(t *testing.T) {
 		ticker := newTickerWithMockNormalStream()
 		shardsNum := 2
 		pchans := ticker.getDmlChannelNames(shardsNum)
-		meta := newMockMetaTable()
+
 		removePartitionCalled := false
 		removePartitionChan := make(chan struct{}, 1)
-		meta.RemovePartitionFunc = func(ctx context.Context, collectionID UniqueID, partitionID UniqueID, ts Timestamp) error {
+		meta := mockrootcoord.NewIMetaTable(t)
+		meta.On("RemovePartition",
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+		).Return(func(ctx context.Context, collectionID UniqueID, partitionID UniqueID, ts Timestamp) error {
 			removePartitionCalled = true
 			removePartitionChan <- struct{}{}
 			return nil
-		}
+		})
+
 		tsoAllocator := newMockTsoAllocator()
 		tsoAllocator.GenerateTSOF = func(count uint32) (uint64, error) {
 			return 100, nil

@@ -53,7 +53,6 @@ func (tc *Catalog) ListDatabases(ctx context.Context, ts typeutil.Timestamp) ([]
 	return []string{}, nil
 }
 
-
 func (tc *Catalog) CreateCollection(ctx context.Context, collection *model.Collection, ts typeutil.Timestamp) error {
 	tenantID := contextutil.TenantID(ctx)
 
@@ -533,7 +532,7 @@ func (tc *Catalog) CreateAlias(ctx context.Context, alias *model.Alias, ts typeu
 	return nil
 }
 
-func (tc *Catalog) DropAlias(ctx context.Context, alias string, ts typeutil.Timestamp) error {
+func (tc *Catalog) DropAlias(ctx context.Context, dbName string, alias string, ts typeutil.Timestamp) error {
 	tenantID := contextutil.TenantID(ctx)
 
 	collectionID, err := tc.metaDomain.CollAliasDb(ctx).GetCollectionIDByAlias(tenantID, alias, ts)
@@ -569,7 +568,7 @@ func (tc *Catalog) AlterAlias(ctx context.Context, alias *model.Alias, ts typeut
 }
 
 // ListAliases query collection ID and aliases only, other information are not needed
-func (tc *Catalog) ListAliases(ctx context.Context, ts typeutil.Timestamp) ([]*model.Alias, error) {
+func (tc *Catalog) ListAliases(ctx context.Context, dbName string, ts typeutil.Timestamp) ([]*model.Alias, error) {
 	tenantID := contextutil.TenantID(ctx)
 
 	// 1. find each collection with latest ts

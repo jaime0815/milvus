@@ -161,10 +161,10 @@ func (node *Proxy) CreateDatabase(ctx context.Context, request *milvuspb.CreateD
 	metrics.ProxyFunctionCall.WithLabelValues(strconv.FormatInt(Params.ProxyCfg.GetNodeID(), 10), method, metrics.TotalLabel).Inc()
 
 	cct := &createDatabaseTask{
-		ctx:                     ctx,
-		Condition:               NewTaskCondition(ctx),
+		ctx:                   ctx,
+		Condition:             NewTaskCondition(ctx),
 		CreateDatabaseRequest: request,
-		rootCoord:               node.rootCoord,
+		rootCoord:             node.rootCoord,
 	}
 
 	log := log.With(zap.String("traceID", traceID),
@@ -212,10 +212,10 @@ func (node *Proxy) DropDatabase(ctx context.Context, request *milvuspb.DropDatab
 	metrics.ProxyFunctionCall.WithLabelValues(strconv.FormatInt(Params.ProxyCfg.GetNodeID(), 10), method, metrics.TotalLabel).Inc()
 
 	dct := &dropDatabaseTask{
-		ctx:                   ctx,
-		Condition:             NewTaskCondition(ctx),
+		ctx:                 ctx,
+		Condition:           NewTaskCondition(ctx),
 		DropDatabaseRequest: request,
-		rootCoord:             node.rootCoord,
+		rootCoord:           node.rootCoord,
 	}
 
 	log := log.With(zap.String("traceID", traceID),
@@ -263,10 +263,10 @@ func (node *Proxy) ListDatabases(ctx context.Context, request *milvuspb.ListData
 	metrics.ProxyFunctionCall.WithLabelValues(strconv.FormatInt(Params.ProxyCfg.GetNodeID(), 10), method, metrics.TotalLabel).Inc()
 
 	dct := &listDatabaseTask{
-		ctx:                   ctx,
-		Condition:             NewTaskCondition(ctx),
+		ctx:                  ctx,
+		Condition:            NewTaskCondition(ctx),
 		ListDatabasesRequest: request,
-		rootCoord:             node.rootCoord,
+		rootCoord:            node.rootCoord,
 	}
 
 	log := log.With(zap.String("traceID", traceID),

@@ -26,7 +26,7 @@ import (
 
 type listDatabaseTask struct {
 	baseTask
-	Req *milvuspb.ListDatabasesRequest
+	Req  *milvuspb.ListDatabasesRequest
 	Resp *milvuspb.ListDatabasesResponse
 }
 
@@ -38,7 +38,7 @@ func (t *listDatabaseTask) Prepare(ctx context.Context) error {
 func (t *listDatabaseTask) Execute(ctx context.Context) error {
 	t.SetStep(typeutil.TaskStepExecute)
 	t.Resp.Status = succStatus()
-	ret, err :=  t.core.meta.ListDatabases(ctx, t.GetTs())
+	ret, err := t.core.meta.ListDatabases(ctx, t.GetTs())
 	if err != nil {
 		t.Resp.Status = failStatus(commonpb.ErrorCode_UnexpectedError, err.Error())
 		return err

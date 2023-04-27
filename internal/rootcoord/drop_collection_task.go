@@ -43,7 +43,7 @@ func (t *dropCollectionTask) validate() error {
 	if err := CheckMsgType(t.Req.GetBase().GetMsgType(), commonpb.MsgType_DropCollection); err != nil {
 		return err
 	}
-	if t.core.meta.IsAlias(t.Req.GetCollectionName()) {
+	if t.core.meta.IsAlias(t.Req.GetDbName(), t.Req.GetCollectionName()) {
 		return fmt.Errorf("cannot drop the collection via alias = %s", t.Req.CollectionName)
 	}
 	return nil

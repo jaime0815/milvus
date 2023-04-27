@@ -76,6 +76,7 @@ message AliasInfo {
   int64 collection_id = 2;
   uint64 created_time = 3;
   AliasState state = 4; // To keep compatible with older version, default state is `Created`.
+  string db_name = 5;
 }
 
 message SegmentIndexInfo {
