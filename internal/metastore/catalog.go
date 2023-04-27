@@ -30,9 +30,9 @@ type RootCoordCatalog interface {
 	AlterPartition(ctx context.Context, dbName string, oldPart *model.Partition, newPart *model.Partition, alterType AlterType, ts typeutil.Timestamp) error
 
 	CreateAlias(ctx context.Context, alias *model.Alias, ts typeutil.Timestamp) error
-	DropAlias(ctx context.Context, alias string, ts typeutil.Timestamp) error
+	DropAlias(ctx context.Context, dbName string, alias string, ts typeutil.Timestamp) error
 	AlterAlias(ctx context.Context, alias *model.Alias, ts typeutil.Timestamp) error
-	ListAliases(ctx context.Context, ts typeutil.Timestamp) ([]*model.Alias, error)
+	ListAliases(ctx context.Context, dbName string, ts typeutil.Timestamp) ([]*model.Alias, error)
 
 	// GetCredential gets the credential info for the username, returns error if no credential exists for this username.
 	GetCredential(ctx context.Context, username string) (*model.Credential, error)

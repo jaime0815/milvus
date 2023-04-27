@@ -43,5 +43,5 @@ func (t *alterAliasTask) Execute(ctx context.Context) error {
 		return err
 	}
 	// alter alias is atomic enough.
-	return t.core.meta.AlterAlias(ctx, t.Req.GetAlias(), t.Req.GetCollectionName(), t.GetTs())
+	return t.core.meta.AlterAlias(ctx, t.Req.GetDbName(), t.Req.GetAlias(), t.Req.GetCollectionName(), t.GetTs())
 }

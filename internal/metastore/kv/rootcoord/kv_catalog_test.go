@@ -44,6 +44,10 @@ var (
 	}
 )
 
+const (
+	testDb = ""
+)
+
 func TestCatalog_ListCollections(t *testing.T) {
 	ctx := context.Background()
 
@@ -687,13 +691,13 @@ func TestCatalog_DropAliasV2(t *testing.T) {
 
 	kc := Catalog{Snapshot: snapshot}
 
-	err := kc.DropAlias(ctx, "alias", 0)
+	err := kc.DropAlias(ctx, testDb, "alias", 0)
 	assert.Error(t, err)
 
 	snapshot.MultiSaveAndRemoveWithPrefixFunc = func(saves map[string]string, removals []string, ts typeutil.Timestamp) error {
 		return nil
 	}
-	err = kc.DropAlias(ctx, "alias", 0)
+	err = kc.DropAlias(ctx, testDb, "alias", 0)
 	assert.NoError(t, err)
 }
 
@@ -758,7 +762,7 @@ func TestCatalog_listAliasesAfter210(t *testing.T) {
 
 		kc := Catalog{Snapshot: snapshot}
 
-		_, err := kc.listAliasesAfter210(ctx, 0)
+		_, err := kc.listAliasesAfter210WithDb(ctx, testDb, 0)
 		assert.Error(t, err)
 	})
 
@@ -772,7 +776,7 @@ func TestCatalog_listAliasesAfter210(t *testing.T) {
 
 		kc := Catalog{Snapshot: snapshot}
 
-		_, err := kc.listAliasesAfter210(ctx, 0)
+		_, err := kc.listAliasesAfter210WithDb(ctx, testDb, 0)
 		assert.Error(t, err)
 	})
 
@@ -790,7 +794,7 @@ func TestCatalog_listAliasesAfter210(t *testing.T) {
 
 		kc := Catalog{Snapshot: snapshot}
 
-		got, err := kc.listAliasesAfter210(ctx, 0)
+		got, err := kc.listAliasesAfter210WithDb(ctx, testDb, 0)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(got))
 		assert.Equal(t, int64(100), got[0].CollectionID)
@@ -808,7 +812,7 @@ func TestCatalog_ListAliasesV2(t *testing.T) {
 
 		kc := Catalog{Snapshot: snapshot}
 
-		_, err := kc.ListAliases(ctx, 0)
+		_, err := kc.ListAliases(ctx, testDb, 0)
 		assert.Error(t, err)
 	})
 
@@ -829,7 +833,7 @@ func TestCatalog_ListAliasesV2(t *testing.T) {
 
 		kc := Catalog{Snapshot: snapshot}
 
-		_, err = kc.ListAliases(ctx, 0)
+		_, err = kc.ListAliases(ctx, testDb, 0)
 		assert.Error(t, err)
 	})
 
@@ -854,7 +858,7 @@ func TestCatalog_ListAliasesV2(t *testing.T) {
 
 		kc := Catalog{Snapshot: snapshot}
 
-		got, err := kc.ListAliases(ctx, 0)
+		got, err := kc.ListAliases(ctx, testDb, 0)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(got))
 		assert.Equal(t, "alias1", got[0].Name)

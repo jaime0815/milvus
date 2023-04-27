@@ -72,6 +72,21 @@ func BuildAliasKey(aliasName string) string {
 	return fmt.Sprintf("%s/%s", AliasMetaPrefix, aliasName)
 }
 
+func BuildAliasKeyWithDb(dbName, aliasName string) string {
+	k := BuildAliasKey(aliasName)
+	if dbName == "" {
+		return k
+	}
+	return fmt.Sprintf("%s/%s", BuildDatabasePrefix(dbName), k)
+}
+
+func BuildAliasPrefixWithDb(dbName string) string {
+	if dbName == "" {
+		return AliasMetaPrefix
+	}
+	return fmt.Sprintf("%s/%s", BuildDatabasePrefix(dbName), AliasMetaPrefix)
+}
+
 func batchMultiSaveAndRemoveWithPrefix(snapshot kv.SnapShotKV, maxTxnNum int, saves map[string]string, removals []string, ts typeutil.Timestamp) error {
 	saveFn := func(partialKvs map[string]string) error {
 		return snapshot.MultiSave(partialKvs, ts)
@@ -105,7 +120,7 @@ func (kc *Catalog) ListDatabases(ctx context.Context, ts typeutil.Timestamp) ([]
 	ret := make([]string, 0, len(keys))
 	for _, k := range keys {
 		parts := strings.Split(k, "/")
-		ret = append(ret, parts[len(parts) - 1])
+		ret = append(ret, parts[len(parts)-1])
 	}
 
 	return ret, nil
@@ -232,14 +247,15 @@ func (kc *Catalog) CreatePartition(ctx context.Context, dbName string, partition
 
 func (kc *Catalog) CreateAlias(ctx context.Context, alias *model.Alias, ts typeutil.Timestamp) error {
 	oldKBefore210 := BuildAliasKey210(alias.Name)
-	k := BuildAliasKey(alias.Name)
+	oldKeyWithoutDb := BuildAliasKey(alias.Name)
+	k := BuildAliasKeyWithDb(alias.DbName, alias.Name)
 	aliasInfo := model.MarshalAliasModel(alias)
 	v, err := proto.Marshal(aliasInfo)
 	if err != nil {
 		return err
 	}
 	kvs := map[string]string{k: string(v)}
-	return kc.Snapshot.MultiSaveAndRemoveWithPrefix(kvs, []string{oldKBefore210}, ts)
+	return kc.Snapshot.MultiSaveAndRemoveWithPrefix(kvs, []string{oldKBefore210, oldKeyWithoutDb}, ts)
 }
 
 func (kc *Catalog) CreateCredential(ctx context.Context, credential *model.Credential) error {
@@ -501,10 +517,11 @@ func (kc *Catalog) DropCredential(ctx context.Context, username string) error {
 	return nil
 }
 
-func (kc *Catalog) DropAlias(ctx context.Context, alias string, ts typeutil.Timestamp) error {
+func (kc *Catalog) DropAlias(ctx context.Context, dbName string, alias string, ts typeutil.Timestamp) error {
 	oldKBefore210 := BuildAliasKey210(alias)
-	k := BuildAliasKey(alias)
-	return kc.Snapshot.MultiSaveAndRemoveWithPrefix(nil, []string{k, oldKBefore210}, ts)
+	oldKeyWithoutDb := BuildAliasKey(alias)
+	k := BuildAliasKeyWithDb(dbName, alias)
+	return kc.Snapshot.MultiSaveAndRemoveWithPrefix(nil, []string{k, oldKeyWithoutDb, oldKBefore210}, ts)
 }
 
 func (kc *Catalog) GetCollectionByName(ctx context.Context, dbName, collectionName string, ts typeutil.Timestamp) (*model.Collection, error) {
@@ -587,13 +604,15 @@ func (kc *Catalog) listAliasesBefore210(ctx context.Context, ts typeutil.Timesta
 			Name:         coll.GetSchema().GetName(),
 			CollectionID: coll.GetID(),
 			CreatedTime:  0, // not accurate.
+			DbName:       "",
 		})
 	}
 	return aliases, nil
 }
 
-func (kc *Catalog) listAliasesAfter210(ctx context.Context, ts typeutil.Timestamp) ([]*model.Alias, error) {
-	_, values, err := kc.Snapshot.LoadWithPrefix(AliasMetaPrefix, ts)
+func (kc *Catalog) listAliasesAfter210WithDb(ctx context.Context, dbName string, ts typeutil.Timestamp) ([]*model.Alias, error) {
+	prefix := BuildAliasPrefixWithDb(dbName)
+	_, values, err := kc.Snapshot.LoadWithPrefix(prefix, ts)
 	if err != nil {
 		return nil, err
 	}
@@ -609,22 +628,27 @@ func (kc *Catalog) listAliasesAfter210(ctx context.Context, ts typeutil.Timestam
 			Name:         info.GetAliasName(),
 			CollectionID: info.GetCollectionId(),
 			CreatedTime:  info.GetCreatedTime(),
+			DbName:       dbName,
 		})
 	}
 	return aliases, nil
 }
 
-func (kc *Catalog) ListAliases(ctx context.Context, ts typeutil.Timestamp) ([]*model.Alias, error) {
+func (kc *Catalog) listAliasesWithDb(ctx context.Context, dbName string, ts typeutil.Timestamp) ([]*model.Alias, error) {
 	aliases1, err := kc.listAliasesBefore210(ctx, ts)
 	if err != nil {
 		return nil, err
 	}
-	aliases2, err := kc.listAliasesAfter210(ctx, ts)
+	aliases2, err := kc.listAliasesAfter210WithDb(ctx, dbName, ts)
 	if err != nil {
 		return nil, err
 	}
 	aliases := append(aliases1, aliases2...)
 	return aliases, nil
+}
+
+func (kc *Catalog) ListAliases(ctx context.Context, dbName string, ts typeutil.Timestamp) ([]*model.Alias, error) {
+	return kc.listAliasesWithDb(ctx, dbName, ts)
 }
 
 func (kc *Catalog) ListCredentials(ctx context.Context) ([]string, error) {

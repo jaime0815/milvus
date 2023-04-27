@@ -942,7 +942,6 @@ type ProxyComponent interface {
 	//  `stateCode` is current statement of this proxy node, indicating whether it's healthy.
 	UpdateStateCode(stateCode commonpb.StateCode)
 
-
 	// CreateDatabase notifies Proxy to create a database
 	//
 	// ctx is the context to control request deadline and cancellation

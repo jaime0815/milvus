@@ -43,5 +43,5 @@ func (t *createAliasTask) Execute(ctx context.Context) error {
 		return err
 	}
 	// create alias is atomic enough.
-	return t.core.meta.CreateAlias(ctx, t.Req.GetAlias(), t.Req.GetCollectionName(), t.GetTs())
+	return t.core.meta.CreateAlias(ctx, t.Req.GetDbName(), t.Req.GetAlias(), t.Req.GetCollectionName(), t.GetTs())
 }

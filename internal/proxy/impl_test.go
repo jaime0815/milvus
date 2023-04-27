@@ -687,7 +687,7 @@ func TestProxyListDatabase(t *testing.T) {
 			Return(&milvuspb.ListDatabasesResponse{
 				Status: &commonpb.Status{
 					ErrorCode: commonpb.ErrorCode_Success,
-			}}, nil)
+				}}, nil)
 		node.rootCoord = rc
 		node.stateCode.Store(commonpb.StateCode_Healthy)
 		ctx := context.Background()

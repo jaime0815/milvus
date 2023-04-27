@@ -57,7 +57,7 @@ func (m *mockProxyComponent) DropDatabase(ctx context.Context, in *milvuspb.Drop
 }
 
 func (m *mockProxyComponent) ListDatabases(ctx context.Context, in *milvuspb.ListDatabasesRequest) (*milvuspb.ListDatabasesResponse, error) {
-	return  &milvuspb.ListDatabasesResponse{Status: testStatus}, nil
+	return &milvuspb.ListDatabasesResponse{Status: testStatus}, nil
 }
 
 func (m *mockProxyComponent) CreateCollection(ctx context.Context, request *milvuspb.CreateCollectionRequest) (*commonpb.Status, error) {

@@ -24,7 +24,7 @@ func TestCreateDatabaseTask(t *testing.T) {
 				MsgID:     100,
 				Timestamp: 100,
 			},
-			DbName:         "db",
+			DbName: "db",
 		},
 		ctx:       ctx,
 		rootCoord: rc,
@@ -48,7 +48,6 @@ func TestCreateDatabaseTask(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-
 	t.Run("pre execute fail", func(t *testing.T) {
 		task.DbName = "#0xc0de"
 		err := task.PreExecute(ctx)
@@ -71,7 +70,7 @@ func TestDropDatabaseTask(t *testing.T) {
 				MsgID:     100,
 				Timestamp: 100,
 			},
-			DbName:         "db",
+			DbName: "db",
 		},
 		ctx:       ctx,
 		rootCoord: rc,
@@ -94,7 +93,6 @@ func TestDropDatabaseTask(t *testing.T) {
 		err = task.Execute(ctx)
 		assert.NoError(t, err)
 	})
-
 
 	t.Run("pre execute fail", func(t *testing.T) {
 		task.DbName = "#0xc0de"

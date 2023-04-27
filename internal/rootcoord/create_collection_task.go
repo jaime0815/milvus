@@ -313,7 +313,7 @@ func (t *createCollectionTask) Execute(ctx context.Context) error {
 	existedCollInfos, err := t.core.meta.ListCollections(ctx, t.Req.GetDbName(), typeutil.MaxTimestamp)
 	if err != nil {
 		log.Warn("fail to list collections for checking the collection count", zap.Error(err))
-		return fmt.Errorf("fail to list collections for checking the collection count")
+		return fmt.Errorf("fail to list collections for checking the collection count, err: %s", err.Error())
 	}
 	maxCollectionNum := Params.QuotaConfig.MaxCollectionNum
 	if len(existedCollInfos) >= maxCollectionNum {

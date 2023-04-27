@@ -219,13 +219,13 @@ func (_m *RootCoordCatalog) DeleteGrant(ctx context.Context, tenant string, role
 	return r0
 }
 
-// DropAlias provides a mock function with given fields: ctx, alias, ts
-func (_m *RootCoordCatalog) DropAlias(ctx context.Context, alias string, ts uint64) error {
-	ret := _m.Called(ctx, alias, ts)
+// DropAlias provides a mock function with given fields: ctx, dbName, alias, ts
+func (_m *RootCoordCatalog) DropAlias(ctx context.Context, dbName string, alias string, ts uint64) error {
+	ret := _m.Called(ctx, dbName, alias, ts)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, uint64) error); ok {
-		r0 = rf(ctx, alias, ts)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, uint64) error); ok {
+		r0 = rf(ctx, dbName, alias, ts)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -372,13 +372,13 @@ func (_m *RootCoordCatalog) GetCredential(ctx context.Context, username string) 
 	return r0, r1
 }
 
-// ListAliases provides a mock function with given fields: ctx, ts
-func (_m *RootCoordCatalog) ListAliases(ctx context.Context, ts uint64) ([]*model.Alias, error) {
-	ret := _m.Called(ctx, ts)
+// ListAliases provides a mock function with given fields: ctx, dbName, ts
+func (_m *RootCoordCatalog) ListAliases(ctx context.Context, dbName string, ts uint64) ([]*model.Alias, error) {
+	ret := _m.Called(ctx, dbName, ts)
 
 	var r0 []*model.Alias
-	if rf, ok := ret.Get(0).(func(context.Context, uint64) []*model.Alias); ok {
-		r0 = rf(ctx, ts)
+	if rf, ok := ret.Get(0).(func(context.Context, string, uint64) []*model.Alias); ok {
+		r0 = rf(ctx, dbName, ts)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*model.Alias)
@@ -386,8 +386,8 @@ func (_m *RootCoordCatalog) ListAliases(ctx context.Context, ts uint64) ([]*mode
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, uint64) error); ok {
-		r1 = rf(ctx, ts)
+	if rf, ok := ret.Get(1).(func(context.Context, string, uint64) error); ok {
+		r1 = rf(ctx, dbName, ts)
 	} else {
 		r1 = ret.Error(1)
 	}
