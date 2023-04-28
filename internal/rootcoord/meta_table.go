@@ -169,6 +169,10 @@ func (mt *MetaTable) CreateDatabase(ctx context.Context, dbName string, ts typeu
 	mt.ddLock.Lock()
 	defer mt.ddLock.Unlock()
 
+	if mt.names.exist(dbName) || mt.aliases.exist(dbName) {
+		return fmt.Errorf("database already exist: %s", dbName)
+	}
+
 	if err := mt.catalog.CreateDatabase(ctx, dbName, ts); err != nil {
 		return err
 	}
@@ -185,8 +189,12 @@ func (mt *MetaTable) DropDatabase(ctx context.Context, dbName string, ts typeuti
 	mt.ddLock.Lock()
 	defer mt.ddLock.Unlock()
 
-	if !mt.names.empty(dbName) || !mt.aliases.empty(dbName) {
-		return fmt.Errorf("database %s not empty", dbName)
+	if !mt.names.exist(dbName) && !mt.aliases.exist(dbName) {
+		return fmt.Errorf("database not exist: %s", dbName)
+	}
+
+	if mt.names.exist(dbName) && !mt.names.empty(dbName) {
+		return fmt.Errorf("database not empty: %s", dbName)
 	}
 
 	if err := mt.catalog.DropDatabase(ctx, dbName, ts); err != nil {
