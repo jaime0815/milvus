@@ -875,7 +875,7 @@ func TestProxy(t *testing.T) {
 	wg.Add(1)
 	t.Run("describe collection", func(t *testing.T) {
 		defer wg.Done()
-		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.DescribeCollection(ctx, &milvuspb.DescribeCollectionRequest{
@@ -1052,7 +1052,7 @@ func TestProxy(t *testing.T) {
 	wg.Add(1)
 	t.Run("show partitions", func(t *testing.T) {
 		defer wg.Done()
-		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.ShowPartitions(ctx, &milvuspb.ShowPartitionsRequest{
@@ -1359,7 +1359,7 @@ func TestProxy(t *testing.T) {
 	t.Run("get replicas", func(t *testing.T) {
 		defer wg.Done()
 
-		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.GetReplicas(ctx, &milvuspb.GetReplicasRequest{
@@ -1608,7 +1608,7 @@ func TestProxy(t *testing.T) {
 	wg.Add(1)
 	t.Run("release collection", func(t *testing.T) {
 		defer wg.Done()
-		_, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+		_, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.ReleaseCollection(ctx, &milvuspb.ReleaseCollectionRequest{
@@ -1649,7 +1649,7 @@ func TestProxy(t *testing.T) {
 	wg.Add(1)
 	t.Run("load partitions", func(t *testing.T) {
 		defer wg.Done()
-		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.LoadPartitions(ctx, &milvuspb.LoadPartitionsRequest{
@@ -1722,7 +1722,7 @@ func TestProxy(t *testing.T) {
 	wg.Add(1)
 	t.Run("show in-memory partitions", func(t *testing.T) {
 		defer wg.Done()
-		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.ShowPartitions(ctx, &milvuspb.ShowPartitionsRequest{
@@ -1879,7 +1879,7 @@ func TestProxy(t *testing.T) {
 	wg.Add(1)
 	t.Run("show in-memory partitions after release partition", func(t *testing.T) {
 		defer wg.Done()
-		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.ShowPartitions(ctx, &milvuspb.ShowPartitionsRequest{
@@ -1957,7 +1957,7 @@ func TestProxy(t *testing.T) {
 	wg.Add(1)
 	t.Run("show partitions after drop partition", func(t *testing.T) {
 		defer wg.Done()
-		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+		collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.ShowPartitions(ctx, &milvuspb.ShowPartitionsRequest{
@@ -2004,7 +2004,7 @@ func TestProxy(t *testing.T) {
 	wg.Add(1)
 	t.Run("drop collection", func(t *testing.T) {
 		defer wg.Done()
-		_, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+		_, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 		assert.NoError(t, err)
 
 		resp, err := proxy.DropCollection(ctx, &milvuspb.DropCollectionRequest{

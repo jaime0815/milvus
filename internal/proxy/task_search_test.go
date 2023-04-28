@@ -205,7 +205,7 @@ func TestSearchTask_PreExecute(t *testing.T) {
 	t.Run("invalid IgnoreGrowing param", func(t *testing.T) {
 		collName := "test_invalid_param" + funcutil.GenRandomStr()
 		createColl(t, collName, rc)
-		collID, err := globalMetaCache.GetCollectionID(context.TODO(), GetCurDatabaseFromContextOrEmpty(ctx), collName)
+		collID, err := globalMetaCache.GetCollectionID(context.TODO(), GetCurDatabaseFromContextOrDefault(ctx), collName)
 		require.NoError(t, err)
 		status, err := qc.LoadCollection(ctx, &querypb.LoadCollectionRequest{
 			Base: &commonpb.MsgBase{
@@ -266,7 +266,7 @@ func TestSearchTask_PreExecute(t *testing.T) {
 	t.Run("test checkIfLoaded error", func(t *testing.T) {
 		collName := "test_checkIfLoaded_error" + funcutil.GenRandomStr()
 		createColl(t, collName, rc)
-		_, err := globalMetaCache.GetCollectionID(context.TODO(), GetCurDatabaseFromContextOrEmpty(ctx), collName)
+		_, err := globalMetaCache.GetCollectionID(context.TODO(), GetCurDatabaseFromContextOrDefault(ctx), collName)
 		require.NoError(t, err)
 		task := getSearchTask(t, collName)
 		task.collectionName = collName
@@ -292,7 +292,7 @@ func TestSearchTask_PreExecute(t *testing.T) {
 	t.Run("search with timeout", func(t *testing.T) {
 		collName := "search_with_timeout" + funcutil.GenRandomStr()
 		createColl(t, collName, rc)
-		collID, err := globalMetaCache.GetCollectionID(context.TODO(), GetCurDatabaseFromContextOrEmpty(ctx), collName)
+		collID, err := globalMetaCache.GetCollectionID(context.TODO(), GetCurDatabaseFromContextOrDefault(ctx), collName)
 		require.NoError(t, err)
 		status, err := qc.LoadCollection(ctx, &querypb.LoadCollectionRequest{
 			Base: &commonpb.MsgBase{
@@ -1827,7 +1827,7 @@ func TestSearchTask_ErrExecute(t *testing.T) {
 	require.NoError(t, createColT.Execute(ctx))
 	require.NoError(t, createColT.PostExecute(ctx))
 
-	collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+	collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 	assert.NoError(t, err)
 
 	status, err := qc.LoadCollection(ctx, &querypb.LoadCollectionRequest{

@@ -818,7 +818,7 @@ func TestHasCollectionTask(t *testing.T) {
 	assert.Equal(t, false, task.result.Value)
 	// createCollection in RootCood and fill GlobalMetaCache
 	rc.CreateCollection(ctx, createColReq)
-	globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+	globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 
 	// success to drop collection
 	err = task.Execute(ctx)
@@ -939,7 +939,7 @@ func TestDescribeCollectionTask_ShardsNum1(t *testing.T) {
 	}
 
 	rc.CreateCollection(ctx, createColReq)
-	globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+	globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 
 	//CreateCollection
 	task := &describeCollectionTask{
@@ -1002,7 +1002,7 @@ func TestDescribeCollectionTask_ShardsNum2(t *testing.T) {
 	}
 
 	rc.CreateCollection(ctx, createColReq)
-	globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+	globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 
 	//CreateCollection
 	task := &describeCollectionTask{
@@ -1386,7 +1386,7 @@ func TestTask_Int64PrimaryKey(t *testing.T) {
 		})
 	})
 
-	collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+	collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 	assert.NoError(t, err)
 
 	dmlChannelsFunc := getDmlChannelsFunc(ctx, rc)
@@ -1641,7 +1641,7 @@ func TestTask_VarCharPrimaryKey(t *testing.T) {
 		})
 	})
 
-	collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+	collectionID, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 	assert.NoError(t, err)
 
 	dmlChannelsFunc := getDmlChannelsFunc(ctx, rc)
@@ -2639,7 +2639,7 @@ func TestTransferReplicaTask(t *testing.T) {
 	mgr := newShardClientMgr()
 	InitMetaCache(ctx, rc, qc, mgr)
 	// make it avoid remote call on rc
-	globalMetaCache.GetCollectionSchema(context.Background(), GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+	globalMetaCache.GetCollectionSchema(context.Background(), GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 
 	req := &milvuspb.TransferReplicaRequest{
 		Base: &commonpb.MsgBase{
@@ -2720,8 +2720,8 @@ func TestDescribeResourceGroupTask(t *testing.T) {
 	mgr := newShardClientMgr()
 	InitMetaCache(ctx, rc, qc, mgr)
 	// make it avoid remote call on rc
-	globalMetaCache.GetCollectionSchema(context.Background(), GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
-	globalMetaCache.GetCollectionSchema(context.Background(), GetCurDatabaseFromContextOrEmpty(ctx), "collection2")
+	globalMetaCache.GetCollectionSchema(context.Background(), GetCurDatabaseFromContextOrDefault(ctx), "collection1")
+	globalMetaCache.GetCollectionSchema(context.Background(), GetCurDatabaseFromContextOrDefault(ctx), "collection2")
 
 	req := &milvuspb.DescribeResourceGroupRequest{
 		Base: &commonpb.MsgBase{
@@ -2765,8 +2765,8 @@ func TestDescribeResourceGroupTaskFailed(t *testing.T) {
 	mgr := newShardClientMgr()
 	InitMetaCache(ctx, rc, qc, mgr)
 	// make it avoid remote call on rc
-	globalMetaCache.GetCollectionSchema(context.Background(), GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
-	globalMetaCache.GetCollectionSchema(context.Background(), GetCurDatabaseFromContextOrEmpty(ctx), "collection2")
+	globalMetaCache.GetCollectionSchema(context.Background(), GetCurDatabaseFromContextOrDefault(ctx), "collection1")
+	globalMetaCache.GetCollectionSchema(context.Background(), GetCurDatabaseFromContextOrDefault(ctx), "collection2")
 
 	req := &milvuspb.DescribeResourceGroupRequest{
 		Base: &commonpb.MsgBase{

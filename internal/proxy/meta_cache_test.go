@@ -243,13 +243,13 @@ func TestMetaCache_GetCollection(t *testing.T) {
 	err := InitMetaCache(ctx, rootCoord, queryCoord, mgr)
 	assert.Nil(t, err)
 
-	id, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+	id, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 	assert.Nil(t, err)
 	assert.Equal(t, id, typeutil.UniqueID(1))
 	assert.Equal(t, rootCoord.GetAccessCount(), 1)
 
 	// should'nt be accessed to remote root coord.
-	schema, err := globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+	schema, err := globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 	assert.Equal(t, rootCoord.GetAccessCount(), 1)
 	assert.Nil(t, err)
 	assert.Equal(t, schema, &schemapb.CollectionSchema{
@@ -257,11 +257,11 @@ func TestMetaCache_GetCollection(t *testing.T) {
 		Fields: []*schemapb.FieldSchema{},
 		Name:   "collection1",
 	})
-	id, err = globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection2")
+	id, err = globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection2")
 	assert.Equal(t, rootCoord.GetAccessCount(), 2)
 	assert.Nil(t, err)
 	assert.Equal(t, id, typeutil.UniqueID(2))
-	schema, err = globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection2")
+	schema, err = globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection2")
 	assert.Equal(t, rootCoord.GetAccessCount(), 2)
 	assert.Nil(t, err)
 	assert.Equal(t, schema, &schemapb.CollectionSchema{
@@ -271,11 +271,11 @@ func TestMetaCache_GetCollection(t *testing.T) {
 	})
 
 	// test to get from cache, this should trigger root request
-	id, err = globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+	id, err = globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 	assert.Equal(t, rootCoord.GetAccessCount(), 2)
 	assert.Nil(t, err)
 	assert.Equal(t, id, typeutil.UniqueID(1))
-	schema, err = globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+	schema, err = globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 	assert.Equal(t, rootCoord.GetAccessCount(), 2)
 	assert.Nil(t, err)
 	assert.Equal(t, schema, &schemapb.CollectionSchema{
@@ -300,7 +300,7 @@ func TestMetaCache_GetCollectionName(t *testing.T) {
 	assert.Equal(t, rootCoord.GetAccessCount(), 1)
 
 	// should'nt be accessed to remote root coord.
-	schema, err := globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+	schema, err := globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 	assert.Equal(t, rootCoord.GetAccessCount(), 1)
 	assert.Nil(t, err)
 	assert.Equal(t, schema, &schemapb.CollectionSchema{
@@ -312,7 +312,7 @@ func TestMetaCache_GetCollectionName(t *testing.T) {
 	assert.Equal(t, rootCoord.GetAccessCount(), 1)
 	assert.Nil(t, err)
 	assert.Equal(t, collection, "collection1")
-	schema, err = globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection2")
+	schema, err = globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection2")
 	assert.Equal(t, rootCoord.GetAccessCount(), 2)
 	assert.Nil(t, err)
 	assert.Equal(t, schema, &schemapb.CollectionSchema{
@@ -326,7 +326,7 @@ func TestMetaCache_GetCollectionName(t *testing.T) {
 	assert.Equal(t, rootCoord.GetAccessCount(), 2)
 	assert.Nil(t, err)
 	assert.Equal(t, collection, "collection1")
-	schema, err = globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+	schema, err = globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 	assert.Equal(t, rootCoord.GetAccessCount(), 2)
 	assert.Nil(t, err)
 	assert.Equal(t, schema, &schemapb.CollectionSchema{
@@ -345,13 +345,13 @@ func TestMetaCache_GetCollectionFailure(t *testing.T) {
 	assert.Nil(t, err)
 	rootCoord.Error = true
 
-	schema, err := globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+	schema, err := globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 	assert.NotNil(t, err)
 	assert.Nil(t, schema)
 
 	rootCoord.Error = false
 
-	schema, err = globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+	schema, err = globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 	assert.Nil(t, err)
 	assert.Equal(t, schema, &schemapb.CollectionSchema{
 		AutoID: true,
@@ -377,10 +377,10 @@ func TestMetaCache_GetNonExistCollection(t *testing.T) {
 	err := InitMetaCache(ctx, rootCoord, queryCoord, mgr)
 	assert.Nil(t, err)
 
-	id, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection3")
+	id, err := globalMetaCache.GetCollectionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection3")
 	assert.NotNil(t, err)
 	assert.Equal(t, id, int64(0))
-	schema, err := globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection3")
+	schema, err := globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection3")
 	assert.NotNil(t, err)
 	assert.Nil(t, schema)
 }
@@ -393,16 +393,16 @@ func TestMetaCache_GetPartitionID(t *testing.T) {
 	err := InitMetaCache(ctx, rootCoord, queryCoord, mgr)
 	assert.Nil(t, err)
 
-	id, err := globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1", "par1")
+	id, err := globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1", "par1")
 	assert.Nil(t, err)
 	assert.Equal(t, id, typeutil.UniqueID(1))
-	id, err = globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1", "par2")
+	id, err = globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1", "par2")
 	assert.Nil(t, err)
 	assert.Equal(t, id, typeutil.UniqueID(2))
-	id, err = globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection2", "par1")
+	id, err = globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection2", "par1")
 	assert.Nil(t, err)
 	assert.Equal(t, id, typeutil.UniqueID(3))
-	id, err = globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection2", "par2")
+	id, err = globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection2", "par2")
 	assert.Nil(t, err)
 	assert.Equal(t, id, typeutil.UniqueID(4))
 }
@@ -421,7 +421,7 @@ func TestMetaCache_ConcurrentTest1(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < cnt; i++ {
 			//GetCollectionSchema will never fail
-			schema, err := globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+			schema, err := globalMetaCache.GetCollectionSchema(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 			assert.Nil(t, err)
 			assert.Equal(t, schema, &schemapb.CollectionSchema{
 				AutoID: true,
@@ -436,7 +436,7 @@ func TestMetaCache_ConcurrentTest1(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < cnt; i++ {
 			//GetPartitions may fail
-			globalMetaCache.GetPartitions(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+			globalMetaCache.GetPartitions(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
@@ -445,7 +445,7 @@ func TestMetaCache_ConcurrentTest1(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < cnt; i++ {
 			//periodically invalid collection cache
-			globalMetaCache.RemoveCollection(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+			globalMetaCache.RemoveCollection(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
@@ -470,24 +470,24 @@ func TestMetaCache_GetPartitionError(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Test the case where ShowPartitionsResponse is not aligned
-	id, err := globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "errorCollection", "par1")
+	id, err := globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), "errorCollection", "par1")
 	assert.NotNil(t, err)
 	log.Debug(err.Error())
 	assert.Equal(t, id, typeutil.UniqueID(0))
 
-	partitions, err2 := globalMetaCache.GetPartitions(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "errorCollection")
+	partitions, err2 := globalMetaCache.GetPartitions(ctx, GetCurDatabaseFromContextOrDefault(ctx), "errorCollection")
 	assert.NotNil(t, err2)
 	log.Debug(err.Error())
 	assert.Equal(t, len(partitions), 0)
 
 	// Test non existed tables
-	id, err = globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "nonExisted", "par1")
+	id, err = globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), "nonExisted", "par1")
 	assert.NotNil(t, err)
 	log.Debug(err.Error())
 	assert.Equal(t, id, typeutil.UniqueID(0))
 
 	// Test non existed partition
-	id, err = globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1", "par3")
+	id, err = globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1", "par3")
 	assert.NotNil(t, err)
 	log.Debug(err.Error())
 	assert.Equal(t, id, typeutil.UniqueID(0))
@@ -510,21 +510,21 @@ func TestMetaCache_GetShards(t *testing.T) {
 	defer qc.Stop()
 
 	t.Run("No collection in meta cache", func(t *testing.T) {
-		shards, err := globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrEmpty(ctx), "non-exists")
+		shards, err := globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrDefault(ctx), "non-exists")
 		assert.Error(t, err)
 		assert.Empty(t, shards)
 	})
 
 	t.Run("without shardLeaders in collection info invalid shardLeaders", func(t *testing.T) {
 		qc.validShardLeaders = false
-		shards, err := globalMetaCache.GetShards(ctx, false, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+		shards, err := globalMetaCache.GetShards(ctx, false, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 		assert.Error(t, err)
 		assert.Empty(t, shards)
 	})
 
 	t.Run("without shardLeaders in collection info", func(t *testing.T) {
 		qc.validShardLeaders = true
-		shards, err := globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+		shards, err := globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, shards)
 		assert.Equal(t, 1, len(shards))
@@ -532,7 +532,7 @@ func TestMetaCache_GetShards(t *testing.T) {
 
 		// get from cache
 		qc.validShardLeaders = false
-		shards, err = globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+		shards, err = globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 
 		assert.NoError(t, err)
 		assert.NotEmpty(t, shards)
@@ -558,26 +558,26 @@ func TestMetaCache_ClearShards(t *testing.T) {
 	defer qc.Stop()
 
 	t.Run("Clear with no collection info", func(t *testing.T) {
-		globalMetaCache.DeprecateShardCache(GetCurDatabaseFromContextOrEmpty(ctx), "collection_not_exist")
+		globalMetaCache.DeprecateShardCache(GetCurDatabaseFromContextOrDefault(ctx), "collection_not_exist")
 	})
 
 	t.Run("Clear valid collection empty cache", func(t *testing.T) {
-		globalMetaCache.DeprecateShardCache(GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+		globalMetaCache.DeprecateShardCache(GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 	})
 
 	t.Run("Clear valid collection valid cache", func(t *testing.T) {
 
 		qc.validShardLeaders = true
-		shards, err := globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+		shards, err := globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 		require.NoError(t, err)
 		require.NotEmpty(t, shards)
 		require.Equal(t, 1, len(shards))
 		require.Equal(t, 3, len(shards["channel-1"]))
 
-		globalMetaCache.DeprecateShardCache(GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+		globalMetaCache.DeprecateShardCache(GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 
 		qc.validShardLeaders = false
-		shards, err = globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrEmpty(ctx), collectionName)
+		shards, err = globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrDefault(ctx), collectionName)
 		assert.Error(t, err)
 		assert.Empty(t, shards)
 	})
@@ -674,7 +674,7 @@ func TestMetaCache_LoadCache(t *testing.T) {
 	assert.Nil(t, err)
 
 	t.Run("test IsCollectionLoaded", func(t *testing.T) {
-		info, err := globalMetaCache.GetCollectionInfo(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+		info, err := globalMetaCache.GetCollectionInfo(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 		assert.NoError(t, err)
 		assert.True(t, info.isLoaded)
 		// no collectionInfo of collection1, should access RootCoord
@@ -682,7 +682,7 @@ func TestMetaCache_LoadCache(t *testing.T) {
 		// not loaded, should access QueryCoord
 		assert.Equal(t, queryCoord.GetAccessCount(), 1)
 
-		info, err = globalMetaCache.GetCollectionInfo(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+		info, err = globalMetaCache.GetCollectionInfo(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 		assert.NoError(t, err)
 		assert.True(t, info.isLoaded)
 		// shouldn't access QueryCoord or RootCoord again
@@ -690,7 +690,7 @@ func TestMetaCache_LoadCache(t *testing.T) {
 		assert.Equal(t, queryCoord.GetAccessCount(), 1)
 
 		// test collection2 not fully loaded
-		info, err = globalMetaCache.GetCollectionInfo(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection2")
+		info, err = globalMetaCache.GetCollectionInfo(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection2")
 		assert.NoError(t, err)
 		assert.False(t, info.isLoaded)
 		// no collectionInfo of collection2, should access RootCoord
@@ -700,8 +700,8 @@ func TestMetaCache_LoadCache(t *testing.T) {
 	})
 
 	t.Run("test RemoveCollectionLoadCache", func(t *testing.T) {
-		globalMetaCache.RemoveCollection(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
-		info, err := globalMetaCache.GetCollectionInfo(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+		globalMetaCache.RemoveCollection(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
+		info, err := globalMetaCache.GetCollectionInfo(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 		assert.NoError(t, err)
 		assert.True(t, info.isLoaded)
 		// should access QueryCoord
@@ -717,21 +717,21 @@ func TestMetaCache_RemoveCollection(t *testing.T) {
 	err := InitMetaCache(ctx, rootCoord, queryCoord, shardMgr)
 	assert.Nil(t, err)
 
-	info, err := globalMetaCache.GetCollectionInfo(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+	info, err := globalMetaCache.GetCollectionInfo(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 	assert.NoError(t, err)
 	assert.True(t, info.isLoaded)
 	// no collectionInfo of collection1, should access RootCoord
 	assert.Equal(t, rootCoord.GetAccessCount(), 1)
 
-	info, err = globalMetaCache.GetCollectionInfo(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+	info, err = globalMetaCache.GetCollectionInfo(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 	assert.NoError(t, err)
 	assert.True(t, info.isLoaded)
 	// shouldn't access RootCoord again
 	assert.Equal(t, rootCoord.GetAccessCount(), 1)
 
-	globalMetaCache.RemoveCollection(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+	globalMetaCache.RemoveCollection(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 	// no collectionInfo of collection2, should access RootCoord
-	info, err = globalMetaCache.GetCollectionInfo(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+	info, err = globalMetaCache.GetCollectionInfo(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 	assert.NoError(t, err)
 	assert.True(t, info.isLoaded)
 	// shouldn't access RootCoord again
@@ -739,7 +739,7 @@ func TestMetaCache_RemoveCollection(t *testing.T) {
 
 	globalMetaCache.RemoveCollectionsByID(ctx, UniqueID(1))
 	// no collectionInfo of collection2, should access RootCoord
-	info, err = globalMetaCache.GetCollectionInfo(ctx, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+	info, err = globalMetaCache.GetCollectionInfo(ctx, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 	assert.NoError(t, err)
 	assert.True(t, info.isLoaded)
 	// shouldn't access RootCoord again
@@ -777,7 +777,7 @@ func TestMetaCache_ExpireShardLeaderCache(t *testing.T) {
 			},
 		},
 	}, nil).Times(1)
-	nodeInfos, err := globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+	nodeInfos, err := globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 	assert.NoError(t, err)
 	assert.Len(t, nodeInfos["channel-1"], 3)
 
@@ -795,7 +795,7 @@ func TestMetaCache_ExpireShardLeaderCache(t *testing.T) {
 	}, nil).Times(1)
 
 	assert.Eventually(t, func() bool {
-		nodeInfos, err := globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+		nodeInfos, err := globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 		assert.NoError(t, err)
 		return len(nodeInfos["channel-1"]) == 2
 	}, 3*time.Second, 1*time.Second)
@@ -814,7 +814,7 @@ func TestMetaCache_ExpireShardLeaderCache(t *testing.T) {
 	}, nil).Times(1)
 
 	assert.Eventually(t, func() bool {
-		nodeInfos, err := globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+		nodeInfos, err := globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 		assert.NoError(t, err)
 		return len(nodeInfos["channel-1"]) == 3
 	}, 3*time.Second, 1*time.Second)
@@ -838,7 +838,7 @@ func TestMetaCache_ExpireShardLeaderCache(t *testing.T) {
 	}, nil).Times(1)
 
 	assert.Eventually(t, func() bool {
-		nodeInfos, err := globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrEmpty(ctx), "collection1")
+		nodeInfos, err := globalMetaCache.GetShards(ctx, true, GetCurDatabaseFromContextOrDefault(ctx), "collection1")
 		assert.NoError(t, err)
 		return len(nodeInfos["channel-1"]) == 3 && len(nodeInfos["channel-2"]) == 3
 	}, 3*time.Second, 1*time.Second)

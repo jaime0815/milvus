@@ -32,6 +32,7 @@ import (
 	"github.com/milvus-io/milvus/internal/metrics"
 	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
+	"github.com/milvus-io/milvus/internal/tso"
 	"github.com/milvus-io/milvus/internal/util/contextutil"
 	"github.com/milvus-io/milvus/internal/util/funcutil"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
@@ -92,6 +93,8 @@ type MetaTable struct {
 	ctx     context.Context
 	catalog metastore.RootCoordCatalog
 
+	tsoAllocator tso.Allocator
+
 	collID2Meta map[typeutil.UniqueID]*model.Collection // collection id -> collection meta
 
 	// collections *collectionDb
@@ -102,10 +105,11 @@ type MetaTable struct {
 	permissionLock sync.RWMutex
 }
 
-func NewMetaTable(ctx context.Context, catalog metastore.RootCoordCatalog) (*MetaTable, error) {
+func NewMetaTable(ctx context.Context, catalog metastore.RootCoordCatalog, tsoAllocator tso.Allocator) (*MetaTable, error) {
 	mt := &MetaTable{
-		ctx:     contextutil.WithTenantID(ctx, Params.CommonCfg.ClusterName),
-		catalog: catalog,
+		ctx:          contextutil.WithTenantID(ctx, Params.CommonCfg.ClusterName),
+		catalog:      catalog,
+		tsoAllocator: tsoAllocator,
 	}
 	if err := mt.reload(); err != nil {
 		return nil, err
@@ -129,6 +133,14 @@ func (mt *MetaTable) reload() error {
 	if err != nil {
 		return err
 	}
+
+	// create default database.
+	if !funcutil.SliceContain(dbs, "default") {
+		if err := mt.createDefaultDb(); err != nil {
+			return err
+		}
+	}
+
 	dbs = append(dbs, "")
 
 	// recover collections.
@@ -139,7 +151,12 @@ func (mt *MetaTable) reload() error {
 		}
 		for name, collection := range collections {
 			mt.collID2Meta[collection.CollectionID] = collection
-			mt.names.insert(db, name, collection.CollectionID)
+			if db == "" {
+				// insert into default database.
+				mt.names.insert("default", name, collection.CollectionID)
+			} else {
+				mt.names.insert(db, name, collection.CollectionID)
+			}
 
 			if collection.Available() {
 				collectionNum++
@@ -155,13 +172,25 @@ func (mt *MetaTable) reload() error {
 			return err
 		}
 		for _, alias := range aliases {
-			mt.aliases.insert(db, alias.Name, alias.CollectionID)
+			if db == "" {
+				mt.aliases.insert("default", alias.Name, alias.CollectionID)
+			} else {
+				mt.aliases.insert(db, alias.Name, alias.CollectionID)
+			}
 		}
 	}
 
 	metrics.RootCoordNumOfCollections.Set(float64(collectionNum))
 	metrics.RootCoordNumOfPartitions.WithLabelValues().Set(float64(partitionNum))
 	return nil
+}
+
+func (mt *MetaTable) createDefaultDb() error {
+	ts, err := mt.tsoAllocator.GenerateTSO(1)
+	if err != nil {
+		return err
+	}
+	return mt.CreateDatabase(mt.ctx, "default", ts)
 }
 
 func (mt *MetaTable) CreateDatabase(ctx context.Context, dbName string, ts typeutil.Timestamp) error {
