@@ -766,7 +766,7 @@ func GetCurDatabaseFromContext(ctx context.Context) (string, error) {
 	return header[0], nil
 }
 
-func GetCurDatabaseFromContextOrEmpty(ctx context.Context) string {
+func GetCurDatabaseFromContextOrDefault(ctx context.Context) string {
 	if db, err := GetCurDatabaseFromContext(ctx); err == nil {
 		return db
 	}
@@ -983,7 +983,7 @@ func getPartitionProgress(ctx context.Context, queryCoord types.QueryCoord,
 	IDs2Names := make(map[int64]string)
 	partitionIDs := make([]int64, 0)
 	for _, partitionName := range partitionNames {
-		partitionID, err := globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName, partitionName)
+		partitionID, err := globalMetaCache.GetPartitionID(ctx, GetCurDatabaseFromContextOrDefault(ctx), collectionName, partitionName)
 		if err != nil {
 			return 0, err
 		}
