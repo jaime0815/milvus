@@ -26,6 +26,10 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/milvus-io/milvus-proto/go-api/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
 	"github.com/milvus-io/milvus/internal/common"
@@ -47,12 +51,10 @@ import (
 	"github.com/milvus-io/milvus/internal/util/trace"
 	"github.com/milvus-io/milvus/internal/util/tsoutil"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"golang.org/x/sync/errgroup"
 )
 
 const moduleName = "Proxy"
+
 const SlowReadSpan = time.Second * 5
 
 // UpdateStateCode updates the state code of Proxy.
@@ -295,7 +297,7 @@ func (node *Proxy) ListDatabases(ctx context.Context, request *milvuspb.ListData
 		return resp, nil
 	}
 
-	log.Info(rpcDone(method))
+	log.Info(rpcDone(method), zap.Int("num of db", len(dct.result.DbNames)))
 	metrics.ProxyFunctionCall.WithLabelValues(strconv.FormatInt(Params.ProxyCfg.GetNodeID(), 10), method, metrics.SuccessLabel).Inc()
 	metrics.ProxyReqLatency.WithLabelValues(strconv.FormatInt(Params.ProxyCfg.GetNodeID(), 10), method).Observe(float64(tr.ElapseSpan().Milliseconds()))
 	return dct.result, nil

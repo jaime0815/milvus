@@ -192,14 +192,17 @@ func (mt *MetaTable) DropDatabase(ctx context.Context, dbName string, ts typeuti
 		return fmt.Errorf("database not exist: %s", dbName)
 	}
 
-	if mt.names.exist(dbName) && !mt.names.empty(dbName) {
-		return fmt.Errorf("database not empty: %s", dbName)
+	colls, err := mt.listCollectionFromCache(dbName, true)
+	if err != nil {
+		return err
+	}
+	if len(colls) >0 {
+		return fmt.Errorf("database:%s not empty, must drop all collections before drop database", dbName)
 	}
 
 	if err := mt.catalog.DropDatabase(ctx, dbName, ts); err != nil {
 		return err
 	}
-
 	mt.names.dropDb(dbName)
 	mt.aliases.dropDb(dbName)
 

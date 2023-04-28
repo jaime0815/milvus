@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"errors"
 
 	"github.com/milvus-io/milvus-proto/go-api/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
@@ -63,6 +64,9 @@ func (cdt *createDatabaseTask) PreExecute(ctx context.Context) error {
 func (cdt *createDatabaseTask) Execute(ctx context.Context) error {
 	var err error
 	cdt.result, err = cdt.rootCoord.CreateDatabase(ctx, cdt.CreateDatabaseRequest)
+	if cdt.result.ErrorCode != commonpb.ErrorCode_Success {
+		return errors.New(cdt.result.Reason)
+	}
 	return err
 }
 
@@ -124,6 +128,9 @@ func (ddt *dropDatabaseTask) PreExecute(ctx context.Context) error {
 func (ddt *dropDatabaseTask) Execute(ctx context.Context) error {
 	var err error
 	ddt.result, err = ddt.rootCoord.DropDatabase(ctx, ddt.DropDatabaseRequest)
+	if ddt.result.ErrorCode != commonpb.ErrorCode_Success {
+		return errors.New(ddt.result.Reason)
+	}
 	return err
 }
 
@@ -185,6 +192,9 @@ func (ldt *listDatabaseTask) PreExecute(ctx context.Context) error {
 func (ldt *listDatabaseTask) Execute(ctx context.Context) error {
 	var err error
 	ldt.result, err = ldt.rootCoord.ListDatabases(ctx, ldt.ListDatabasesRequest)
+	if ldt.result.Status.ErrorCode != commonpb.ErrorCode_Success {
+		return errors.New(ldt.result.Status.Reason)
+	}
 	return err
 }
 
