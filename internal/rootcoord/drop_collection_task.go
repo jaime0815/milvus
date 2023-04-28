@@ -76,7 +76,7 @@ func (t *dropCollectionTask) Execute(ctx context.Context) error {
 
 	redoTask.AddSyncStep(&expireCacheStep{
 		baseStep:        baseStep{core: t.core},
-		dbName:          collMeta.DBName,
+		dbName:          t.Req.GetDbName(),
 		collectionNames: append(aliases, collMeta.Name),
 		collectionID:    collMeta.CollectionID,
 		ts:              ts,
