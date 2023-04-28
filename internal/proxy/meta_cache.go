@@ -628,7 +628,10 @@ func (m *MetaCache) updatePartitions(partitions *milvuspb.ShowPartitionsResponse
 func (m *MetaCache) RemoveCollection(ctx context.Context, database, collectionName string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	delete(m.collInfo, collectionName)
+	_, dbOk := m.collInfo[database]
+	if dbOk {
+		delete(m.collInfo[database], collectionName)
+	}
 }
 
 func (m *MetaCache) RemoveCollectionsByID(ctx context.Context, collectionID UniqueID) []string {

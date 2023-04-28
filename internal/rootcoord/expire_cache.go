@@ -60,6 +60,7 @@ func (c *Core) ExpireMetaCache(ctx context.Context, dbName string, collNames []s
 				commonpbutil.WithTimeStamp(ts),
 				commonpbutil.WithSourceID(c.session.ServerID),
 			),
+			DbName:       dbName,
 			CollectionID: collectionID,
 		}
 		return c.proxyClientManager.InvalidateCollectionMetaCache(ctx, &req, opts...)
@@ -74,6 +75,7 @@ func (c *Core) ExpireMetaCache(ctx context.Context, dbName string, collNames []s
 				commonpbutil.WithTimeStamp(ts),
 				commonpbutil.WithSourceID(c.session.ServerID),
 			),
+			DbName:         dbName,
 			CollectionName: collName,
 		}
 		err := c.proxyClientManager.InvalidateCollectionMetaCache(ctx, &req, opts...)

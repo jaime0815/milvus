@@ -120,7 +120,7 @@ func (node *Proxy) InvalidateCollectionMetaCache(ctx context.Context, request *p
 	var aliasName []string
 	if globalMetaCache != nil {
 		if collectionName != "" {
-			globalMetaCache.RemoveCollection(ctx, GetCurDatabaseFromContextOrEmpty(ctx), collectionName) // no need to return error, though collection may be not cached
+			globalMetaCache.RemoveCollection(ctx, request.GetDbName(), collectionName) // no need to return error, though collection may be not cached
 		}
 		if request.CollectionID != UniqueID(0) {
 			aliasName = globalMetaCache.RemoveCollectionsByID(ctx, collectionID)
