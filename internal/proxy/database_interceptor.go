@@ -3,13 +3,13 @@ package proxy
 import (
 	"context"
 
-	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
-
 	"google.golang.org/grpc"
+
+	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
 )
 
-// FillDatabaseInterceptor not used now.
-func FillDatabaseInterceptor() grpc.UnaryServerInterceptor {
+// DatabaseInterceptor fill dbname into request based on kv pair <"dbname": "xx"> in header
+func DatabaseInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 		filledCtx, filledReq := fillDatabase(ctx, req)
 		return handler(filledCtx, filledReq)

@@ -24,7 +24,6 @@ import (
 
 	"github.com/milvus-io/milvus-proto/go-api/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
-
 	"github.com/milvus-io/milvus/internal/common"
 	"github.com/milvus-io/milvus/internal/log"
 	"github.com/milvus-io/milvus/internal/metastore/model"
@@ -74,6 +73,7 @@ func (t *dropPartitionTask) Execute(ctx context.Context) error {
 
 	redoTask.AddSyncStep(&expireCacheStep{
 		baseStep:        baseStep{core: t.core},
+		dbName:          t.collMeta.DBName,
 		collectionNames: []string{t.collMeta.Name},
 		collectionID:    t.collMeta.CollectionID,
 		ts:              t.GetTs(),

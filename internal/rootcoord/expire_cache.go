@@ -52,7 +52,7 @@ func expireCacheWithDropFlag() expireCacheOpt {
 }
 
 // ExpireMetaCache will call invalidate collection meta cache
-func (c *Core) ExpireMetaCache(ctx context.Context, collNames []string, collectionID UniqueID, ts typeutil.Timestamp, opts ...expireCacheOpt) error {
+func (c *Core) ExpireMetaCache(ctx context.Context, dbName string, collNames []string, collectionID UniqueID, ts typeutil.Timestamp, opts ...expireCacheOpt) error {
 	// if collectionID is specified, invalidate all the collection meta cache with the specified collectionID and return
 	if collectionID != InvalidCollectionID {
 		req := proxypb.InvalidateCollMetaCacheRequest{

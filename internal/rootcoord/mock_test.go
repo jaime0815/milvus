@@ -76,7 +76,7 @@ func (m mockMetaTable) ListDatabases(ctx context.Context, ts typeutil.Timestamp)
 	return m.ListDatabasesFunc(ctx, ts)
 }
 
-func (m mockMetaTable) ListCollections(ctx context.Context, dbName string, ts Timestamp) ([]*model.Collection, error) {
+func (m mockMetaTable) ListCollections(ctx context.Context, dbName string, ts Timestamp, onlyAvail bool) ([]*model.Collection, error) {
 	return m.ListCollectionsFunc(ctx, ts)
 }
 

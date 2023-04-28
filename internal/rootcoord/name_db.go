@@ -1,6 +1,10 @@
 package rootcoord
 
 import (
+	"fmt"
+
+	"golang.org/x/exp/maps"
+
 	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 
@@ -41,12 +45,20 @@ func (n *nameDb) get(dbName string, collectionName string) (collectionID UniqueI
 	return collectionID, ok
 }
 
-func (n *nameDb) list() []string {
+func (n *nameDb) listDB() []string {
 	dbs := make([]string, 0, len(n.db2Name2ID))
 	for db := range n.db2Name2ID {
 		dbs = append(dbs, db)
 	}
 	return dbs
+}
+
+func (n *nameDb) listCollectionID(dbName string) ([]typeutil.UniqueID, error) {
+	name2ID, ok := n.db2Name2ID[dbName]
+	if !ok {
+		return nil, fmt.Errorf("database not exist: %s", dbName)
+	}
+	return maps.Values(name2ID), nil
 }
 
 func (n *nameDb) removeIf(selector func(db string, collection string, id UniqueID) bool) {

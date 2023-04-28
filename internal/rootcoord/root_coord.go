@@ -593,41 +593,38 @@ func (c *Core) initRbac() (initError error) {
 
 // TODO: database implement
 func (c *Core) restore(ctx context.Context) error {
-	colls, err := c.meta.ListAbnormalCollections(ctx, typeutil.MaxTimestamp)
+	dbs, err := c.meta.ListDatabases(ctx, typeutil.MaxTimestamp)
 	if err != nil {
 		return err
 	}
 
-	for _, coll := range colls {
-		ts, err := c.tsoAllocator.GenerateTSO(1)
+	for _, db := range dbs {
+		colls, err := c.meta.ListCollections(ctx, db, typeutil.MaxTimestamp, false)
 		if err != nil {
 			return err
 		}
+		for _, coll := range colls {
+			for _, part := range coll.Partitions {
+				ts, err := c.tsoAllocator.GenerateTSO(1)
+				if err != nil {
+					return err
+				}
 
-		switch coll.State {
-		case pb.CollectionState_CollectionDropping:
-			go c.garbageCollector.ReDropCollection(coll.Clone(), ts)
-		case pb.CollectionState_CollectionCreating:
-			go c.garbageCollector.RemoveCreatingCollection(coll.Clone())
-		default:
-		}
-	}
-
-	colls, err = c.meta.ListCollections(ctx, "", typeutil.MaxTimestamp)
-	if err != nil {
-		return err
-	}
-	for _, coll := range colls {
-		for _, part := range coll.Partitions {
-			ts, err := c.tsoAllocator.GenerateTSO(1)
-			if err != nil {
-				return err
-			}
-
-			switch part.State {
-			case pb.PartitionState_PartitionDropping:
-				go c.garbageCollector.ReDropPartition(coll.PhysicalChannelNames, part.Clone(), ts)
-			default:
+				if coll.Available() {
+					switch part.State {
+					case pb.PartitionState_PartitionDropping:
+						go c.garbageCollector.ReDropPartition(coll.DBName, coll.PhysicalChannelNames, part.Clone(), ts)
+					default:
+					}
+				} else {
+					switch coll.State {
+					case pb.CollectionState_CollectionDropping:
+						go c.garbageCollector.ReDropCollection(coll.Clone(), ts)
+					case pb.CollectionState_CollectionCreating:
+						go c.garbageCollector.RemoveCreatingCollection(coll.Clone())
+					default:
+					}
+				}
 			}
 		}
 	}
@@ -933,8 +930,11 @@ func (c *Core) CreateCollection(ctx context.Context, in *milvuspb.CreateCollecti
 	metrics.RootCoordDDLReqCounter.WithLabelValues(method, metrics.TotalLabel).Inc()
 	tr := timerecord.NewTimeRecorder("CreateCollection")
 
-	log.Ctx(ctx).Info("received request to create collection", zap.String("role", typeutil.RootCoordRole),
-		zap.String("name", in.GetCollectionName()), zap.Int64("msgID", in.GetBase().GetMsgID()))
+	log.Ctx(ctx).Info("received request to create collection",
+		zap.String("dbName", in.GetDbName()),
+		zap.String("collectionName", in.GetCollectionName()),
+		zap.String("role", typeutil.RootCoordRole),
+		zap.Int64("msgID", in.GetBase().GetMsgID()))
 
 	t := &createCollectionTask{
 		baseTask: newBaseTask(ctx, c),
@@ -983,8 +983,11 @@ func (c *Core) DropCollection(ctx context.Context, in *milvuspb.DropCollectionRe
 	metrics.RootCoordDDLReqCounter.WithLabelValues(method, metrics.TotalLabel).Inc()
 	tr := timerecord.NewTimeRecorder("DropCollection")
 
-	log.Ctx(ctx).Info("received request to drop collection", zap.String("role", typeutil.RootCoordRole),
-		zap.String("name", in.GetCollectionName()), zap.Int64("msgID", in.GetBase().GetMsgID()))
+	log.Ctx(ctx).Info("received request to drop collection",
+		zap.String("role", typeutil.RootCoordRole),
+		zap.String("dbName", in.GetDbName()),
+		zap.String("collectionName", in.GetCollectionName()),
+		zap.Int64("msgID", in.GetBase().GetMsgID()))
 
 	t := &dropCollectionTask{
 		baseTask: newBaseTask(ctx, c),

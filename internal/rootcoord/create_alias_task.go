@@ -39,7 +39,7 @@ func (t *createAliasTask) Prepare(ctx context.Context) error {
 
 func (t *createAliasTask) Execute(ctx context.Context) error {
 	t.SetStep(typeutil.TaskStepExecute)
-	if err := t.core.ExpireMetaCache(ctx, []string{t.Req.GetAlias(), t.Req.GetCollectionName()}, InvalidCollectionID, t.GetTs()); err != nil {
+	if err := t.core.ExpireMetaCache(ctx, t.Req.GetDbName(), []string{t.Req.GetAlias(), t.Req.GetCollectionName()}, InvalidCollectionID, t.GetTs()); err != nil {
 		return err
 	}
 	// create alias is atomic enough.

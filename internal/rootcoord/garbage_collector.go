@@ -20,18 +20,17 @@ import (
 	"context"
 
 	"github.com/milvus-io/milvus-proto/go-api/commonpb"
+	"github.com/milvus-io/milvus/internal/metastore/model"
 	ms "github.com/milvus-io/milvus/internal/mq/msgstream"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
 	"github.com/milvus-io/milvus/internal/util/commonpbutil"
-
-	"github.com/milvus-io/milvus/internal/metastore/model"
 )
 
 //go:generate mockery --name=GarbageCollector --outpkg=mockrootcoord
 type GarbageCollector interface {
 	ReDropCollection(collMeta *model.Collection, ts Timestamp)
 	RemoveCreatingCollection(collMeta *model.Collection)
-	ReDropPartition(pChannels []string, partition *model.Partition, ts Timestamp)
+	ReDropPartition(dbName string, pChannels []string, partition *model.Partition, ts Timestamp)
 	GcCollectionData(ctx context.Context, coll *model.Collection) (ddlTs Timestamp, err error)
 	GcPartitionData(ctx context.Context, pChannels []string, partition *model.Partition) (ddlTs Timestamp, err error)
 }
@@ -52,6 +51,7 @@ func (c *bgGarbageCollector) ReDropCollection(collMeta *model.Collection, ts Tim
 	redo := newBaseRedoTask(c.s.stepExecutor)
 	redo.AddAsyncStep(&expireCacheStep{
 		baseStep:        baseStep{core: c.s},
+		dbName:          collMeta.DBName,
 		collectionNames: append(aliases, collMeta.Name),
 		collectionID:    collMeta.CollectionID,
 		ts:              ts,
@@ -115,13 +115,14 @@ func (c *bgGarbageCollector) RemoveCreatingCollection(collMeta *model.Collection
 	_ = redo.Execute(context.Background())
 }
 
-func (c *bgGarbageCollector) ReDropPartition(pChannels []string, partition *model.Partition, ts Timestamp) {
+func (c *bgGarbageCollector) ReDropPartition(dbName string, pChannels []string, partition *model.Partition, ts Timestamp) {
 	// TODO: remove this after data gc can be notified by rpc.
 	c.s.chanTimeTick.addDmlChannels(pChannels...)
 
 	redo := newBaseRedoTask(c.s.stepExecutor)
 	redo.AddAsyncStep(&expireCacheStep{
 		baseStep:     baseStep{core: c.s},
+		dbName:       dbName,
 		collectionID: partition.CollectionID,
 		ts:           ts,
 	})

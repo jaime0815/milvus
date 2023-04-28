@@ -22,10 +22,8 @@ import (
 	"time"
 
 	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
-
-	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
-
 	"github.com/milvus-io/milvus/internal/metastore/model"
+	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
 )
 
 type stepPriority int
@@ -165,6 +163,7 @@ func (s *changeCollectionStateStep) Desc() string {
 
 type expireCacheStep struct {
 	baseStep
+	dbName          string
 	collectionNames []string
 	collectionID    UniqueID
 	ts              Timestamp
@@ -172,7 +171,7 @@ type expireCacheStep struct {
 }
 
 func (s *expireCacheStep) Execute(ctx context.Context) ([]nestedStep, error) {
-	err := s.core.ExpireMetaCache(ctx, s.collectionNames, s.collectionID, s.ts, s.opts...)
+	err := s.core.ExpireMetaCache(ctx, s.dbName, s.collectionNames, s.collectionID, s.ts, s.opts...)
 	return nil, err
 }
 

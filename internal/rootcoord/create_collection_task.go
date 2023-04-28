@@ -21,27 +21,20 @@ import (
 	"errors"
 	"fmt"
 
-	ms "github.com/milvus-io/milvus/internal/mq/msgstream"
-	"github.com/milvus-io/milvus/internal/proto/internalpb"
-
-	"github.com/milvus-io/milvus/internal/util/commonpbutil"
-	"github.com/milvus-io/milvus/internal/util/funcutil"
-
-	"github.com/milvus-io/milvus-proto/go-api/commonpb"
-
-	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
-
-	"github.com/milvus-io/milvus/internal/metastore/model"
-
-	"github.com/milvus-io/milvus/internal/log"
-	"github.com/milvus-io/milvus/internal/util/typeutil"
+	"github.com/golang/protobuf/proto"
 	"go.uber.org/zap"
 
-	"github.com/golang/protobuf/proto"
-
-	"github.com/milvus-io/milvus-proto/go-api/schemapb"
-
+	"github.com/milvus-io/milvus-proto/go-api/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
+	"github.com/milvus-io/milvus-proto/go-api/schemapb"
+	"github.com/milvus-io/milvus/internal/log"
+	"github.com/milvus-io/milvus/internal/metastore/model"
+	ms "github.com/milvus-io/milvus/internal/mq/msgstream"
+	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
+	"github.com/milvus-io/milvus/internal/proto/internalpb"
+	"github.com/milvus-io/milvus/internal/util/commonpbutil"
+	"github.com/milvus-io/milvus/internal/util/funcutil"
+	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 
 type collectionChannels struct {
@@ -310,7 +303,7 @@ func (t *createCollectionTask) Execute(ctx context.Context) error {
 		return nil
 	}
 
-	existedCollInfos, err := t.core.meta.ListCollections(ctx, t.Req.GetDbName(), typeutil.MaxTimestamp)
+	existedCollInfos, err := t.core.meta.ListCollections(ctx, t.Req.GetDbName(), typeutil.MaxTimestamp, true)
 	if err != nil {
 		log.Warn("fail to list collections for checking the collection count", zap.Error(err))
 		return fmt.Errorf("fail to list collections for checking the collection count, err: %s", err.Error())
@@ -324,6 +317,7 @@ func (t *createCollectionTask) Execute(ctx context.Context) error {
 	undoTask := newBaseUndoTask(t.core.stepExecutor)
 	undoTask.AddStep(&expireCacheStep{
 		baseStep:        baseStep{core: t.core},
+		dbName:          t.Req.GetDbName(),
 		collectionNames: []string{t.Req.GetCollectionName()},
 		collectionID:    InvalidCollectionID,
 		ts:              ts,

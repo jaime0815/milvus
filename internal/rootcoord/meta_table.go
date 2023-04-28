@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"sync"
 
+	"go.uber.org/zap"
+
 	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
 	"github.com/milvus-io/milvus/internal/common"
 	"github.com/milvus-io/milvus/internal/log"
@@ -33,11 +35,9 @@ import (
 	"github.com/milvus-io/milvus/internal/util/contextutil"
 	"github.com/milvus-io/milvus/internal/util/funcutil"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
-
-	"go.uber.org/zap"
 )
 
-//go:generate mockery --name=IMetaTable --outpkg=mockrootcoord
+//go:generate mockery --name=IMetaTable --outpkg=mockrootcoord --output=./mocks
 type IMetaTable interface {
 	CreateDatabase(ctx context.Context, dbName string, ts typeutil.Timestamp) error
 	DropDatabase(ctx context.Context, dbName string, ts typeutil.Timestamp) error
@@ -48,8 +48,7 @@ type IMetaTable interface {
 	RemoveCollection(ctx context.Context, collectionID UniqueID, ts Timestamp) error
 	GetCollectionByName(ctx context.Context, dbName string, collectionName string, ts Timestamp) (*model.Collection, error)
 	GetCollectionByID(ctx context.Context, dbName string, collectionID UniqueID, ts Timestamp, allowUnavailable bool) (*model.Collection, error)
-	ListCollections(ctx context.Context, dbName string, ts Timestamp) ([]*model.Collection, error)
-	ListAbnormalCollections(ctx context.Context, ts Timestamp) ([]*model.Collection, error)
+	ListCollections(ctx context.Context, dbName string, ts Timestamp, onlyAvail bool) ([]*model.Collection, error)
 	ListCollectionPhysicalChannels() map[typeutil.UniqueID][]string
 	GetCollectionVirtualChannels(colID int64) []string
 	AddPartition(ctx context.Context, partition *model.Partition) error
@@ -213,7 +212,7 @@ func (mt *MetaTable) ListDatabases(ctx context.Context, ts typeutil.Timestamp) (
 	mt.ddLock.Lock()
 	defer mt.ddLock.Unlock()
 
-	return mt.names.list(), nil
+	return mt.names.listDB(), nil
 }
 
 func (mt *MetaTable) AddCollection(ctx context.Context, coll *model.Collection) error {
@@ -440,12 +439,12 @@ func (mt *MetaTable) GetCollectionByID(ctx context.Context, dbName string, colle
 	return mt.getCollectionByIDInternal(ctx, dbName, collectionID, ts, allowUnavailable)
 }
 
-func (mt *MetaTable) ListCollections(ctx context.Context, dbName string, ts Timestamp) ([]*model.Collection, error) {
+func (mt *MetaTable) ListCollections(ctx context.Context, dbName string, ts Timestamp, onlyAvail bool) ([]*model.Collection, error) {
 	mt.ddLock.RLock()
 	defer mt.ddLock.RUnlock()
 
 	if isMaxTs(ts) {
-		return mt.listCollectionFromCache()
+		return mt.listCollectionFromCache(dbName, onlyAvail)
 	}
 
 	// list collections should always be loaded from catalog.
@@ -456,40 +455,33 @@ func (mt *MetaTable) ListCollections(ctx context.Context, dbName string, ts Time
 	}
 	onlineCollections := make([]*model.Collection, 0, len(colls))
 	for _, coll := range colls {
-		if coll.Available() {
-			onlineCollections = append(onlineCollections, coll)
+		if onlyAvail && !coll.Available() {
+			continue
 		}
+		onlineCollections = append(onlineCollections, coll)
 	}
 	return onlineCollections, nil
 }
 
-func (mt *MetaTable) listCollectionFromCache() ([]*model.Collection, error) {
-	collectionFromCache := make([]*model.Collection, 0)
-	for _, meta := range mt.collID2Meta {
-		if meta.Available() {
-			collectionFromCache = append(collectionFromCache, meta)
-		}
-	}
-	return collectionFromCache, nil
-}
-
-func (mt *MetaTable) ListAbnormalCollections(ctx context.Context, ts Timestamp) ([]*model.Collection, error) {
-	mt.ddLock.RLock()
-	defer mt.ddLock.RUnlock()
-
-	// list collections should always be loaded from catalog.
-	ctx1 := contextutil.WithTenantID(ctx, Params.CommonCfg.ClusterName)
-	colls, err := mt.catalog.ListCollections(ctx1, "", ts)
+func (mt *MetaTable) listCollectionFromCache(dbName string, onlyAvail bool) ([]*model.Collection, error) {
+	collectionIDs, err := mt.names.listCollectionID(dbName)
 	if err != nil {
 		return nil, err
 	}
-	abnormalCollections := make([]*model.Collection, 0, len(colls))
-	for _, coll := range colls {
-		if !coll.Available() {
-			abnormalCollections = append(abnormalCollections, coll)
+
+	collectionFromCache := make([]*model.Collection, 0, len(collectionIDs))
+	for _, colID := range collectionIDs {
+		meta, ok := mt.collID2Meta[colID]
+		if !ok {
+			return nil, fmt.Errorf("collectionID:%d  not existwithin db:%s", colID, dbName)
 		}
+
+		if onlyAvail && !meta.Available() {
+			continue
+		}
+		collectionFromCache = append(collectionFromCache, meta)
 	}
-	return abnormalCollections, nil
+	return collectionFromCache, nil
 }
 
 // ListCollectionPhysicalChannels list physical channels of all collections.

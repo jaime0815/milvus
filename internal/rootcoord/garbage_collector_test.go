@@ -22,14 +22,12 @@ import (
 	"fmt"
 	"testing"
 
-	mockrootcoord "github.com/milvus-io/milvus/internal/rootcoord/mocks"
-
-	mocktso "github.com/milvus-io/milvus/internal/tso/mocks"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/milvus-io/milvus/internal/metastore/model"
+	mockrootcoord "github.com/milvus-io/milvus/internal/rootcoord/mocks"
+	mocktso "github.com/milvus-io/milvus/internal/tso/mocks"
 )
 
 func TestGarbageCollectorCtx_ReDropCollection(t *testing.T) {
@@ -353,7 +351,7 @@ func TestGarbageCollectorCtx_ReDropPartition(t *testing.T) {
 		core.ddlTsLockManager = newDdlTsLockManager(core.tsoAllocator)
 		gc := newBgGarbageCollector(core)
 		core.garbageCollector = gc
-		gc.ReDropPartition(pchans, &model.Partition{}, 100000)
+		gc.ReDropPartition("", pchans, &model.Partition{}, 100000)
 	})
 
 	t.Run("failed to RemovePartition", func(t *testing.T) {
@@ -383,7 +381,7 @@ func TestGarbageCollectorCtx_ReDropPartition(t *testing.T) {
 		core.ddlTsLockManager = newDdlTsLockManager(core.tsoAllocator)
 		gc := newBgGarbageCollector(core)
 		core.garbageCollector = gc
-		gc.ReDropPartition(pchans, &model.Partition{}, 100000)
+		gc.ReDropPartition("", pchans, &model.Partition{}, 100000)
 		<-removePartitionChan
 		assert.True(t, removePartitionCalled)
 	})
@@ -415,7 +413,7 @@ func TestGarbageCollectorCtx_ReDropPartition(t *testing.T) {
 		core.ddlTsLockManager = newDdlTsLockManager(core.tsoAllocator)
 		gc := newBgGarbageCollector(core)
 		core.garbageCollector = gc
-		gc.ReDropPartition(pchans, &model.Partition{}, 100000)
+		gc.ReDropPartition("", pchans, &model.Partition{}, 100000)
 		<-removePartitionChan
 		assert.True(t, removePartitionCalled)
 	})

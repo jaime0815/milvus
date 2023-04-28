@@ -20,18 +20,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/milvus-io/milvus/internal/common"
-
-	"github.com/milvus-io/milvus/internal/log"
 	"go.uber.org/zap"
 
-	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
-
-	"github.com/milvus-io/milvus/internal/util/typeutil"
-
 	"github.com/milvus-io/milvus-proto/go-api/commonpb"
-
 	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
+	"github.com/milvus-io/milvus/internal/common"
+	"github.com/milvus-io/milvus/internal/log"
+	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
+	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 
 type dropCollectionTask struct {
@@ -80,6 +76,7 @@ func (t *dropCollectionTask) Execute(ctx context.Context) error {
 
 	redoTask.AddSyncStep(&expireCacheStep{
 		baseStep:        baseStep{core: t.core},
+		dbName:          collMeta.DBName,
 		collectionNames: append(aliases, collMeta.Name),
 		collectionID:    collMeta.CollectionID,
 		ts:              ts,
