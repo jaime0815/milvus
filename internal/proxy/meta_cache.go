@@ -217,12 +217,13 @@ func NewMetaCache(rootCoord types.RootCoord, queryCoord types.QueryCoord, shardM
 func (m *MetaCache) GetCollectionID(ctx context.Context, database, collectionName string) (typeutil.UniqueID, error) {
 	m.mu.RLock()
 
-	db, dbOk := m.collInfo[database]
-	if !dbOk || db == nil {
-		return 0, fmt.Errorf("database %s not found", database)
-	}
+	var ok bool
+	var collInfo *collectionInfo
 
-	collInfo, ok := db[collectionName]
+	db, dbOk := m.collInfo[database]
+	if dbOk && db != nil {
+		collInfo, ok = db[collectionName]
+	}
 
 	method := "GeCollectionID"
 	if !ok || !collInfo.isCollectionCached() {
@@ -437,7 +438,7 @@ func (m *MetaCache) GetPartitions(ctx context.Context, database, collectionName 
 		metrics.ProxyCacheStatsCounter.WithLabelValues(strconv.FormatInt(Params.ProxyCfg.GetNodeID(), 10), method, metrics.CacheMissLabel).Inc()
 		m.mu.RUnlock()
 
-		partitions, err := m.showPartitions(ctx, collectionName)
+		partitions, err := m.showPartitions(ctx, database, collectionName)
 		if err != nil {
 			return nil, err
 		}
@@ -500,7 +501,7 @@ func (m *MetaCache) GetPartitionInfo(ctx context.Context, database, collectionNa
 	if !ok {
 		tr := timerecord.NewTimeRecorder("UpdateCache")
 		metrics.ProxyCacheStatsCounter.WithLabelValues(strconv.FormatInt(Params.ProxyCfg.GetNodeID(), 10), method, metrics.CacheMissLabel).Inc()
-		partitions, err := m.showPartitions(ctx, collectionName)
+		partitions, err := m.showPartitions(ctx, database, collectionName)
 		if err != nil {
 			return nil, err
 		}
@@ -566,11 +567,12 @@ func (m *MetaCache) describeCollection(ctx context.Context, database, collection
 	return resp, nil
 }
 
-func (m *MetaCache) showPartitions(ctx context.Context, collectionName string) (*milvuspb.ShowPartitionsResponse, error) {
+func (m *MetaCache) showPartitions(ctx context.Context, dbName string, collectionName string) (*milvuspb.ShowPartitionsResponse, error) {
 	req := &milvuspb.ShowPartitionsRequest{
 		Base: commonpbutil.NewMsgBase(
 			commonpbutil.WithMsgType(commonpb.MsgType_ShowPartitions),
 		),
+		DbName:         dbName,
 		CollectionName: collectionName,
 	}
 

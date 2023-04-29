@@ -388,6 +388,12 @@ func (c *Core) initIDAllocator() error {
 		return err
 	}
 	c.idAllocator = idAllocator
+
+	log.Info("id allocator initialized",
+		zap.String("root_path", Params.EtcdCfg.KvRootPath),
+		zap.String("sub_path", globalIDAllocatorSubPath),
+		zap.String("key", globalIDAllocatorKey))
+
 	return nil
 }
 
@@ -398,6 +404,11 @@ func (c *Core) initTSOAllocator() error {
 		return err
 	}
 	c.tsoAllocator = tsoAllocator
+
+	log.Info("tso allocator initialized",
+		zap.String("root_path", Params.EtcdCfg.KvRootPath),
+		zap.String("sub_path", globalIDAllocatorSubPath),
+		zap.String("key", globalIDAllocatorKey))
 
 	return nil
 }
@@ -427,15 +438,15 @@ func (c *Core) initInternal() error {
 	c.UpdateStateCode(commonpb.StateCode_Initializing)
 	c.initKVCreator()
 
-	if err := c.initMetaTable(); err != nil {
-		return err
-	}
-
 	if err := c.initIDAllocator(); err != nil {
 		return err
 	}
 
 	if err := c.initTSOAllocator(); err != nil {
+		return err
+	}
+
+	if err := c.initMetaTable(); err != nil {
 		return err
 	}
 

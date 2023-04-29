@@ -134,6 +134,8 @@ func (mt *MetaTable) reload() error {
 		return err
 	}
 
+	log.Info("recover databases", zap.Int("num of dbs", len(dbs)))
+
 	// create default database.
 	if !funcutil.SliceContain(dbs, "default") {
 		if err := mt.createDefaultDb(); err != nil {
@@ -165,6 +167,9 @@ func (mt *MetaTable) reload() error {
 		}
 	}
 
+	log.Info("recover collections",
+		zap.Int64("collection_num", collectionNum), zap.Int64("partition_num", partitionNum))
+
 	// recover aliases.
 	for _, db := range dbs {
 		aliases, err := mt.catalog.ListAliases(mt.ctx, db, typeutil.MaxTimestamp)
@@ -182,6 +187,9 @@ func (mt *MetaTable) reload() error {
 
 	metrics.RootCoordNumOfCollections.Set(float64(collectionNum))
 	metrics.RootCoordNumOfPartitions.WithLabelValues().Set(float64(partitionNum))
+
+	log.Info("meta table recovery finished")
+
 	return nil
 }
 
@@ -190,13 +198,17 @@ func (mt *MetaTable) createDefaultDb() error {
 	if err != nil {
 		return err
 	}
-	return mt.CreateDatabase(mt.ctx, "default", ts)
+	return mt.createDatabasePrivate(mt.ctx, "default", ts)
 }
 
 func (mt *MetaTable) CreateDatabase(ctx context.Context, dbName string, ts typeutil.Timestamp) error {
 	mt.ddLock.Lock()
 	defer mt.ddLock.Unlock()
 
+	return mt.createDatabasePrivate(ctx, dbName, ts)
+}
+
+func (mt *MetaTable) createDatabasePrivate(ctx context.Context, dbName string, ts typeutil.Timestamp) error {
 	if mt.names.exist(dbName) || mt.aliases.exist(dbName) {
 		return fmt.Errorf("database already exist: %s", dbName)
 	}
@@ -225,7 +237,7 @@ func (mt *MetaTable) DropDatabase(ctx context.Context, dbName string, ts typeuti
 	if err != nil {
 		return err
 	}
-	if len(colls) >0 {
+	if len(colls) > 0 {
 		return fmt.Errorf("database:%s not empty, must drop all collections before drop database", dbName)
 	}
 

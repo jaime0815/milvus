@@ -2710,6 +2710,7 @@ func (node *Proxy) Insert(ctx context.Context, request *milvuspb.InsertRequest) 
 					commonpbutil.WithMsgID(0),
 					commonpbutil.WithSourceID(Params.ProxyCfg.GetNodeID()),
 				),
+				DbName:         request.GetDbName(),
 				CollectionName: request.CollectionName,
 				PartitionName:  request.PartitionName,
 				FieldsData:     request.FieldsData,

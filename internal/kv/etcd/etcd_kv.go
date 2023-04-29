@@ -766,7 +766,7 @@ func (kv *EtcdKV) getEtcdMeta(ctx context.Context, key string, opts ...clientv3.
 
 	start := timerecord.NewTimeRecorder("getEtcdMeta")
 	resp, err := kv.client.Get(ctx1, key, opts...)
-	elapsed := start.Elapse("getEtcdMeta done")
+	elapsed := start.ElapseSpan()
 	metrics.MetaOpCounter.WithLabelValues(metrics.MetaGetLabel, metrics.TotalLabel).Inc()
 
 	// cal meta kv size
@@ -791,7 +791,7 @@ func (kv *EtcdKV) putEtcdMeta(ctx context.Context, key, val string, opts ...clie
 
 	start := timerecord.NewTimeRecorder("putEtcdMeta")
 	resp, err := kv.client.Put(ctx1, key, val, opts...)
-	elapsed := start.Elapse("putEtcdMeta done")
+	elapsed := start.ElapseSpan()
 	metrics.MetaOpCounter.WithLabelValues(metrics.MetaPutLabel, metrics.TotalLabel).Inc()
 	if err == nil {
 		metrics.MetaKvSize.WithLabelValues(metrics.MetaPutLabel).Observe(float64(len(val)))
@@ -810,7 +810,7 @@ func (kv *EtcdKV) removeEtcdMeta(ctx context.Context, key string, opts ...client
 
 	start := timerecord.NewTimeRecorder("removeEtcdMeta")
 	resp, err := kv.client.Delete(ctx1, key, opts...)
-	elapsed := start.Elapse("removeEtcdMeta done")
+	elapsed := start.ElapseSpan()
 	metrics.MetaOpCounter.WithLabelValues(metrics.MetaRemoveLabel, metrics.TotalLabel).Inc()
 
 	if err == nil {
@@ -831,7 +831,7 @@ func (kv *EtcdKV) executeTxn(txn clientv3.Txn, ops ...clientv3.Op) (*clientv3.Tx
 	start := timerecord.NewTimeRecorder("executeTxn")
 
 	resp, err := txn.Then(ops...).Commit()
-	elapsed := start.Elapse("executeTxn done")
+	elapsed := start.ElapseSpan()
 	metrics.MetaOpCounter.WithLabelValues(metrics.MetaTxnLabel, metrics.TotalLabel).Inc()
 
 	if err == nil && resp.Succeeded {
