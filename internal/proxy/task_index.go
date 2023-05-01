@@ -186,7 +186,7 @@ func (cit *createIndexTask) parseIndexParams() error {
 }
 
 func (cit *createIndexTask) getIndexedField(ctx context.Context) (*schemapb.FieldSchema, error) {
-	schema, err := globalMetaCache.GetCollectionSchema(ctx, cit.req.GetCollectionName())
+	schema, err := globalMetaCache.GetCollectionSchema(ctx, cit.req.GetDbName(), cit.req.GetCollectionName())
 	if err != nil {
 		log.Error("failed to get collection schema", zap.Error(err))
 		return nil, fmt.Errorf("failed to get collection schema: %s", err)
@@ -272,7 +272,7 @@ func (cit *createIndexTask) PreExecute(ctx context.Context) error {
 
 	collName := cit.req.GetCollectionName()
 
-	collID, err := globalMetaCache.GetCollectionID(ctx, collName)
+	collID, err := globalMetaCache.GetCollectionID(ctx, cit.req.GetDbName(), collName)
 	if err != nil {
 		return err
 	}
@@ -398,7 +398,7 @@ func (dit *describeIndexTask) PreExecute(ctx context.Context) error {
 		return err
 	}
 
-	collID, err := globalMetaCache.GetCollectionID(ctx, dit.CollectionName)
+	collID, err := globalMetaCache.GetCollectionID(ctx, dit.GetDbName(), dit.CollectionName)
 	if err != nil {
 		return err
 	}
@@ -407,7 +407,7 @@ func (dit *describeIndexTask) PreExecute(ctx context.Context) error {
 }
 
 func (dit *describeIndexTask) Execute(ctx context.Context) error {
-	schema, err := globalMetaCache.GetCollectionSchema(ctx, dit.GetCollectionName())
+	schema, err := globalMetaCache.GetCollectionSchema(ctx, dit.GetDbName(), dit.GetCollectionName())
 	if err != nil {
 		log.Error("failed to get collection schema", zap.Error(err))
 		return fmt.Errorf("failed to get collection schema: %s", err)
@@ -520,7 +520,7 @@ func (dit *dropIndexTask) PreExecute(ctx context.Context) error {
 		}
 	}
 
-	collID, err := globalMetaCache.GetCollectionID(ctx, dit.CollectionName)
+	collID, err := globalMetaCache.GetCollectionID(ctx, dit.GetDbName(), dit.CollectionName)
 	if err != nil {
 		return err
 	}
@@ -622,7 +622,7 @@ func (gibpt *getIndexBuildProgressTask) PreExecute(ctx context.Context) error {
 
 func (gibpt *getIndexBuildProgressTask) Execute(ctx context.Context) error {
 	collectionName := gibpt.CollectionName
-	collectionID, err := globalMetaCache.GetCollectionID(ctx, collectionName)
+	collectionID, err := globalMetaCache.GetCollectionID(ctx, gibpt.GetDbName(), collectionName)
 	if err != nil { // err is not nil if collection not exists
 		return err
 	}
@@ -710,7 +710,7 @@ func (gist *getIndexStateTask) PreExecute(ctx context.Context) error {
 }
 
 func (gist *getIndexStateTask) Execute(ctx context.Context) error {
-	collectionID, err := globalMetaCache.GetCollectionID(ctx, gist.CollectionName)
+	collectionID, err := globalMetaCache.GetCollectionID(ctx, gist.GetDbName(), gist.CollectionName)
 	if err != nil {
 		return err
 	}

@@ -34,7 +34,7 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
 	ot "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
-	"github.com/opentracing/opentracing-go"
+	opentracing "github.com/opentracing/opentracing-go"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -67,6 +67,7 @@ import (
 )
 
 var Params paramtable.GrpcServerConfig
+
 var HTTPParams paramtable.HTTPConfig
 
 var (
@@ -179,6 +180,7 @@ func (s *Server) startExternalGrpc(grpcPort int, errChan chan error) {
 			grpc_auth.UnaryServerInterceptor(proxy.AuthenticationInterceptor),
 			proxy.UnaryServerHookInterceptor(),
 			proxy.UnaryServerInterceptor(proxy.PrivilegeInterceptor),
+			proxy.DatabaseInterceptor(),
 			logutil.UnaryTraceLoggerInterceptor,
 			proxy.RateLimitInterceptor(limiter),
 		)),
@@ -931,16 +933,13 @@ func (s *Server) ListResourceGroups(ctx context.Context, req *milvuspb.ListResou
 }
 
 func (s *Server) CreateDatabase(ctx context.Context, request *milvuspb.CreateDatabaseRequest) (*commonpb.Status, error) {
-	//TODO implement me
-	panic("implement me")
+	return s.proxy.CreateDatabase(ctx, request)
 }
 
-func (s *Server) DropDatabase(ctx context.Context, request *milvuspb.CreateDatabaseRequest) (*commonpb.Status, error) {
-	//TODO implement me
-	panic("implement me")
+func (s *Server) DropDatabase(ctx context.Context, request *milvuspb.DropDatabaseRequest) (*commonpb.Status, error) {
+	return s.proxy.DropDatabase(ctx, request)
 }
 
 func (s *Server) ListDatabases(ctx context.Context, request *milvuspb.ListDatabasesRequest) (*milvuspb.ListDatabasesResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	return s.proxy.ListDatabases(ctx, request)
 }

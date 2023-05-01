@@ -9,7 +9,9 @@ import (
 	"github.com/milvus-io/milvus-proto/go-api/schemapb"
 	"github.com/milvus-io/milvus/internal/mq/msgstream"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
+
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestInsertTask_checkLengthOfFieldsData(t *testing.T) {
@@ -354,10 +356,12 @@ func TestInsertTask(t *testing.T) {
 		collectionID := UniqueID(0)
 		collectionName := "col-0"
 		channels := []pChan{"mock-chan-0", "mock-chan-1"}
-		cache := newMockCache()
-		cache.setGetIDFunc(func(ctx context.Context, collectionName string) (UniqueID, error) {
-			return collectionID, nil
-		})
+		cache := NewMockCache(t)
+		cache.On("GetCollectionID",
+			mock.Anything, // context.Context
+			mock.AnythingOfType("string"),
+			mock.AnythingOfType("string"),
+		).Return(collectionID, nil)
 		globalMetaCache = cache
 		chMgr := newMockChannelsMgr()
 		chMgr.getChannelsFunc = func(collectionID UniqueID) ([]pChan, error) {

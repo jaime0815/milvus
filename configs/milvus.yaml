@@ -133,6 +133,7 @@ rootCoord:
   enableActiveStandby: false  # Enable active-standby
 
   dmlChannelNum: 16 # The number of dml channels created at system startup
+  maxDatabaseNum: 64 # Maximum number of database
   maxPartitionNum: 4096 # Maximum number of partitions in a collection
   minSegmentSizeToEnableIndex: 1024 # It's a threshold. When the segment size is less than this value, the segment will not be indexed
 
@@ -526,7 +527,7 @@ quotaAndLimits:
       diskQuota: -1 # MB, (0, +inf), default no limit
       diskQuotaPerCollection: -1 # MB, (0, +inf), default no limit
 
-  # limitReading decides whether dql requests are allowed.    
+  # limitReading decides whether dql requests are allowed.
   limitReading:
     # forceDeny `false` means dql requests are allowed (except for some
     # specific conditions, such as collection has been dropped), `true` means always reject all dql requests.

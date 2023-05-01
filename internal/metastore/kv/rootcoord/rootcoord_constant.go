@@ -1,8 +1,12 @@
 package rootcoord
 
+import "fmt"
+
 const (
 	// ComponentPrefix prefix for rootcoord component
 	ComponentPrefix = "root-coord"
+
+	DatabaseMetaPrefix = ComponentPrefix + "/database"
 
 	// CollectionMetaPrefix prefix for collection meta
 	CollectionMetaPrefix = ComponentPrefix + "/collection"
@@ -16,6 +20,7 @@ const (
 
 	SnapshotsSep   = "_ts"
 	SnapshotPrefix = "snapshots"
+	Aliases        = "aliases"
 
 	// CommonCredentialPrefix subpath for common credential
 	/* #nosec G101 */
@@ -39,3 +44,7 @@ const (
 	// GranteeIDPrefix prefix for mapping among privilege and grantor
 	GranteeIDPrefix = ComponentPrefix + CommonCredentialPrefix + "/grantee-id"
 )
+
+func BuildDatabasePrefix(dbName string) string {
+	return fmt.Sprintf("%s/%s", DatabaseMetaPrefix, dbName)
+}

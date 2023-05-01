@@ -52,6 +52,8 @@ const (
 
 	PrivilegeWord = "Privilege"
 	AnyWord       = "*"
+
+	HeaderDatabase = "dbname"
 )
 
 const (
