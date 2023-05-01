@@ -4,13 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
-	"github.com/milvus-io/milvus/internal/metastore"
-
-	"github.com/milvus-io/milvus/internal/util/crypto"
-	"github.com/milvus-io/milvus/internal/util/etcd"
-
-	"github.com/milvus-io/milvus/internal/util"
+	"strings"
 
 	"github.com/golang/protobuf/proto"
 	"go.uber.org/zap"
@@ -20,9 +14,13 @@ import (
 	"github.com/milvus-io/milvus/internal/common"
 	"github.com/milvus-io/milvus/internal/kv"
 	"github.com/milvus-io/milvus/internal/log"
+	"github.com/milvus-io/milvus/internal/metastore"
 	"github.com/milvus-io/milvus/internal/metastore/model"
 	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
+	"github.com/milvus-io/milvus/internal/util"
+	"github.com/milvus-io/milvus/internal/util/crypto"
+	"github.com/milvus-io/milvus/internal/util/etcd"
 	"github.com/milvus-io/milvus/internal/util/funcutil"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
@@ -40,7 +38,10 @@ type Catalog struct {
 	Snapshot kv.SnapShotKV
 }
 
-func BuildCollectionKey(collectionID typeutil.UniqueID) string {
+func BuildCollectionKey(dbName string, collectionID typeutil.UniqueID) string {
+	if dbName != "" {
+		return fmt.Sprintf("%s/%d", BuildDatabasePrefix(dbName), collectionID)
+	}
 	return fmt.Sprintf("%s/%d", CollectionMetaPrefix, collectionID)
 }
 
@@ -68,6 +69,21 @@ func BuildAliasKey(aliasName string) string {
 	return fmt.Sprintf("%s/%s", AliasMetaPrefix, aliasName)
 }
 
+func BuildAliasKeyWithDb(dbName, aliasName string) string {
+	k := BuildAliasKey(aliasName)
+	if dbName == "" {
+		return k
+	}
+	return fmt.Sprintf("%s/%s/%s", BuildDatabasePrefix(dbName), Aliases, aliasName)
+}
+
+func BuildAliasPrefixWithDb(dbName string) string {
+	if dbName == "" {
+		return AliasMetaPrefix
+	}
+	return fmt.Sprintf("%s/%s", BuildDatabasePrefix(dbName), Aliases)
+}
+
 func batchMultiSaveAndRemoveWithPrefix(snapshot kv.SnapShotKV, maxTxnNum int, saves map[string]string, removals []string, ts typeutil.Timestamp) error {
 	saveFn := func(partialKvs map[string]string) error {
 		return snapshot.MultiSave(partialKvs, ts)
@@ -82,12 +98,40 @@ func batchMultiSaveAndRemoveWithPrefix(snapshot kv.SnapShotKV, maxTxnNum int, sa
 	return etcd.RemoveByBatch(removals, removeFn)
 }
 
+func (kc *Catalog) CreateDatabase(ctx context.Context, dbName string, ts typeutil.Timestamp) error {
+	key := BuildDatabasePrefix(dbName)
+	return kc.Snapshot.Save(key, "", ts)
+}
+
+func (kc *Catalog) DropDatabase(ctx context.Context, dbName string, ts typeutil.Timestamp) error {
+	key := BuildDatabasePrefix(dbName)
+	return kc.Snapshot.MultiSaveAndRemoveWithPrefix(nil, []string{key}, ts)
+}
+
+func (kc *Catalog) ListDatabases(ctx context.Context, ts typeutil.Timestamp) ([]string, error) {
+	keys, _, err := kc.Snapshot.LoadWithPrefix(DatabaseMetaPrefix, ts)
+	if err != nil {
+		return nil, err
+	}
+
+	ret := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts := strings.Split(k, "/")
+		if len(parts) < 3 {
+			return nil, fmt.Errorf("illegal meta key while list databases:%s", k)
+		}
+		ret = append(ret, parts[2])
+	}
+
+	return ret, nil
+}
+
 func (kc *Catalog) CreateCollection(ctx context.Context, coll *model.Collection, ts typeutil.Timestamp) error {
 	if coll.State != pb.CollectionState_CollectionCreating {
 		return fmt.Errorf("cannot create collection with state: %s, collection: %s", coll.State.String(), coll.Name)
 	}
 
-	k1 := BuildCollectionKey(coll.CollectionID)
+	k1 := BuildCollectionKey(coll.DBName, coll.CollectionID)
 	collInfo := model.MarshalCollectionModel(coll)
 	v1, err := proto.Marshal(collInfo)
 	if err != nil {
@@ -131,22 +175,37 @@ func (kc *Catalog) CreateCollection(ctx context.Context, coll *model.Collection,
 	}
 
 	// Though batchSave is not atomic enough, we can promise the atomicity outside.
-	// Recovering from failure, if we found collection is creating, we should removing all these related meta.
+	// Recovering from failure, if we found collection is creating, we should remove all these related meta.
 	return etcd.SaveByBatchWithLimit(kvs, maxTxnNum/2, func(partialKvs map[string]string) error {
 		return kc.Snapshot.MultiSave(partialKvs, ts)
 	})
 }
 
-func (kc *Catalog) loadCollection(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*pb.CollectionInfo, error) {
-	collKey := BuildCollectionKey(collectionID)
+func (kc *Catalog) loadCollectionFromDb(ctx context.Context, dbName string, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*pb.CollectionInfo, error) {
+	collKey := BuildCollectionKey(dbName, collectionID)
 	collVal, err := kc.Snapshot.Load(collKey, ts)
 	if err != nil {
-		return nil, common.NewCollectionNotExistError(fmt.Sprintf("collection not found: %d", collectionID))
+		return nil, common.NewCollectionNotExistError(fmt.Sprintf("collection not found: %d, error: %s", collectionID, err.Error()))
 	}
 
 	collMeta := &pb.CollectionInfo{}
 	err = proto.Unmarshal([]byte(collVal), collMeta)
 	return collMeta, err
+}
+
+func (kc *Catalog) loadCollectionFromDefaultDb(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*pb.CollectionInfo, error) {
+	if info, err := kc.loadCollectionFromDb(ctx, util.DefaultDBName, collectionID, ts); err == nil {
+		return info, nil
+	}
+	// get collection from older version.
+	return kc.loadCollectionFromDb(ctx, "", collectionID, ts)
+}
+
+func (kc *Catalog) loadCollection(ctx context.Context, dbName string, collectionID typeutil.UniqueID, ts typeutil.Timestamp) (*pb.CollectionInfo, error) {
+	if dbName == util.DefaultDBName {
+		return kc.loadCollectionFromDefaultDb(ctx, collectionID, ts)
+	}
+	return kc.loadCollectionFromDb(ctx, dbName, collectionID, ts)
 }
 
 func partitionVersionAfter210(collMeta *pb.CollectionInfo) bool {
@@ -163,8 +222,8 @@ func partitionExistByName(collMeta *pb.CollectionInfo, partitionName string) boo
 	return funcutil.SliceContain(collMeta.GetPartitionNames(), partitionName)
 }
 
-func (kc *Catalog) CreatePartition(ctx context.Context, partition *model.Partition, ts typeutil.Timestamp) error {
-	collMeta, err := kc.loadCollection(ctx, partition.CollectionID, ts)
+func (kc *Catalog) CreatePartition(ctx context.Context, dbName string, partition *model.Partition, ts typeutil.Timestamp) error {
+	collMeta, err := kc.loadCollection(ctx, dbName, partition.CollectionID, ts)
 	if err != nil {
 		return err
 	}
@@ -193,7 +252,8 @@ func (kc *Catalog) CreatePartition(ctx context.Context, partition *model.Partiti
 	collMeta.PartitionNames = append(collMeta.PartitionNames, partition.PartitionName)
 	collMeta.PartitionCreatedTimestamps = append(collMeta.PartitionCreatedTimestamps, partition.PartitionCreatedTimestamp)
 
-	k := BuildCollectionKey(partition.CollectionID)
+	// this partition exists in older version, should be also changed in place.
+	k := BuildCollectionKey("", partition.CollectionID)
 	v, err := proto.Marshal(collMeta)
 	if err != nil {
 		return err
@@ -203,14 +263,15 @@ func (kc *Catalog) CreatePartition(ctx context.Context, partition *model.Partiti
 
 func (kc *Catalog) CreateAlias(ctx context.Context, alias *model.Alias, ts typeutil.Timestamp) error {
 	oldKBefore210 := BuildAliasKey210(alias.Name)
-	k := BuildAliasKey(alias.Name)
+	oldKeyWithoutDb := BuildAliasKey(alias.Name)
+	k := BuildAliasKeyWithDb(alias.DbName, alias.Name)
 	aliasInfo := model.MarshalAliasModel(alias)
 	v, err := proto.Marshal(aliasInfo)
 	if err != nil {
 		return err
 	}
 	kvs := map[string]string{k: string(v)}
-	return kc.Snapshot.MultiSaveAndRemoveWithPrefix(kvs, []string{oldKBefore210}, ts)
+	return kc.Snapshot.MultiSaveAndRemoveWithPrefix(kvs, []string{oldKBefore210, oldKeyWithoutDb}, ts)
 }
 
 func (kc *Catalog) CreateCredential(ctx context.Context, credential *model.Credential) error {
@@ -298,9 +359,8 @@ func (kc *Catalog) appendPartitionAndFieldsInfo(ctx context.Context, collMeta *p
 	return collection, nil
 }
 
-func (kc *Catalog) GetCollectionByID(ctx context.Context, collectionID typeutil.UniqueID,
-	ts typeutil.Timestamp) (*model.Collection, error) {
-	collMeta, err := kc.loadCollection(ctx, collectionID, ts)
+func (kc *Catalog) GetCollectionByID(ctx context.Context, dbName string, ts typeutil.Timestamp, collectionID typeutil.UniqueID) (*model.Collection, error) {
+	collMeta, err := kc.loadCollection(ctx, dbName, collectionID, ts)
 	if err != nil {
 		return nil, err
 	}
@@ -308,8 +368,8 @@ func (kc *Catalog) GetCollectionByID(ctx context.Context, collectionID typeutil.
 	return kc.appendPartitionAndFieldsInfo(ctx, collMeta, ts)
 }
 
-func (kc *Catalog) CollectionExists(ctx context.Context, collectionID typeutil.UniqueID, ts typeutil.Timestamp) bool {
-	_, err := kc.GetCollectionByID(ctx, collectionID, ts)
+func (kc *Catalog) CollectionExists(ctx context.Context, dbName string, collectionID typeutil.UniqueID, ts typeutil.Timestamp) bool {
+	_, err := kc.GetCollectionByID(ctx, dbName, ts, collectionID)
 	return err == nil
 }
 
@@ -339,13 +399,21 @@ func (kc *Catalog) AlterAlias(ctx context.Context, alias *model.Alias, ts typeut
 }
 
 func (kc *Catalog) DropCollection(ctx context.Context, collectionInfo *model.Collection, ts typeutil.Timestamp) error {
-	collectionKey := BuildCollectionKey(collectionInfo.CollectionID)
+	collectionKeys := []string{BuildCollectionKey(collectionInfo.DBName, collectionInfo.CollectionID)}
+	if collectionInfo.DBName == util.DefaultDBName {
+		collectionKeys = append(collectionKeys, BuildCollectionKey("", collectionInfo.CollectionID))
+	}
 
 	var delMetakeysSnap []string
 	for _, alias := range collectionInfo.Aliases {
 		delMetakeysSnap = append(delMetakeysSnap,
 			BuildAliasKey210(alias),
+			BuildAliasKey(alias),
+			BuildAliasKeyWithDb(collectionInfo.DBName, alias),
 		)
+		if collectionInfo.DBName == util.DefaultDBName {
+			delMetakeysSnap = append(delMetakeysSnap, BuildAliasKeyWithDb("", alias))
+		}
 	}
 	// Snapshot will list all (k, v) pairs and then use Txn.MultiSave to save tombstone for these keys when it prepares
 	// to remove a prefix, so though we have very few prefixes, the final operations may exceed the max txn number.
@@ -367,7 +435,7 @@ func (kc *Catalog) DropCollection(ctx context.Context, collectionInfo *model.Col
 	}
 
 	// if we found collection dropping, we should try removing related resources.
-	return kc.Snapshot.MultiSaveAndRemoveWithPrefix(nil, []string{collectionKey}, ts)
+	return kc.Snapshot.MultiSaveAndRemoveWithPrefix(nil, collectionKeys, ts)
 }
 
 func (kc *Catalog) alterModifyCollection(oldColl *model.Collection, newColl *model.Collection, ts typeutil.Timestamp) error {
@@ -375,6 +443,7 @@ func (kc *Catalog) alterModifyCollection(oldColl *model.Collection, newColl *mod
 		return fmt.Errorf("altering tenant id or collection id is forbidden")
 	}
 	oldCollClone := oldColl.Clone()
+	oldCollClone.DBName = newColl.DBName
 	oldCollClone.Name = newColl.Name
 	oldCollClone.Description = newColl.Description
 	oldCollClone.AutoID = newColl.AutoID
@@ -385,10 +454,14 @@ func (kc *Catalog) alterModifyCollection(oldColl *model.Collection, newColl *mod
 	oldCollClone.CreateTime = newColl.CreateTime
 	oldCollClone.ConsistencyLevel = newColl.ConsistencyLevel
 	oldCollClone.State = newColl.State
-	key := BuildCollectionKey(oldColl.CollectionID)
+	key := BuildCollectionKey(newColl.DBName, oldColl.CollectionID)
 	value, err := proto.Marshal(model.MarshalCollectionModel(oldCollClone))
 	if err != nil {
 		return err
+	}
+	if newColl.DBName == util.DefaultDBName {
+		removal := BuildCollectionKey("", newColl.CollectionID)
+		return kc.Snapshot.MultiSaveAndRemoveWithPrefix(map[string]string{key: string(value)}, []string{removal}, ts)
 	}
 	return kc.Snapshot.Save(key, string(value), ts)
 }
@@ -417,7 +490,7 @@ func (kc *Catalog) alterModifyPartition(oldPart *model.Partition, newPart *model
 	return kc.Snapshot.Save(key, string(value), ts)
 }
 
-func (kc *Catalog) AlterPartition(ctx context.Context, oldPart *model.Partition, newPart *model.Partition, alterType metastore.AlterType, ts typeutil.Timestamp) error {
+func (kc *Catalog) AlterPartition(ctx context.Context, dbName string, oldPart *model.Partition, newPart *model.Partition, alterType metastore.AlterType, ts typeutil.Timestamp) error {
 	if alterType == metastore.MODIFY {
 		return kc.alterModifyPartition(oldPart, newPart, ts)
 	}
@@ -445,8 +518,8 @@ func dropPartition(collMeta *pb.CollectionInfo, partitionID typeutil.UniqueID) {
 	}
 }
 
-func (kc *Catalog) DropPartition(ctx context.Context, collectionID typeutil.UniqueID, partitionID typeutil.UniqueID, ts typeutil.Timestamp) error {
-	collMeta, err := kc.loadCollection(ctx, collectionID, ts)
+func (kc *Catalog) DropPartition(ctx context.Context, dbName string, collectionID typeutil.UniqueID, partitionID typeutil.UniqueID, ts typeutil.Timestamp) error {
+	collMeta, err := kc.loadCollection(ctx, dbName, collectionID, ts)
 	if err != nil {
 		return err
 	}
@@ -456,7 +529,7 @@ func (kc *Catalog) DropPartition(ctx context.Context, collectionID typeutil.Uniq
 		return kc.Snapshot.MultiSaveAndRemoveWithPrefix(nil, []string{k}, ts)
 	}
 
-	k := BuildCollectionKey(collectionID)
+	k := BuildCollectionKey(dbName, collectionID)
 	dropPartition(collMeta, partitionID)
 	v, err := proto.Marshal(collMeta)
 	if err != nil {
@@ -476,20 +549,32 @@ func (kc *Catalog) DropCredential(ctx context.Context, username string) error {
 	return nil
 }
 
-func (kc *Catalog) DropAlias(ctx context.Context, alias string, ts typeutil.Timestamp) error {
+func (kc *Catalog) DropAlias(ctx context.Context, dbName string, alias string, ts typeutil.Timestamp) error {
 	oldKBefore210 := BuildAliasKey210(alias)
-	k := BuildAliasKey(alias)
-	return kc.Snapshot.MultiSaveAndRemoveWithPrefix(nil, []string{k, oldKBefore210}, ts)
+	oldKeyWithoutDb := BuildAliasKey(alias)
+	k := BuildAliasKeyWithDb(dbName, alias)
+	return kc.Snapshot.MultiSaveAndRemoveWithPrefix(nil, []string{k, oldKeyWithoutDb, oldKBefore210}, ts)
 }
 
-func (kc *Catalog) GetCollectionByName(ctx context.Context, collectionName string, ts typeutil.Timestamp) (*model.Collection, error) {
-	_, vals, err := kc.Snapshot.LoadWithPrefix(CollectionMetaPrefix, ts)
+func (kc *Catalog) GetCollectionByName(ctx context.Context, dbName, collectionName string, ts typeutil.Timestamp) (*model.Collection, error) {
+	prefix := ""
+	if dbName != "" {
+		prefix = BuildDatabasePrefix(dbName)
+	} else {
+		prefix = CollectionMetaPrefix
+	}
+	keys, vals, err := kc.Snapshot.LoadWithPrefix(prefix, ts)
 	if err != nil {
 		log.Warn("get collection meta fail", zap.String("collectionName", collectionName), zap.Error(err))
 		return nil, err
 	}
 
-	for _, val := range vals {
+	for i, val := range vals {
+		// skip database key
+		if keys == nil || keys[i] == prefix {
+			continue
+		}
+
 		colMeta := pb.CollectionInfo{}
 		err = proto.Unmarshal([]byte(val), &colMeta)
 		if err != nil {
@@ -498,25 +583,36 @@ func (kc *Catalog) GetCollectionByName(ctx context.Context, collectionName strin
 		}
 		if colMeta.Schema.Name == collectionName {
 			// compatibility handled by kc.GetCollectionByID.
-			return kc.GetCollectionByID(ctx, colMeta.GetID(), ts)
+			return kc.GetCollectionByID(ctx, "", ts, colMeta.GetID())
 		}
 	}
 
 	return nil, common.NewCollectionNotExistError(fmt.Sprintf("can't find collection: %s, at timestamp = %d", collectionName, ts))
 }
 
-func (kc *Catalog) ListCollections(ctx context.Context, ts typeutil.Timestamp) (map[string]*model.Collection, error) {
-	_, vals, err := kc.Snapshot.LoadWithPrefix(CollectionMetaPrefix, ts)
+func (kc *Catalog) ListCollections(ctx context.Context, dbName string, ts typeutil.Timestamp) (map[string]*model.Collection, error) {
+	prefix := ""
+	if dbName != "" {
+		prefix = BuildDatabasePrefix(dbName)
+	} else {
+		prefix = CollectionMetaPrefix
+	}
+	keys, vals, err := kc.Snapshot.LoadWithPrefix(prefix, ts)
 	if err != nil {
 		log.Error("get collections meta fail",
-			zap.String("prefix", CollectionMetaPrefix),
+			zap.String("prefix", prefix),
 			zap.Uint64("timestamp", ts),
 			zap.Error(err))
 		return nil, err
 	}
 
 	colls := make(map[string]*model.Collection)
-	for _, val := range vals {
+	for i, val := range vals {
+		// skip database key
+		if keys == nil || keys[i] == prefix {
+			continue
+		}
+
 		collMeta := pb.CollectionInfo{}
 		err := proto.Unmarshal([]byte(val), &collMeta)
 		if err != nil {
@@ -550,13 +646,15 @@ func (kc *Catalog) listAliasesBefore210(ctx context.Context, ts typeutil.Timesta
 			Name:         coll.GetSchema().GetName(),
 			CollectionID: coll.GetID(),
 			CreatedTime:  0, // not accurate.
+			DbName:       "",
 		})
 	}
 	return aliases, nil
 }
 
-func (kc *Catalog) listAliasesAfter210(ctx context.Context, ts typeutil.Timestamp) ([]*model.Alias, error) {
-	_, values, err := kc.Snapshot.LoadWithPrefix(AliasMetaPrefix, ts)
+func (kc *Catalog) listAliasesAfter210WithDb(ctx context.Context, dbName string, ts typeutil.Timestamp) ([]*model.Alias, error) {
+	prefix := BuildAliasPrefixWithDb(dbName)
+	_, values, err := kc.Snapshot.LoadWithPrefix(prefix, ts)
 	if err != nil {
 		return nil, err
 	}
@@ -572,22 +670,35 @@ func (kc *Catalog) listAliasesAfter210(ctx context.Context, ts typeutil.Timestam
 			Name:         info.GetAliasName(),
 			CollectionID: info.GetCollectionId(),
 			CreatedTime:  info.GetCreatedTime(),
+			DbName:       dbName,
 		})
 	}
 	return aliases, nil
 }
 
-func (kc *Catalog) ListAliases(ctx context.Context, ts typeutil.Timestamp) ([]*model.Alias, error) {
+func (kc *Catalog) listAliasesInDefaultDb(ctx context.Context, ts typeutil.Timestamp) ([]*model.Alias, error) {
 	aliases1, err := kc.listAliasesBefore210(ctx, ts)
 	if err != nil {
 		return nil, err
 	}
-	aliases2, err := kc.listAliasesAfter210(ctx, ts)
+	aliases2, err := kc.listAliasesAfter210WithDb(ctx, util.DefaultDBName, ts)
+	if err != nil {
+		return nil, err
+	}
+	aliases3, err := kc.listAliasesAfter210WithDb(ctx, "", ts)
 	if err != nil {
 		return nil, err
 	}
 	aliases := append(aliases1, aliases2...)
+	aliases = append(aliases, aliases3...)
 	return aliases, nil
+}
+
+func (kc *Catalog) ListAliases(ctx context.Context, dbName string, ts typeutil.Timestamp) ([]*model.Alias, error) {
+	if dbName != util.DefaultDBName {
+		return kc.listAliasesAfter210WithDb(ctx, dbName, ts)
+	}
+	return kc.listAliasesInDefaultDb(ctx, ts)
 }
 
 func (kc *Catalog) ListCredentials(ctx context.Context) ([]string, error) {
