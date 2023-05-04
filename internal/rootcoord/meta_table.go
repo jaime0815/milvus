@@ -139,26 +139,28 @@ func (mt *MetaTable) reload() error {
 	log.Info("recover databases", zap.Int("num of dbs", len(dbs)))
 
 	// create default database.
-	if !funcutil.SliceContain(dbs, "default") {
+	if !funcutil.SliceContain(dbs, util.DefaultDBName) {
 		if err := mt.createDefaultDb(); err != nil {
 			return err
 		}
 	}
 
-	dbs = append(dbs, "")
+	// in order to support backward compatibility with "" database name, there will append
+	// an empty string as the database name to load all collections of the old version.
+	defaultDatabaseName := ""
+	dbs = append(dbs, defaultDatabaseName)
 
 	// recover collections.
 	for _, db := range dbs {
-		mt.names.createDbIfNotExist(db)
 		collections, err := mt.catalog.ListCollections(mt.ctx, db, typeutil.MaxTimestamp)
 		if err != nil {
 			return err
 		}
 		for name, collection := range collections {
 			mt.collID2Meta[collection.CollectionID] = collection
-			if db == "" {
-				// insert into default database.
-				mt.names.insert("default", name, collection.CollectionID)
+			if db == defaultDatabaseName {
+				// insert into default database if find the collections doesn't inside some database
+				mt.names.insert(util.DefaultDBName, name, collection.CollectionID)
 			} else {
 				mt.names.insert(db, name, collection.CollectionID)
 			}
@@ -170,19 +172,17 @@ func (mt *MetaTable) reload() error {
 		}
 	}
 
-	log.Info("recover collections",
-		zap.Int64("collection_num", collectionNum), zap.Int64("partition_num", partitionNum))
+	log.Info("recover collections", zap.Int64("collection_num", collectionNum), zap.Int64("partition_num", partitionNum))
 
 	// recover aliases.
 	for _, db := range dbs {
-		mt.names.createDbIfNotExist(db)
 		aliases, err := mt.catalog.ListAliases(mt.ctx, db, typeutil.MaxTimestamp)
 		if err != nil {
 			return err
 		}
 		for _, alias := range aliases {
-			if db == "" {
-				mt.aliases.insert("default", alias.Name, alias.CollectionID)
+			if db == defaultDatabaseName {
+				mt.aliases.insert(util.DefaultDBName, alias.Name, alias.CollectionID)
 			} else {
 				mt.aliases.insert(db, alias.Name, alias.CollectionID)
 			}
