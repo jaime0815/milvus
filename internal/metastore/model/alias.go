@@ -7,7 +7,7 @@ type Alias struct {
 	CollectionID int64
 	CreatedTime  uint64
 	State        pb.AliasState
-	DbName       string
+	DbID         int64
 }
 
 func (a Alias) Available() bool {
@@ -20,14 +20,14 @@ func (a Alias) Clone() *Alias {
 		CollectionID: a.CollectionID,
 		CreatedTime:  a.CreatedTime,
 		State:        a.State,
-		DbName:       a.DbName,
+		DbID:         a.DbID,
 	}
 }
 
 func (a Alias) Equal(other Alias) bool {
 	return a.Name == other.Name &&
 		a.CollectionID == other.CollectionID &&
-		a.DbName == other.DbName
+		a.DbID == other.DbID
 }
 
 func MarshalAliasModel(alias *Alias) *pb.AliasInfo {
@@ -36,7 +36,7 @@ func MarshalAliasModel(alias *Alias) *pb.AliasInfo {
 		CollectionId: alias.CollectionID,
 		CreatedTime:  alias.CreatedTime,
 		State:        alias.State,
-		DbName:       alias.DbName,
+		DbId:         alias.DbID,
 	}
 }
 
@@ -46,6 +46,6 @@ func UnmarshalAliasModel(info *pb.AliasInfo) *Alias {
 		CollectionID: info.GetCollectionId(),
 		CreatedTime:  info.GetCreatedTime(),
 		State:        info.GetState(),
-		DbName:       info.GetDbName(),
+		DbID:         info.GetDbId(),
 	}
 }

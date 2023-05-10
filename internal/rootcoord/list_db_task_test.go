@@ -22,6 +22,7 @@ import (
 
 	"github.com/milvus-io/milvus-proto/go-api/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
+	"github.com/milvus-io/milvus/internal/metastore/model"
 	mockrootcoord "github.com/milvus-io/milvus/internal/rootcoord/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -49,7 +50,7 @@ func Test_ListDBTask(t *testing.T) {
 	})
 
 	t.Run("ok", func(t *testing.T) {
-		ret := []string{"db1", "db2"}
+		ret := []*model.Database{model.NewDefaultDatabase()}
 		meta := mockrootcoord.NewIMetaTable(t)
 		meta.On("ListDatabases",
 			mock.Anything,
@@ -72,7 +73,8 @@ func Test_ListDBTask(t *testing.T) {
 
 		err = task.Execute(context.Background())
 		assert.NoError(t, err)
-		assert.Equal(t, ret, task.Resp.GetDbNames())
+		assert.Equal(t, 1, len(task.Resp.GetDbNames()))
+		assert.Equal(t, ret[0].Name, task.Resp.GetDbNames()[0])
 		assert.Equal(t, commonpb.ErrorCode_Success, task.Resp.Status.ErrorCode)
 	})
 }

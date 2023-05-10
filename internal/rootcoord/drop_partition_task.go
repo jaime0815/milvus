@@ -73,7 +73,7 @@ func (t *dropPartitionTask) Execute(ctx context.Context) error {
 
 	redoTask.AddSyncStep(&expireCacheStep{
 		baseStep:        baseStep{core: t.core},
-		dbName:          t.collMeta.DBName,
+		dbName:          t.Req.GetDbName(),
 		collectionNames: []string{t.collMeta.Name},
 		collectionID:    t.collMeta.CollectionID,
 		ts:              t.GetTs(),
@@ -105,6 +105,7 @@ func (t *dropPartitionTask) Execute(ctx context.Context) error {
 	redoTask.AddAsyncStep(newConfirmGCStep(t.core, t.collMeta.CollectionID, partID))
 	redoTask.AddAsyncStep(&removePartitionMetaStep{
 		baseStep:     baseStep{core: t.core},
+		dbName:       t.Req.GetDbName(),
 		collectionID: t.collMeta.CollectionID,
 		partitionID:  partID,
 		// This ts is less than the ts when we notify data nodes to drop partition, but it's OK since we have already

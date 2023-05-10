@@ -9,18 +9,15 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/milvus-io/milvus/internal/util"
-
-	"github.com/milvus-io/milvus-proto/go-api/commonpb"
-	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
-	"github.com/milvus-io/milvus-proto/go-api/schemapb"
-	"go.uber.org/atomic"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/atomic"
 
+	"github.com/milvus-io/milvus-proto/go-api/commonpb"
+	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
+	"github.com/milvus-io/milvus-proto/go-api/schemapb"
 	"github.com/milvus-io/milvus/internal/common"
 	"github.com/milvus-io/milvus/internal/kv"
 	"github.com/milvus-io/milvus/internal/kv/mocks"
@@ -28,6 +25,7 @@ import (
 	"github.com/milvus-io/milvus/internal/metastore/model"
 	pb "github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
+	"github.com/milvus-io/milvus/internal/util"
 	"github.com/milvus-io/milvus/internal/util/crypto"
 	"github.com/milvus-io/milvus/internal/util/funcutil"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
@@ -47,7 +45,7 @@ var (
 )
 
 const (
-	testDb = ""
+	testDb = 1000
 )
 
 func TestCatalog_ListCollections(t *testing.T) {
@@ -88,7 +86,7 @@ func TestCatalog_ListCollections(t *testing.T) {
 			Return(nil, nil, targetErr)
 
 		kc := Catalog{Snapshot: kv}
-		ret, err := kc.ListCollections(ctx, "", ts)
+		ret, err := kc.ListCollections(ctx, util.NonDBID, ts)
 		assert.ErrorIs(t, err, targetErr)
 		assert.Nil(t, ret)
 	})
@@ -108,7 +106,7 @@ func TestCatalog_ListCollections(t *testing.T) {
 			Return(nil, nil, targetErr)
 		kc := Catalog{Snapshot: kv}
 
-		ret, err := kc.ListCollections(ctx, "", ts)
+		ret, err := kc.ListCollections(ctx, util.NonDBID, ts)
 		assert.ErrorIs(t, err, targetErr)
 		assert.Nil(t, ret)
 	})
@@ -139,7 +137,7 @@ func TestCatalog_ListCollections(t *testing.T) {
 			Return(nil, nil, targetErr)
 		kc := Catalog{Snapshot: kv}
 
-		ret, err := kc.ListCollections(ctx, "", ts)
+		ret, err := kc.ListCollections(ctx, util.NonDBID, ts)
 		assert.ErrorIs(t, err, targetErr)
 		assert.Nil(t, ret)
 	})
@@ -154,11 +152,47 @@ func TestCatalog_ListCollections(t *testing.T) {
 			Return([]string{"key"}, []string{string(bColl)}, nil)
 		kc := Catalog{Snapshot: kv}
 
-		ret, err := kc.ListCollections(ctx, "", ts)
+		ret, err := kc.ListCollections(ctx, util.NonDBID, ts)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(ret))
 		modCol := ret["c1"]
 		assert.Equal(t, coll1.ID, modCol.CollectionID)
+	})
+
+	t.Run("list collection with db", func(t *testing.T) {
+		kv := mocks.NewSnapShotKV(t)
+		ts := uint64(1)
+
+		bColl, err := proto.Marshal(coll2)
+		assert.NoError(t, err)
+		kv.On("LoadWithPrefix", BuildDatabasePrefixWithDBID(testDb), ts).
+			Return([]string{"key"}, []string{string(bColl)}, nil)
+
+		partitionMeta := &pb.PartitionInfo{}
+		pm, err := proto.Marshal(partitionMeta)
+		assert.NoError(t, err)
+
+		kv.On("LoadWithPrefix", mock.MatchedBy(
+			func(prefix string) bool {
+				return strings.HasPrefix(prefix, PartitionMetaPrefix)
+			}), ts).
+			Return([]string{"key"}, []string{string(pm)}, nil)
+
+		fieldMeta := &schemapb.FieldSchema{}
+		fm, err := proto.Marshal(fieldMeta)
+		assert.NoError(t, err)
+
+		kv.On("LoadWithPrefix", mock.MatchedBy(
+			func(prefix string) bool {
+				return strings.HasPrefix(prefix, FieldMetaPrefix)
+			}), ts).
+			Return([]string{"key"}, []string{string(fm)}, nil)
+		kc := Catalog{Snapshot: kv}
+
+		ret, err := kc.ListCollections(ctx, testDb, ts)
+		assert.NoError(t, err)
+		assert.NotNil(t, ret)
+		assert.Equal(t, 1, len(ret))
 	})
 
 	t.Run("list collection ok for the newest version", func(t *testing.T) {
@@ -191,7 +225,7 @@ func TestCatalog_ListCollections(t *testing.T) {
 			Return([]string{"key"}, []string{string(fm)}, nil)
 		kc := Catalog{Snapshot: kv}
 
-		ret, err := kc.ListCollections(ctx, "", ts)
+		ret, err := kc.ListCollections(ctx, util.NonDBID, ts)
 		assert.NoError(t, err)
 		assert.NotNil(t, ret)
 		assert.Equal(t, 1, len(ret))
@@ -206,7 +240,7 @@ func TestCatalog_loadCollection(t *testing.T) {
 			return "", errors.New("mock")
 		}
 		kc := Catalog{Snapshot: snapshot}
-		_, err := kc.loadCollection(ctx, "", 1, 0)
+		_, err := kc.loadCollection(ctx, testDb, 1, 0)
 		assert.Error(t, err)
 	})
 
@@ -217,7 +251,7 @@ func TestCatalog_loadCollection(t *testing.T) {
 			return "not in pb format", nil
 		}
 		kc := Catalog{Snapshot: snapshot}
-		_, err := kc.loadCollection(ctx, "", 1, 0)
+		_, err := kc.loadCollection(ctx, testDb, 1, 0)
 		assert.Error(t, err)
 	})
 
@@ -231,7 +265,7 @@ func TestCatalog_loadCollection(t *testing.T) {
 			return string(value), nil
 		}
 		kc := Catalog{Snapshot: snapshot}
-		got, err := kc.loadCollection(ctx, "", 1, 0)
+		got, err := kc.loadCollection(ctx, 0, 1, 0)
 		assert.NoError(t, err)
 		assert.Equal(t, got.GetID(), coll.GetID())
 	})
@@ -314,11 +348,11 @@ func TestCatalog_GetCollectionByID(t *testing.T) {
 		},
 	)
 
-	coll, err := c.GetCollectionByID(ctx, "", 1, 1)
+	coll, err := c.GetCollectionByID(ctx, 0, 1, 1)
 	assert.Error(t, err)
 	assert.Nil(t, coll)
 
-	coll, err = c.GetCollectionByID(ctx, "", 10000, 1)
+	coll, err = c.GetCollectionByID(ctx, 0, 10000, 1)
 	assert.NoError(t, err)
 	assert.NotNil(t, coll)
 }
@@ -331,7 +365,7 @@ func TestCatalog_CreatePartitionV2(t *testing.T) {
 			return "", errors.New("mock")
 		}
 		kc := Catalog{Snapshot: snapshot}
-		err := kc.CreatePartition(ctx, "", &model.Partition{}, 0)
+		err := kc.CreatePartition(ctx, 0, &model.Partition{}, 0)
 		assert.Error(t, err)
 	})
 
@@ -352,13 +386,13 @@ func TestCatalog_CreatePartitionV2(t *testing.T) {
 
 		kc := Catalog{Snapshot: snapshot}
 
-		err = kc.CreatePartition(ctx, "", &model.Partition{}, 0)
+		err = kc.CreatePartition(ctx, 0, &model.Partition{}, 0)
 		assert.Error(t, err)
 
 		snapshot.SaveFunc = func(key string, value string, ts typeutil.Timestamp) error {
 			return nil
 		}
-		err = kc.CreatePartition(ctx, "", &model.Partition{}, 0)
+		err = kc.CreatePartition(ctx, 0, &model.Partition{}, 0)
 		assert.NoError(t, err)
 	})
 
@@ -377,7 +411,7 @@ func TestCatalog_CreatePartitionV2(t *testing.T) {
 
 		kc := Catalog{Snapshot: snapshot}
 
-		err = kc.CreatePartition(ctx, "", &model.Partition{PartitionID: partID}, 0)
+		err = kc.CreatePartition(ctx, 0, &model.Partition{PartitionID: partID}, 0)
 		assert.Error(t, err)
 	})
 
@@ -396,7 +430,7 @@ func TestCatalog_CreatePartitionV2(t *testing.T) {
 
 		kc := Catalog{Snapshot: snapshot}
 
-		err = kc.CreatePartition(ctx, "", &model.Partition{PartitionName: partition}, 0)
+		err = kc.CreatePartition(ctx, 0, &model.Partition{PartitionName: partition}, 0)
 		assert.Error(t, err)
 	})
 
@@ -421,13 +455,13 @@ func TestCatalog_CreatePartitionV2(t *testing.T) {
 
 		kc := Catalog{Snapshot: snapshot}
 
-		err = kc.CreatePartition(ctx, "", &model.Partition{}, 0)
+		err = kc.CreatePartition(ctx, 0, &model.Partition{}, 0)
 		assert.Error(t, err)
 
 		snapshot.SaveFunc = func(key string, value string, ts typeutil.Timestamp) error {
 			return nil
 		}
-		err = kc.CreatePartition(ctx, "", &model.Partition{}, 0)
+		err = kc.CreatePartition(ctx, 0, &model.Partition{}, 0)
 		assert.NoError(t, err)
 	})
 }
@@ -620,7 +654,7 @@ func TestCatalog_DropPartitionV2(t *testing.T) {
 
 		kc := Catalog{Snapshot: snapshot}
 
-		err := kc.DropPartition(ctx, "", 100, 101, 0)
+		err := kc.DropPartition(ctx, 0, 100, 101, 0)
 		assert.Error(t, err)
 	})
 
@@ -641,13 +675,13 @@ func TestCatalog_DropPartitionV2(t *testing.T) {
 
 		kc := Catalog{Snapshot: snapshot}
 
-		err = kc.DropPartition(ctx, "", 100, 101, 0)
+		err = kc.DropPartition(ctx, 0, 100, 101, 0)
 		assert.Error(t, err)
 
 		snapshot.MultiSaveAndRemoveWithPrefixFunc = func(saves map[string]string, removals []string, ts typeutil.Timestamp) error {
 			return nil
 		}
-		err = kc.DropPartition(ctx, "", 100, 101, 0)
+		err = kc.DropPartition(ctx, 0, 100, 101, 0)
 		assert.NoError(t, err)
 	})
 
@@ -672,13 +706,13 @@ func TestCatalog_DropPartitionV2(t *testing.T) {
 
 		kc := Catalog{Snapshot: snapshot}
 
-		err = kc.DropPartition(ctx, "", 100, 101, 0)
+		err = kc.DropPartition(ctx, 0, 100, 101, 0)
 		assert.Error(t, err)
 
 		snapshot.SaveFunc = func(key string, value string, ts typeutil.Timestamp) error {
 			return nil
 		}
-		err = kc.DropPartition(ctx, "", 100, 102, 0)
+		err = kc.DropPartition(ctx, 0, 100, 102, 0)
 		assert.NoError(t, err)
 	})
 }
@@ -830,10 +864,17 @@ func TestCatalog_ListAliasesV2(t *testing.T) {
 			if key == AliasMetaPrefix {
 				return nil, nil, errors.New("mock")
 			}
+
+			if strings.Contains(key, DatabaseMetaPrefix) {
+				return nil, nil, errors.New("mock")
+			}
 			return []string{"key"}, []string{string(value)}, nil
 		}
 
 		kc := Catalog{Snapshot: snapshot}
+
+		_, err = kc.ListAliases(ctx, util.NonDBID, 0)
+		assert.Error(t, err)
 
 		_, err = kc.ListAliases(ctx, testDb, 0)
 		assert.Error(t, err)
@@ -848,7 +889,8 @@ func TestCatalog_ListAliasesV2(t *testing.T) {
 
 		snapshot := kv.NewMockSnapshotKV()
 		snapshot.LoadWithPrefixFunc = func(key string, ts typeutil.Timestamp) ([]string, []string, error) {
-			if strings.Contains(key, testDb) && strings.Contains(key, Aliases) {
+			dbStr := fmt.Sprintf("%d", testDb)
+			if strings.Contains(key, dbStr) && strings.Contains(key, Aliases) {
 				return []string{"key1"}, []string{string(value2)}, nil
 			}
 			return []string{}, []string{}, nil
@@ -930,7 +972,7 @@ func TestCatalog_AlterCollection(t *testing.T) {
 		newC := &model.Collection{CollectionID: collectionID, State: pb.CollectionState_CollectionCreated}
 		err := kc.AlterCollection(ctx, oldC, newC, metastore.MODIFY, 0)
 		assert.NoError(t, err)
-		key := BuildCollectionKey("", collectionID)
+		key := BuildCollectionKey(0, collectionID)
 		value, ok := kvs[key]
 		assert.True(t, ok)
 		var collPb pb.CollectionInfo
@@ -955,14 +997,14 @@ func TestCatalog_AlterPartition(t *testing.T) {
 	t.Run("add", func(t *testing.T) {
 		kc := &Catalog{}
 		ctx := context.Background()
-		err := kc.AlterPartition(ctx, "", nil, nil, metastore.ADD, 0)
+		err := kc.AlterPartition(ctx, testDb, nil, nil, metastore.ADD, 0)
 		assert.Error(t, err)
 	})
 
 	t.Run("delete", func(t *testing.T) {
 		kc := &Catalog{}
 		ctx := context.Background()
-		err := kc.AlterPartition(ctx, "", nil, nil, metastore.DELETE, 0)
+		err := kc.AlterPartition(ctx, testDb, nil, nil, metastore.DELETE, 0)
 		assert.Error(t, err)
 	})
 
@@ -979,7 +1021,7 @@ func TestCatalog_AlterPartition(t *testing.T) {
 		var partitionID int64 = 2
 		oldP := &model.Partition{PartitionID: partitionID, CollectionID: collectionID, State: pb.PartitionState_PartitionCreating}
 		newP := &model.Partition{PartitionID: partitionID, CollectionID: collectionID, State: pb.PartitionState_PartitionCreated}
-		err := kc.AlterPartition(ctx, "", oldP, newP, metastore.MODIFY, 0)
+		err := kc.AlterPartition(ctx, testDb, oldP, newP, metastore.MODIFY, 0)
 		assert.NoError(t, err)
 		key := BuildPartitionKey(collectionID, partitionID)
 		value, ok := kvs[key]
@@ -997,7 +1039,7 @@ func TestCatalog_AlterPartition(t *testing.T) {
 		var collectionID int64 = 1
 		oldP := &model.Partition{PartitionID: 1, CollectionID: collectionID, State: pb.PartitionState_PartitionCreating}
 		newP := &model.Partition{PartitionID: 2, CollectionID: collectionID, State: pb.PartitionState_PartitionCreated}
-		err := kc.AlterPartition(ctx, "", oldP, newP, metastore.MODIFY, 0)
+		err := kc.AlterPartition(ctx, testDb, oldP, newP, metastore.MODIFY, 0)
 		assert.Error(t, err)
 	})
 }
@@ -1919,6 +1961,7 @@ func TestRBAC_Role(t *testing.T) {
 		}
 	})
 }
+
 func TestRBAC_Grant(t *testing.T) {
 	var (
 		tenant = "default"

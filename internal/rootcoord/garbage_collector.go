@@ -28,7 +28,7 @@ import (
 
 //go:generate mockery --name=GarbageCollector --outpkg=mockrootcoord
 type GarbageCollector interface {
-	ReDropCollection(collMeta *model.Collection, ts Timestamp)
+	ReDropCollection(dbName string, collMeta *model.Collection, ts Timestamp)
 	RemoveCreatingCollection(collMeta *model.Collection)
 	ReDropPartition(dbName string, pChannels []string, partition *model.Partition, ts Timestamp)
 	GcCollectionData(ctx context.Context, coll *model.Collection) (ddlTs Timestamp, err error)
@@ -43,7 +43,7 @@ func newBgGarbageCollector(s *Core) *bgGarbageCollector {
 	return &bgGarbageCollector{s: s}
 }
 
-func (c *bgGarbageCollector) ReDropCollection(collMeta *model.Collection, ts Timestamp) {
+func (c *bgGarbageCollector) ReDropCollection(dbName string, collMeta *model.Collection, ts Timestamp) {
 	// TODO: remove this after data gc can be notified by rpc.
 	c.s.chanTimeTick.addDmlChannels(collMeta.PhysicalChannelNames...)
 	aliases := c.s.meta.ListAliasesByID(collMeta.CollectionID)
@@ -51,7 +51,7 @@ func (c *bgGarbageCollector) ReDropCollection(collMeta *model.Collection, ts Tim
 	redo := newBaseRedoTask(c.s.stepExecutor)
 	redo.AddAsyncStep(&expireCacheStep{
 		baseStep:        baseStep{core: c.s},
-		dbName:          collMeta.DBName,
+		dbName:          dbName,
 		collectionNames: append(aliases, collMeta.Name),
 		collectionID:    collMeta.CollectionID,
 		ts:              ts,
@@ -142,6 +142,7 @@ func (c *bgGarbageCollector) ReDropPartition(dbName string, pChannels []string, 
 	})
 	redo.AddAsyncStep(&removePartitionMetaStep{
 		baseStep:     baseStep{core: c.s},
+		dbName:       dbName,
 		collectionID: partition.CollectionID,
 		partitionID:  partition.PartitionID,
 		// This ts is less than the ts when we notify data nodes to drop partition, but it's OK since we have already

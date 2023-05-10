@@ -57,7 +57,7 @@ func (_m *GarbageCollector) GcPartitionData(ctx context.Context, pChannels []str
 }
 
 // ReDropCollection provides a mock function with given fields: collMeta, ts
-func (_m *GarbageCollector) ReDropCollection(collMeta *model.Collection, ts uint64) {
+func (_m *GarbageCollector) ReDropCollection(dbName string, collMeta *model.Collection, ts uint64) {
 	_m.Called(collMeta, ts)
 }
 

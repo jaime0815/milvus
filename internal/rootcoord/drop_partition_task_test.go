@@ -171,7 +171,8 @@ func Test_dropPartitionTask_Execute(t *testing.T) {
 			mock.Anything,
 			mock.Anything,
 			mock.Anything,
-		).Return(func(ctx context.Context, collectionID UniqueID, partitionID UniqueID, ts Timestamp) error {
+			mock.Anything,
+		).Return(func(ctx context.Context, dbName string, collectionID int64, partitionID int64, ts uint64) error {
 			removePartitionMetaCalled = true
 			removePartitionMetaChan <- struct{}{}
 			return nil
