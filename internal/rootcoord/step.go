@@ -325,13 +325,14 @@ func (s *changePartitionStateStep) Desc() string {
 
 type removePartitionMetaStep struct {
 	baseStep
+	dbName       string
 	collectionID UniqueID
 	partitionID  UniqueID
 	ts           Timestamp
 }
 
 func (s *removePartitionMetaStep) Execute(ctx context.Context) ([]nestedStep, error) {
-	err := s.core.meta.RemovePartition(ctx, s.collectionID, s.partitionID, s.ts)
+	err := s.core.meta.RemovePartition(ctx, s.dbName, s.collectionID, s.partitionID, s.ts)
 	return nil, err
 }
 

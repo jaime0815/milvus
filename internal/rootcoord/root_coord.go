@@ -614,7 +614,7 @@ func (c *Core) restore(ctx context.Context) error {
 	}
 
 	for _, db := range dbs {
-		colls, err := c.meta.ListCollections(ctx, db, typeutil.MaxTimestamp, false)
+		colls, err := c.meta.ListCollections(ctx, db.Name, typeutil.MaxTimestamp, false)
 		if err != nil {
 			return err
 		}
@@ -628,13 +628,13 @@ func (c *Core) restore(ctx context.Context) error {
 				if coll.Available() {
 					switch part.State {
 					case pb.PartitionState_PartitionDropping:
-						go c.garbageCollector.ReDropPartition(coll.DBName, coll.PhysicalChannelNames, part.Clone(), ts)
+						go c.garbageCollector.ReDropPartition(db.Name, coll.PhysicalChannelNames, part.Clone(), ts)
 					default:
 					}
 				} else {
 					switch coll.State {
 					case pb.CollectionState_CollectionDropping:
-						go c.garbageCollector.ReDropCollection(coll.Clone(), ts)
+						go c.garbageCollector.ReDropCollection(db.Name, coll.Clone(), ts)
 					case pb.CollectionState_CollectionCreating:
 						go c.garbageCollector.RemoveCreatingCollection(coll.Clone())
 					default:

@@ -21,12 +21,15 @@ import (
 	"fmt"
 
 	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
+	"github.com/milvus-io/milvus/internal/metastore/model"
+	"github.com/milvus-io/milvus/internal/proto/etcdpb"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
 )
 
 type createDatabaseTask struct {
 	baseTask
-	Req *milvuspb.CreateDatabaseRequest
+	Req  *milvuspb.CreateDatabaseRequest
+	dbID UniqueID
 }
 
 func (t *createDatabaseTask) Prepare(ctx context.Context) error {
@@ -40,10 +43,16 @@ func (t *createDatabaseTask) Prepare(ctx context.Context) error {
 	if int64(len(dbs)) > cfgMaxDatabaseNum {
 		return fmt.Errorf("database number (%d) exceeds max configuration (%d)", len(dbs), cfgMaxDatabaseNum)
 	}
+
+	t.dbID, err = t.core.idAllocator.AllocOne()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 func (t *createDatabaseTask) Execute(ctx context.Context) error {
 	t.SetStep(typeutil.TaskStepExecute)
-	return t.core.meta.CreateDatabase(ctx, t.Req.GetDbName(), t.GetTs())
+	db := model.NewDatabase(t.dbID, t.Req.GetDbName(), etcdpb.DatabaseState_DatabaseCreated)
+	return t.core.meta.CreateDatabase(ctx, db, t.GetTs())
 }

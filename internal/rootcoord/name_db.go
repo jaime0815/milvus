@@ -9,7 +9,9 @@ import (
 )
 
 type nameDb struct {
-	db2Name2ID map[string]map[string]typeutil.UniqueID // database -> collection name -> collection id
+	db2Name2ID         map[string]map[string]typeutil.UniqueID // database -> collection name -> collection id
+	totalCollectionNum int
+	totalPartitionNum  int
 }
 
 func (n *nameDb) exist(dbName string) bool {

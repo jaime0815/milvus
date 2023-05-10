@@ -20,6 +20,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/milvus-io/milvus/internal/metastore/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
@@ -48,14 +49,14 @@ func Test_CreateDBTask_Prepare(t *testing.T) {
 		meta := mockrootcoord.NewIMetaTable(t)
 		cfgMaxDatabaseNum := Params.RootCoordCfg.MaxDatabaseNum
 		len := int(cfgMaxDatabaseNum) + 1
-		dbNames := make([]string, 0, len)
+		dbs := make([]*model.Database, 0, len)
 		for i := 0; i < len; i++ {
-			dbNames = append(dbNames, "db")
+			dbs = append(dbs, model.NewDefaultDatabase())
 		}
 		meta.On("ListDatabases",
 			mock.Anything,
 			mock.Anything).
-			Return(dbNames, nil)
+			Return(dbs, nil)
 
 		core := newTestCore(withMeta(meta))
 
@@ -77,9 +78,9 @@ func Test_CreateDBTask_Prepare(t *testing.T) {
 		meta.On("ListDatabases",
 			mock.Anything,
 			mock.Anything).
-			Return([]string{"db1"}, nil)
+			Return([]*model.Database{model.NewDefaultDatabase()}, nil)
 
-		core := newTestCore(withMeta(meta))
+		core := newTestCore(withMeta(meta), withValidIDAllocator())
 		Params.RootCoordCfg.MaxDatabaseNum = 10
 		task := &createDatabaseTask{
 			baseTask: newBaseTask(context.TODO(), core),

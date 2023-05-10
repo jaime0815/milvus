@@ -44,6 +44,10 @@ func (t *listDatabaseTask) Execute(ctx context.Context) error {
 		return err
 	}
 
-	t.Resp.DbNames = ret
+	dbNames := make([]string, 0, len(ret))
+	for _, db := range ret {
+		dbNames = append(dbNames, db.Name)
+	}
+	t.Resp.DbNames = dbNames
 	return nil
 }

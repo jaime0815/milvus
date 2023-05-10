@@ -231,10 +231,18 @@ func Test_createCollectionTask_Prepare(t *testing.T) {
 		assert.Error(t, err)
 	})
 
+	meta := mockrootcoord.NewIMetaTable(t)
+	meta.On("GetDatabaseByName",
+		mock.Anything,
+		mock.Anything,
+		mock.Anything,
+	).Return(model.NewDefaultDatabase(), nil)
+
 	t.Run("invalid schema", func(t *testing.T) {
+		core := newTestCore(withMeta(meta))
 		collectionName := funcutil.GenRandomStr()
 		task := &createCollectionTask{
-			baseTask: newBaseTask(context.TODO(), nil),
+			baseTask: newBaseTask(context.TODO(), core),
 			Req: &milvuspb.CreateCollectionRequest{
 				Base:           &commonpb.MsgBase{MsgType: commonpb.MsgType_CreateCollection},
 				CollectionName: collectionName,
@@ -259,7 +267,7 @@ func Test_createCollectionTask_Prepare(t *testing.T) {
 		marshaledSchema, err := proto.Marshal(schema)
 		assert.NoError(t, err)
 
-		core := newTestCore(withInvalidIDAllocator())
+		core := newTestCore(withInvalidIDAllocator(), withMeta(meta))
 
 		task := createCollectionTask{
 			baseTask: newBaseTask(context.TODO(), core),
@@ -281,7 +289,7 @@ func Test_createCollectionTask_Prepare(t *testing.T) {
 
 		ticker := newRocksMqTtSynchronizer()
 
-		core := newTestCore(withValidIDAllocator(), withTtSynchronizer(ticker))
+		core := newTestCore(withValidIDAllocator(), withTtSynchronizer(ticker), withMeta(meta))
 
 		schema := &schemapb.CollectionSchema{
 			Name:        collectionName,

@@ -50,6 +50,7 @@ type createCollectionTask struct {
 	schema   *schemapb.CollectionSchema
 	collID   UniqueID
 	partID   UniqueID
+	dbID     UniqueID
 	channels collectionChannels
 }
 
@@ -189,6 +190,12 @@ func (t *createCollectionTask) Prepare(ctx context.Context) error {
 		return err
 	}
 
+	db, err := t.core.meta.GetDatabaseByName(ctx, t.Req.GetDbName(), typeutil.MaxTimestamp)
+	if err != nil {
+		return err
+	}
+	t.dbID = db.ID
+
 	if err := t.prepareSchema(); err != nil {
 		return err
 	}
@@ -264,7 +271,7 @@ func (t *createCollectionTask) Execute(ctx context.Context) error {
 
 	collInfo := model.Collection{
 		CollectionID:         collID,
-		DBName:               t.Req.DbName,
+		DBID:                 t.dbID,
 		Name:                 t.schema.Name,
 		Description:          t.schema.Description,
 		AutoID:               t.schema.AutoID,
@@ -317,7 +324,7 @@ func (t *createCollectionTask) Execute(ctx context.Context) error {
 	}
 	// check collection number quota for DB
 	existedColsInDB := lo.Filter(existedCollInfos, func(collection *model.Collection, _ int) bool {
-		return t.Req.GetDbName() != "" && collection.DBName == t.Req.GetDbName()
+		return t.Req.GetDbName() != "" && collection.DBID == t.dbID
 	})
 	maxColNumPerDB := Params.QuotaConfig.MaxCollectionNumPerDB
 	if len(existedColsInDB) >= maxColNumPerDB {

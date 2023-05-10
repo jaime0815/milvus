@@ -41,7 +41,7 @@ func TestGarbageCollectorCtx_ReDropCollection(t *testing.T) {
 		core := newTestCore(withInvalidProxyManager(),
 			withTtSynchronizer(ticker), withMeta(meta))
 		gc := newBgGarbageCollector(core)
-		gc.ReDropCollection(&model.Collection{}, 1000)
+		gc.ReDropCollection("", &model.Collection{}, 1000)
 	})
 
 	t.Run("failed to release collection", func(t *testing.T) {
@@ -56,7 +56,7 @@ func TestGarbageCollectorCtx_ReDropCollection(t *testing.T) {
 		ticker := newTickerWithMockNormalStream()
 		core := newTestCore(withBroker(broker), withTtSynchronizer(ticker), withMeta(meta), withValidProxyManager())
 		gc := newBgGarbageCollector(core)
-		gc.ReDropCollection(&model.Collection{}, 1000)
+		gc.ReDropCollection("", &model.Collection{}, 1000)
 	})
 
 	t.Run("failed to DropCollectionIndex", func(t *testing.T) {
@@ -79,7 +79,7 @@ func TestGarbageCollectorCtx_ReDropCollection(t *testing.T) {
 		core := newTestCore(withBroker(broker), withTtSynchronizer(ticker), withMeta(meta), withValidProxyManager())
 		gc := newBgGarbageCollector(core)
 		core.garbageCollector = gc
-		gc.ReDropCollection(&model.Collection{}, 1000)
+		gc.ReDropCollection("", &model.Collection{}, 1000)
 		<-releaseCollectionChan
 		assert.True(t, releaseCollectionCalled)
 	})
@@ -116,7 +116,7 @@ func TestGarbageCollectorCtx_ReDropCollection(t *testing.T) {
 		core.garbageCollector = gc
 		shardsNum := int(common.DefaultShardsNum)
 		pchans := ticker.getDmlChannelNames(shardsNum)
-		gc.ReDropCollection(&model.Collection{PhysicalChannelNames: pchans}, 1000)
+		gc.ReDropCollection("", &model.Collection{PhysicalChannelNames: pchans}, 1000)
 		<-releaseCollectionChan
 		assert.True(t, releaseCollectionCalled)
 		<-dropCollectionIndexChan
@@ -166,7 +166,7 @@ func TestGarbageCollectorCtx_ReDropCollection(t *testing.T) {
 		core.ddlTsLockManager = newDdlTsLockManager(core.tsoAllocator)
 		gc := newBgGarbageCollector(core)
 		core.garbageCollector = gc
-		gc.ReDropCollection(&model.Collection{}, 1000)
+		gc.ReDropCollection("", &model.Collection{}, 1000)
 		<-releaseCollectionChan
 		assert.True(t, releaseCollectionCalled)
 		<-dropCollectionIndexChan
@@ -218,7 +218,7 @@ func TestGarbageCollectorCtx_ReDropCollection(t *testing.T) {
 		core.ddlTsLockManager = newDdlTsLockManager(core.tsoAllocator)
 		gc := newBgGarbageCollector(core)
 		core.garbageCollector = gc
-		gc.ReDropCollection(&model.Collection{}, 1000)
+		gc.ReDropCollection("", &model.Collection{}, 1000)
 		<-releaseCollectionChan
 		assert.True(t, releaseCollectionCalled)
 		<-dropCollectionIndexChan
@@ -368,7 +368,8 @@ func TestGarbageCollectorCtx_ReDropPartition(t *testing.T) {
 			mock.Anything,
 			mock.Anything,
 			mock.Anything,
-		).Return(func(ctx context.Context, collectionID UniqueID, partitionID UniqueID, ts Timestamp) error {
+			mock.Anything,
+		).Return(func(ctx context.Context, dbName string, collectionID int64, partitionID int64, ts uint64) error {
 			removePartitionCalled = true
 			removePartitionChan <- struct{}{}
 			return errors.New("error mock RemovePartition")
@@ -400,7 +401,8 @@ func TestGarbageCollectorCtx_ReDropPartition(t *testing.T) {
 			mock.Anything,
 			mock.Anything,
 			mock.Anything,
-		).Return(func(ctx context.Context, collectionID UniqueID, partitionID UniqueID, ts Timestamp) error {
+			mock.Anything,
+		).Return(func(ctx context.Context, dbName string, collectionID int64, partitionID int64, ts uint64) error {
 			removePartitionCalled = true
 			removePartitionChan <- struct{}{}
 			return nil

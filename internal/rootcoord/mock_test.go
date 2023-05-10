@@ -22,6 +22,8 @@ import (
 	"math/rand"
 	"os"
 
+	"go.uber.org/zap"
+
 	"github.com/milvus-io/milvus-proto/go-api/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
 	"github.com/milvus-io/milvus/internal/allocator"
@@ -40,7 +42,6 @@ import (
 	"github.com/milvus-io/milvus/internal/util/retry"
 	"github.com/milvus-io/milvus/internal/util/sessionutil"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
-	"go.uber.org/zap"
 )
 
 const (
@@ -50,7 +51,7 @@ const (
 
 type mockMetaTable struct {
 	IMetaTable
-	ListDatabasesFunc                func(ctx context.Context, ts Timestamp) ([]string, error)
+	ListDatabasesFunc                func(ctx context.Context, ts Timestamp) ([]*model.Database, error)
 	ListCollectionsFunc              func(ctx context.Context, ts Timestamp) ([]*model.Collection, error)
 	AddCollectionFunc                func(ctx context.Context, coll *model.Collection) error
 	GetCollectionByNameFunc          func(ctx context.Context, collectionName string, ts Timestamp) (*model.Collection, error)
@@ -72,7 +73,7 @@ type mockMetaTable struct {
 	RenameCollectionFunc             func(ctx context.Context, oldName string, newName string, ts Timestamp) error
 }
 
-func (m mockMetaTable) ListDatabases(ctx context.Context, ts typeutil.Timestamp) ([]string, error) {
+func (m mockMetaTable) ListDatabases(ctx context.Context, ts typeutil.Timestamp) ([]*model.Database, error) {
 	return m.ListDatabasesFunc(ctx, ts)
 }
 
@@ -108,7 +109,7 @@ func (m mockMetaTable) ChangePartitionState(ctx context.Context, collectionID Un
 	return m.ChangePartitionStateFunc(ctx, collectionID, partitionID, state, ts)
 }
 
-func (m mockMetaTable) RemovePartition(ctx context.Context, collectionID UniqueID, partitionID UniqueID, ts Timestamp) error {
+func (m mockMetaTable) RemovePartition(ctx context.Context, dbName string, collectionID UniqueID, partitionID UniqueID, ts Timestamp) error {
 	return m.RemovePartitionFunc(ctx, collectionID, partitionID, ts)
 }
 
@@ -380,7 +381,7 @@ func withMeta(meta IMetaTable) Opt {
 
 func withInvalidMeta() Opt {
 	meta := newMockMetaTable()
-	meta.ListDatabasesFunc = func(ctx context.Context, ts Timestamp) ([]string, error) {
+	meta.ListDatabasesFunc = func(ctx context.Context, ts Timestamp) ([]*model.Database, error) {
 		return nil, errors.New("error mock ListDatabases")
 	}
 	meta.ListCollectionsFunc = func(ctx context.Context, ts Timestamp) ([]*model.Collection, error) {

@@ -1,12 +1,18 @@
 package rootcoord
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/milvus-io/milvus/internal/util"
+)
 
 const (
 	// ComponentPrefix prefix for rootcoord component
 	ComponentPrefix = "root-coord"
 
-	DatabaseMetaPrefix = ComponentPrefix + "/database"
+	DatabaseMetaPrefix       = ComponentPrefix + "/database"
+	DBInfoMetaPrefix         = DatabaseMetaPrefix + "/db-info"
+	CollectionInfoMetaPrefix = DatabaseMetaPrefix + "/collection-info"
 
 	// CollectionMetaPrefix prefix for collection meta
 	CollectionMetaPrefix = ComponentPrefix + "/collection"
@@ -45,6 +51,21 @@ const (
 	GranteeIDPrefix = ComponentPrefix + CommonCredentialPrefix + "/grantee-id"
 )
 
-func BuildDatabasePrefix(dbName string) string {
-	return fmt.Sprintf("%s/%s", DatabaseMetaPrefix, dbName)
+func BuildDatabasePrefixWithDBID(dbID int64) string {
+	return fmt.Sprintf("%s/%d", CollectionInfoMetaPrefix, dbID)
+}
+
+func BuildCollectionKeyWithDBID(dbID int64, collectionID int64) string {
+	return fmt.Sprintf("%s/%d/%d", CollectionInfoMetaPrefix, dbID, collectionID)
+}
+
+func BuildDatabaseKey(dbID int64) string {
+	return fmt.Sprintf("%s/%d", DBInfoMetaPrefix, dbID)
+}
+
+func getDatabasePrefix(dbID int64) string {
+	if dbID != util.NonDBID {
+		return BuildDatabasePrefixWithDBID(dbID)
+	}
+	return CollectionMetaPrefix
 }
