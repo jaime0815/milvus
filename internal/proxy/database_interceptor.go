@@ -2,16 +2,23 @@ package proxy
 
 import (
 	"context"
+	"time"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
+	"github.com/milvus-io/milvus/internal/log"
 )
 
 // DatabaseInterceptor fill dbname into request based on kv pair <"dbname": "xx"> in header
 func DatabaseInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+		now := time.Now().UnixMilli()
+		log.Info("========= DatabaseInterceptor start", zap.Int64("req", now))
 		filledCtx, filledReq := fillDatabase(ctx, req)
+		log.Info("========= DatabaseInterceptor end", zap.Int64("req", now))
+
 		return handler(filledCtx, filledReq)
 	}
 }

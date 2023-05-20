@@ -3,13 +3,15 @@ package proxy
 import (
 	"context"
 	"strings"
+	"time"
+
+	"go.uber.org/zap"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/milvus-io/milvus/internal/log"
 	"github.com/milvus-io/milvus/internal/metrics"
 	"github.com/milvus-io/milvus/internal/util"
 	"github.com/milvus-io/milvus/internal/util/crypto"
-	"go.uber.org/zap"
-	"google.golang.org/grpc/metadata"
 )
 
 func parseMD(authorization []string) (username, password string) {
@@ -47,6 +49,9 @@ func validSourceID(ctx context.Context, authorization []string) bool {
 
 // AuthenticationInterceptor verify based on kv pair <"authorization": "token"> in header
 func AuthenticationInterceptor(ctx context.Context) (context.Context, error) {
+	now := time.Now().UnixMilli()
+	log.Info("========= AuthenticationInterceptor start", zap.Int64("req", now))
+
 	// The keys within metadata.MD are normalized to lowercase.
 	// See: https://godoc.org/google.golang.org/grpc/metadata#New
 	md, ok := metadata.FromIncomingContext(ctx)
@@ -70,5 +75,7 @@ func AuthenticationInterceptor(ctx context.Context) (context.Context, error) {
 			metrics.UserRPCCounter.WithLabelValues(username).Inc()
 		}
 	}
+
+	log.Info("========= AuthenticationInterceptor end", zap.Int64("req", now))
 	return ctx, nil
 }

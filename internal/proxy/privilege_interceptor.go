@@ -5,18 +5,20 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
-	"github.com/casbin/casbin/v2"
+	casbin "github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	jsonadapter "github.com/casbin/json-adapter/v2"
-	"github.com/milvus-io/milvus-proto/go-api/commonpb"
-	"github.com/milvus-io/milvus/internal/log"
-	"github.com/milvus-io/milvus/internal/util"
-	"github.com/milvus-io/milvus/internal/util/funcutil"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/milvus-io/milvus-proto/go-api/commonpb"
+	"github.com/milvus-io/milvus/internal/log"
+	"github.com/milvus-io/milvus/internal/util"
+	"github.com/milvus-io/milvus/internal/util/funcutil"
 )
 
 type PrivilegeFunc func(ctx context.Context, req interface{}) (context.Context, error)
@@ -65,6 +67,9 @@ func PrivilegeInterceptor(ctx context.Context, req interface{}) (context.Context
 	if !Params.CommonCfg.AuthorizationEnabled {
 		return ctx, nil
 	}
+	now := time.Now().UnixMilli()
+	log.Info("========= PrivilegeInterceptor start", zap.Int64("req", now))
+
 	log.Debug("PrivilegeInterceptor", zap.String("type", reflect.TypeOf(req).String()))
 	privilegeExt, err := funcutil.GetPrivilegeExtObj(req)
 	if err != nil {
@@ -122,6 +127,7 @@ func PrivilegeInterceptor(ctx context.Context, req interface{}) (context.Context
 			if err != nil {
 				return false, err
 			}
+			log.Info("========= PrivilegeInterceptor end", zap.Int64("req", now))
 			return isPermit, nil
 		}
 
@@ -130,6 +136,7 @@ func PrivilegeInterceptor(ctx context.Context, req interface{}) (context.Context
 			permitObject, err := permitFunc(objectName)
 			if err != nil {
 				logWithCurrentRequestInfo.Warn("fail to execute permit func", zap.String("name", objectName), zap.Error(err))
+				log.Info("========= PrivilegeInterceptor end", zap.Int64("req", now))
 				return ctx, err
 			}
 			if permitObject {
@@ -144,6 +151,7 @@ func PrivilegeInterceptor(ctx context.Context, req interface{}) (context.Context
 				p, err := permitFunc(name)
 				if err != nil {
 					logWithCurrentRequestInfo.Warn("fail to execute permit func", zap.String("name", name), zap.Error(err))
+					log.Info("========= PrivilegeInterceptor end", zap.Int64("req", now))
 					return ctx, err
 				}
 				if !p {
@@ -152,6 +160,7 @@ func PrivilegeInterceptor(ctx context.Context, req interface{}) (context.Context
 				}
 			}
 			if permitObjects && len(objectNames) != 0 {
+				log.Info("========= PrivilegeInterceptor end", zap.Int64("req", now))
 				return ctx, nil
 			}
 		}

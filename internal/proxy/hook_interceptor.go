@@ -6,12 +6,14 @@ import (
 	"plugin"
 	"strconv"
 	"strings"
+	"time"
+
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
 
 	"github.com/milvus-io/milvus-proto/go-api/hook"
 	"github.com/milvus-io/milvus/internal/log"
 	"github.com/milvus-io/milvus/internal/metrics"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
 )
 
 type defaultHook struct {
@@ -73,6 +75,9 @@ func UnaryServerHookInterceptor() grpc.UnaryServerInterceptor {
 		hoo = defaultHook{}
 	}
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		now := time.Now().UnixMilli()
+		log.Info("========= HookInterceptor start", zap.Int64("req", now))
+
 		var (
 			fullMethod = info.FullMethod
 			newCtx     context.Context
@@ -106,6 +111,7 @@ func UnaryServerHookInterceptor() grpc.UnaryServerInterceptor {
 			updateProxyFunctionCallMetric(fullMethod)
 			return nil, err
 		}
+		log.Info("========= HookInterceptor end", zap.Int64("req", now))
 		return realResp, realErr
 	}
 }

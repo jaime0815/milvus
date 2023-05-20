@@ -20,12 +20,15 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/golang/protobuf/proto"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"github.com/milvus-io/milvus-proto/go-api/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/milvuspb"
+	"github.com/milvus-io/milvus/internal/log"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
 	"github.com/milvus-io/milvus/internal/types"
 )
@@ -33,6 +36,9 @@ import (
 // RateLimitInterceptor returns a new unary server interceptors that performs request rate limiting.
 func RateLimitInterceptor(limiter types.Limiter) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		now := time.Now().UnixMilli()
+		log.Info("========= RateLimitInterceptor start", zap.Int64("req", now))
+
 		collectionID, rt, n, err := getRequestInfo(req)
 		if err != nil {
 			return handler(ctx, req)
@@ -45,6 +51,7 @@ func RateLimitInterceptor(limiter types.Limiter) grpc.UnaryServerInterceptor {
 				return rsp, nil
 			}
 		}
+		log.Info("========= RateLimitInterceptor end", zap.Int64("req", now))
 		return handler(ctx, req)
 	}
 }
