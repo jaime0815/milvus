@@ -37,7 +37,7 @@ import (
 func RateLimitInterceptor(limiter types.Limiter) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		now := time.Now().UnixMilli()
-		log.Info("========= RateLimitInterceptor start", zap.Int64("req", now))
+		log.Info("========= RateLimitInterceptor start", zap.Int64("req", now), zap.String("type", reflect.TypeOf(req).String()))
 
 		collectionID, rt, n, err := getRequestInfo(req)
 		if err != nil {
@@ -51,7 +51,7 @@ func RateLimitInterceptor(limiter types.Limiter) grpc.UnaryServerInterceptor {
 				return rsp, nil
 			}
 		}
-		log.Info("========= RateLimitInterceptor end", zap.Int64("req", now))
+		log.Info("========= RateLimitInterceptor end", zap.Int64("req", now), zap.String("type", reflect.TypeOf(req).String()))
 		return handler(ctx, req)
 	}
 }

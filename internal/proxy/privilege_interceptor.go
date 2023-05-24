@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	casbin "github.com/casbin/casbin/v2"
+	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	jsonadapter "github.com/casbin/json-adapter/v2"
 	"go.uber.org/zap"
@@ -68,7 +68,7 @@ func PrivilegeInterceptor(ctx context.Context, req interface{}) (context.Context
 		return ctx, nil
 	}
 	now := time.Now().UnixMilli()
-	log.Info("========= PrivilegeInterceptor start", zap.Int64("req", now))
+	log.Info("========= PrivilegeInterceptor start", zap.Int64("req", now),  zap.String("type", reflect.TypeOf(req).String()))
 
 	log.Debug("PrivilegeInterceptor", zap.String("type", reflect.TypeOf(req).String()))
 	privilegeExt, err := funcutil.GetPrivilegeExtObj(req)
@@ -127,7 +127,7 @@ func PrivilegeInterceptor(ctx context.Context, req interface{}) (context.Context
 			if err != nil {
 				return false, err
 			}
-			log.Info("========= PrivilegeInterceptor end", zap.Int64("req", now))
+			log.Info("========= PrivilegeInterceptor end", zap.Int64("req", now),  zap.String("type", reflect.TypeOf(req).String()))
 			return isPermit, nil
 		}
 
@@ -136,7 +136,7 @@ func PrivilegeInterceptor(ctx context.Context, req interface{}) (context.Context
 			permitObject, err := permitFunc(objectName)
 			if err != nil {
 				logWithCurrentRequestInfo.Warn("fail to execute permit func", zap.String("name", objectName), zap.Error(err))
-				log.Info("========= PrivilegeInterceptor end", zap.Int64("req", now))
+				log.Info("========= PrivilegeInterceptor end", zap.Int64("req", now),  zap.String("type", reflect.TypeOf(req).String()))
 				return ctx, err
 			}
 			if permitObject {
@@ -151,7 +151,7 @@ func PrivilegeInterceptor(ctx context.Context, req interface{}) (context.Context
 				p, err := permitFunc(name)
 				if err != nil {
 					logWithCurrentRequestInfo.Warn("fail to execute permit func", zap.String("name", name), zap.Error(err))
-					log.Info("========= PrivilegeInterceptor end", zap.Int64("req", now))
+					log.Info("========= PrivilegeInterceptor end", zap.Int64("req", now),  zap.String("type", reflect.TypeOf(req).String()))
 					return ctx, err
 				}
 				if !p {

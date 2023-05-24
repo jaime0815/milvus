@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"plugin"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -76,7 +77,7 @@ func UnaryServerHookInterceptor() grpc.UnaryServerInterceptor {
 	}
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		now := time.Now().UnixMilli()
-		log.Info("========= HookInterceptor start", zap.Int64("req", now))
+		log.Info("========= HookInterceptor start", zap.Int64("req", now), zap.String("type", reflect.TypeOf(req).String()))
 
 		var (
 			fullMethod = info.FullMethod
@@ -111,7 +112,7 @@ func UnaryServerHookInterceptor() grpc.UnaryServerInterceptor {
 			updateProxyFunctionCallMetric(fullMethod)
 			return nil, err
 		}
-		log.Info("========= HookInterceptor end", zap.Int64("req", now))
+		log.Info("========= HookInterceptor end", zap.Int64("req", now), zap.String("type", reflect.TypeOf(req).String()))
 		return realResp, realErr
 	}
 }

@@ -2,10 +2,12 @@ package logutil
 
 import (
 	"context"
+	"reflect"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/milvus-io/milvus/internal/log"
 	"github.com/milvus-io/milvus/internal/util/trace"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -18,7 +20,10 @@ const (
 
 // UnaryTraceLoggerInterceptor adds a traced logger in unary rpc call ctx
 func UnaryTraceLoggerInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	log.Info("========= UnaryTraceLoggerInterceptor start", zap.String("type", reflect.TypeOf(req).String()))
+
 	newctx := withLevelAndTrace(ctx)
+	log.Info("========= UnaryTraceLoggerInterceptor end", zap.String("type", reflect.TypeOf(req).String()))
 	return handler(newctx, req)
 }
 
