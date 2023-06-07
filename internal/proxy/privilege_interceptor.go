@@ -9,14 +9,15 @@ import (
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	jsonadapter "github.com/casbin/json-adapter/v2"
-	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
-	"github.com/milvus-io/milvus/pkg/log"
-	"github.com/milvus-io/milvus/pkg/util"
-	"github.com/milvus-io/milvus/pkg/util/funcutil"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
+	"github.com/milvus-io/milvus/pkg/log"
+	"github.com/milvus-io/milvus/pkg/util"
+	"github.com/milvus-io/milvus/pkg/util/funcutil"
 )
 
 type PrivilegeFunc func(ctx context.Context, req interface{}) (context.Context, error)

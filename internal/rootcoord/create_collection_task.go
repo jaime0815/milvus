@@ -23,6 +23,8 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/golang/protobuf/proto"
+	"go.uber.org/zap"
+
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/milvuspb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/msgpb"
@@ -36,8 +38,6 @@ import (
 	"github.com/milvus-io/milvus/pkg/util/funcutil"
 	"github.com/milvus-io/milvus/pkg/util/merr"
 	"github.com/milvus-io/milvus/pkg/util/typeutil"
-	"github.com/samber/lo"
-	"go.uber.org/zap"
 )
 
 type collectionChannels struct {
@@ -52,6 +52,7 @@ type createCollectionTask struct {
 	collID         UniqueID
 	partIDs        []UniqueID
 	channels       collectionChannels
+	dbID           UniqueID
 	partitionNames []string
 }
 
@@ -76,6 +77,30 @@ func (t *createCollectionTask) validate() error {
 		return fmt.Errorf("shard num (%d) exceeds system limit (%d)", shardsNum, cfgShardLimit)
 	}
 
+	db2CollIDs := t.core.meta.ListAllAvailCollections(t.ctx)
+
+	collIDs, ok := db2CollIDs[t.dbID]
+	if !ok {
+		log.Warn("can not found DB ID", zap.String("collection", t.Req.GetCollectionName()), zap.String("dbName", t.Req.GetDbName()))
+		return fmt.Errorf("failed to create collection, can not found dbID:{%s}", t.Req.GetDbName())
+	}
+
+	maxColNumPerDB := Params.QuotaConfig.MaxCollectionNumPerDB.GetAsInt()
+	if len(collIDs) >= maxColNumPerDB {
+		log.Warn("unable to create collection because the number of collection has reached the limit in DB", zap.Int("maxCollectionNumPerDB", maxColNumPerDB))
+		return fmt.Errorf("exceeded the limit number of collections per DB, maxCollectionNumPerDB={%d}", maxColNumPerDB)
+	}
+
+	totalCollections := 0
+	for _, collIDs := range db2CollIDs {
+		totalCollections += len(collIDs)
+	}
+
+	maxCollectionNum := Params.QuotaConfig.MaxCollectionNum.GetAsInt()
+	if totalCollections >= maxCollectionNum {
+		log.Warn("unable to create collection because the number of collection has reached the limit", zap.Int("max_collection_num", maxCollectionNum))
+		return fmt.Errorf("exceeded the limit number of collections, limit={%d}", maxCollectionNum)
+	}
 	return nil
 }
 
@@ -287,6 +312,12 @@ func (t *createCollectionTask) assignChannels() error {
 }
 
 func (t *createCollectionTask) Prepare(ctx context.Context) error {
+	db, err := t.core.meta.GetDatabaseByName(ctx, t.Req.GetDbName(), typeutil.MaxTimestamp)
+	if err != nil {
+		return err
+	}
+	t.dbID = db.ID
+
 	if err := t.validate(); err != nil {
 		return err
 	}
@@ -376,6 +407,7 @@ func (t *createCollectionTask) Execute(ctx context.Context) error {
 
 	collInfo := model.Collection{
 		CollectionID:         collID,
+		DBID:                 t.dbID,
 		Name:                 t.schema.Name,
 		Description:          t.schema.Description,
 		AutoID:               t.schema.AutoID,
@@ -397,7 +429,7 @@ func (t *createCollectionTask) Execute(ctx context.Context) error {
 	// are not promised idempotent.
 	clone := collInfo.Clone()
 	// need double check in meta table if we can't promise the sequence execution.
-	existedCollInfo, err := t.core.meta.GetCollectionByName(ctx, t.Req.GetCollectionName(), typeutil.MaxTimestamp)
+	existedCollInfo, err := t.core.meta.GetCollectionByName(ctx, t.Req.GetDbName(), t.Req.GetCollectionName(), typeutil.MaxTimestamp)
 	if err == nil {
 		equal := existedCollInfo.Equal(*clone)
 		if !equal {
@@ -408,30 +440,10 @@ func (t *createCollectionTask) Execute(ctx context.Context) error {
 		return nil
 	}
 
-	// check collection number quota for the entire the instance
-	existedCollInfos, err := t.core.meta.ListCollections(ctx, typeutil.MaxTimestamp)
-	if err != nil {
-		log.Warn("fail to list collections for checking the collection count", zap.Error(err))
-		return fmt.Errorf("fail to list collections for checking the collection count")
-	}
-	maxCollectionNum := Params.QuotaConfig.MaxCollectionNum.GetAsInt()
-	if len(existedCollInfos) >= maxCollectionNum {
-		log.Warn("unable to create collection because the number of collection has reached the limit", zap.Int("max_collection_num", maxCollectionNum))
-		return merr.WrapErrCollectionResourceLimitExceeded(fmt.Sprintf("Failed to create collection, limit={%d}", maxCollectionNum))
-	}
-	// check collection number quota for DB
-	existedColsInDB := lo.Filter(existedCollInfos, func(collection *model.Collection, _ int) bool {
-		return t.Req.GetDbName() != "" && collection.DBName == t.Req.GetDbName()
-	})
-	maxColNumPerDB := Params.QuotaConfig.MaxCollectionNumPerDB.GetAsInt()
-	if len(existedColsInDB) >= maxColNumPerDB {
-		log.Warn("unable to create collection because the number of collection has reached the limit in DB", zap.Int("maxCollectionNumPerDB", maxColNumPerDB))
-		return merr.WrapErrCollectionResourceLimitExceeded(fmt.Sprintf("Failed to create collection, maxCollectionNumPerDB={%d}", maxColNumPerDB))
-	}
-
 	undoTask := newBaseUndoTask(t.core.stepExecutor)
 	undoTask.AddStep(&expireCacheStep{
 		baseStep:        baseStep{core: t.core},
+		dbName:          t.Req.GetDbName(),
 		collectionNames: []string{t.Req.GetCollectionName()},
 		collectionID:    InvalidCollectionID,
 		ts:              ts,

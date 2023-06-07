@@ -77,7 +77,7 @@ func (it *insertTask) getChannels() ([]pChan, error) {
 	if len(it.pChannels) != 0 {
 		return it.pChannels, nil
 	}
-	collID, err := globalMetaCache.GetCollectionID(it.ctx, it.insertMsg.CollectionName)
+	collID, err := globalMetaCache.GetCollectionID(it.ctx, it.insertMsg.GetDbName(), it.insertMsg.CollectionName)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func (it *insertTask) PreExecute(ctx context.Context) error {
 		return err
 	}
 
-	schema, err := globalMetaCache.GetCollectionSchema(ctx, collectionName)
+	schema, err := globalMetaCache.GetCollectionSchema(ctx, it.insertMsg.GetDbName(), collectionName)
 	if err != nil {
 		log.Error("get collection schema from global meta cache failed", zap.String("collectionName", collectionName), zap.Error(err))
 		return err
@@ -173,7 +173,7 @@ func (it *insertTask) PreExecute(ctx context.Context) error {
 		return err
 	}
 
-	partitionKeyMode, err := isPartitionKeyMode(ctx, collectionName)
+	partitionKeyMode, err := isPartitionKeyMode(ctx, it.insertMsg.GetDbName(), collectionName)
 	if err != nil {
 		log.Warn("check partition key mode failed", zap.String("collection name", collectionName), zap.Error(err))
 		return err
@@ -217,7 +217,7 @@ func (it *insertTask) Execute(ctx context.Context) error {
 	tr := timerecord.NewTimeRecorder(fmt.Sprintf("proxy execute insert %d", it.ID()))
 
 	collectionName := it.insertMsg.CollectionName
-	collID, err := globalMetaCache.GetCollectionID(ctx, collectionName)
+	collID, err := globalMetaCache.GetCollectionID(it.ctx, it.insertMsg.GetDbName(), it.insertMsg.CollectionName)
 	if err != nil {
 		return err
 	}

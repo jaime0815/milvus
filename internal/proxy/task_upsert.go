@@ -121,7 +121,7 @@ func (it *upsertTask) getChannels() ([]pChan, error) {
 	if len(it.pChannels) != 0 {
 		return it.pChannels, nil
 	}
-	collID, err := globalMetaCache.GetCollectionID(it.ctx, it.req.CollectionName)
+	collID, err := globalMetaCache.GetCollectionID(it.ctx, it.req.GetDbName(), it.req.CollectionName)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +226,7 @@ func (it *upsertTask) deletePreExecute(ctx context.Context) error {
 		log.Info("Invalid collection name", zap.Error(err))
 		return err
 	}
-	collID, err := globalMetaCache.GetCollectionID(ctx, collName)
+	collID, err := globalMetaCache.GetCollectionID(ctx, it.req.GetDbName(), collName)
 	if err != nil {
 		log.Info("Failed to get collection id", zap.Error(err))
 		return err
@@ -246,7 +246,7 @@ func (it *upsertTask) deletePreExecute(ctx context.Context) error {
 			log.Info("Invalid partition name", zap.String("partitionName", partName), zap.Error(err))
 			return err
 		}
-		partID, err := globalMetaCache.GetPartitionID(ctx, collName, partName)
+		partID, err := globalMetaCache.GetPartitionID(ctx, it.req.GetDbName(), collName, partName)
 		if err != nil {
 			log.Info("Failed to get partition id", zap.String("collectionName", collName), zap.String("partitionName", partName), zap.Error(err))
 			return err
@@ -279,7 +279,7 @@ func (it *upsertTask) PreExecute(ctx context.Context) error {
 		Timestamp: it.EndTs(),
 	}
 
-	schema, err := globalMetaCache.GetCollectionSchema(ctx, collectionName)
+	schema, err := globalMetaCache.GetCollectionSchema(ctx, it.req.GetDbName(), collectionName)
 	if err != nil {
 		log.Info("Failed to get collection schema",
 			zap.String("collectionName", collectionName),
@@ -288,7 +288,7 @@ func (it *upsertTask) PreExecute(ctx context.Context) error {
 	}
 	it.schema = schema
 
-	it.partitionKeyMode, err = isPartitionKeyMode(ctx, collectionName)
+	it.partitionKeyMode, err = isPartitionKeyMode(ctx, it.req.GetDbName(), collectionName)
 	if err != nil {
 		log.Warn("check partition key mode failed",
 			zap.String("collectionName", collectionName),
@@ -321,6 +321,7 @@ func (it *upsertTask) PreExecute(ctx context.Context) error {
 				FieldsData:     it.req.FieldsData,
 				NumRows:        uint64(it.req.NumRows),
 				Version:        msgpb.InsertDataVersion_ColumnBased,
+				DbName:         it.req.DbName,
 			},
 		},
 		DeleteMsg: &msgstream.DeleteMsg{
@@ -366,7 +367,7 @@ func (it *upsertTask) insertExecute(ctx context.Context, msgPack *msgstream.MsgP
 	defer tr.Elapse("insert execute done when insertExecute")
 
 	collectionName := it.upsertMsg.InsertMsg.CollectionName
-	collID, err := globalMetaCache.GetCollectionID(ctx, collectionName)
+	collID, err := globalMetaCache.GetCollectionID(ctx, it.req.GetDbName(), collectionName)
 	if err != nil {
 		return err
 	}

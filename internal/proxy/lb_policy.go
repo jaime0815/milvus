@@ -18,19 +18,21 @@ package proxy
 import (
 	"context"
 
+	"github.com/samber/lo"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/milvus-io/milvus/internal/types"
 	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/milvus-io/milvus/pkg/util/merr"
 	"github.com/milvus-io/milvus/pkg/util/retry"
 	"github.com/milvus-io/milvus/pkg/util/typeutil"
-	"github.com/samber/lo"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 )
 
 type executeFunc func(context.Context, UniqueID, types.QueryNode, ...string) error
 
 type ChannelWorkload struct {
+	db           string
 	collection   string
 	channel      string
 	shardLeaders []int64
@@ -40,6 +42,7 @@ type ChannelWorkload struct {
 }
 
 type CollectionWorkLoad struct {
+	db         string
 	collection string
 	nq         int64
 	exec       executeFunc
@@ -73,20 +76,20 @@ func (lb *LBPolicyImpl) selectNode(ctx context.Context, workload ChannelWorkload
 		return !excludeNodes.Contain(node)
 	}
 
-	getShardLeaders := func(collection string, channel string) ([]int64, error) {
-		shardLeaders, err := globalMetaCache.GetShards(ctx, false, collection)
+	getShardLeaders := func() ([]int64, error) {
+		shardLeaders, err := globalMetaCache.GetShards(ctx, false, workload.db, workload.collection)
 		if err != nil {
 			return nil, err
 		}
 
-		return lo.Map(shardLeaders[channel], func(node nodeInfo, _ int) int64 { return node.nodeID }), nil
+		return lo.Map(shardLeaders[workload.channel], func(node nodeInfo, _ int) int64 { return node.nodeID }), nil
 	}
 
 	availableNodes := lo.Filter(workload.shardLeaders, filterAvailableNodes)
 	targetNode, err := lb.balancer.SelectNode(availableNodes, workload.nq)
 	if err != nil {
-		globalMetaCache.DeprecateShardCache(workload.collection)
-		nodes, err := getShardLeaders(workload.collection, workload.channel)
+		globalMetaCache.DeprecateShardCache(workload.db, workload.collection)
+		nodes, err := getShardLeaders()
 		if err != nil || len(nodes) == 0 {
 			log.Warn("failed to get shard delegator",
 				zap.Error(err))
@@ -154,7 +157,7 @@ func (lb *LBPolicyImpl) ExecuteWithRetry(ctx context.Context, workload ChannelWo
 
 // Execute will execute collection workload in parallel
 func (lb *LBPolicyImpl) Execute(ctx context.Context, workload CollectionWorkLoad) error {
-	dml2leaders, err := globalMetaCache.GetShards(ctx, true, workload.collection)
+	dml2leaders, err := globalMetaCache.GetShards(ctx, true, workload.db, workload.collection)
 	if err != nil {
 		return err
 	}
@@ -165,6 +168,7 @@ func (lb *LBPolicyImpl) Execute(ctx context.Context, workload CollectionWorkLoad
 		nodes := lo.Map(nodes, func(node nodeInfo, _ int) int64 { return node.nodeID })
 		wg.Go(func() error {
 			err := lb.ExecuteWithRetry(ctx, ChannelWorkload{
+				db:           workload.db,
 				collection:   workload.collection,
 				channel:      channel,
 				shardLeaders: nodes,
