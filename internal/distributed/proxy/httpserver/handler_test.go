@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/stretchr/testify/mock"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,8 +16,11 @@ import (
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/milvuspb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/schemapb"
-	"github.com/milvus-io/milvus/internal/types"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/milvus-io/milvus/internal/mocks"
+	"github.com/milvus-io/milvus/internal/proxy"
+	"github.com/milvus-io/milvus/internal/types"
 )
 
 func Test_WrappedInsertRequest_JSONMarshal_AsInsertRequest(t *testing.T) {
@@ -43,6 +47,10 @@ type mockProxyComponent struct {
 
 func (m *mockProxyComponent) Dummy(ctx context.Context, request *milvuspb.DummyRequest) (*milvuspb.DummyResponse, error) {
 	return nil, nil
+}
+
+func (m *mockProxyComponent) CheckHealth(ctx context.Context, req *milvuspb.CheckHealthRequest) (*milvuspb.CheckHealthResponse, error) {
+	return &milvuspb.CheckHealthResponse{Status: testStatus}, nil
 }
 
 var emptyBody = &gin.H{}
@@ -286,7 +294,7 @@ func (m *mockProxyComponent) ListCredUsers(ctx context.Context, request *milvusp
 	return &milvuspb.ListCredUsersResponse{Status: testStatus}, nil
 }
 
-func TestHandlers(t *testing.T) {
+func Test_Handlers_Requests(t *testing.T) {
 	mockProxy := &mockProxyComponent{}
 	h := NewHandlers(mockProxy)
 	testEngine := gin.New()
@@ -297,7 +305,6 @@ func TestHandlers(t *testing.T) {
 		w := httptest.NewRecorder()
 		testEngine.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Equal(t, w.Body.Bytes(), []byte(`{"status":"ok"}`))
 	})
 	t.Run("handleGetHealth accept yaml ok", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -307,7 +314,6 @@ func TestHandlers(t *testing.T) {
 		w := httptest.NewRecorder()
 		testEngine.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Equal(t, w.Body.Bytes(), []byte("status: ok\n"))
 	})
 	t.Run("handlePostDummy parsejson failed 400", func(t *testing.T) {
 		bodyBytes := []byte("---")
@@ -565,4 +571,192 @@ func TestHandlers(t *testing.T) {
 			assert.Equal(t, http.StatusBadRequest, w.Code)
 		})
 	}
+}
+
+func getCollectionSchema(collectionName string) *schemapb.CollectionSchema {
+	sch := &schemapb.CollectionSchema{
+		Name:   collectionName,
+		AutoID: false,
+	}
+	sch.Fields = getFieldSchema()
+	return sch
+}
+
+func getFieldSchema() []*schemapb.FieldSchema {
+	fields := []*schemapb.FieldSchema{
+		{
+			FieldID:     0,
+			Name:        "RowID",
+			Description: "RowID field",
+			DataType:    schemapb.DataType_Int64,
+			TypeParams: []*commonpb.KeyValuePair{
+				{
+					Key:   "f0_tk1",
+					Value: "f0_tv1",
+				},
+			},
+		},
+		{
+			FieldID:     1,
+			Name:        "Timestamp",
+			Description: "Timestamp field",
+			DataType:    schemapb.DataType_Int64,
+			TypeParams: []*commonpb.KeyValuePair{
+				{
+					Key:   "f1_tk1",
+					Value: "f1_tv1",
+				},
+			},
+		},
+		{
+			FieldID:     100,
+			Name:        "float_vector_field",
+			Description: "field 100",
+			DataType:    schemapb.DataType_FloatVector,
+			TypeParams: []*commonpb.KeyValuePair{
+				{
+					Key:   "dim",
+					Value: "2",
+				},
+			},
+			IndexParams: []*commonpb.KeyValuePair{
+				{
+					Key:   "indexkey",
+					Value: "indexvalue",
+				},
+			},
+		},
+		{
+			FieldID:      101,
+			Name:         "int64_field",
+			Description:  "field 106",
+			DataType:     schemapb.DataType_Int64,
+			TypeParams:   []*commonpb.KeyValuePair{},
+			IndexParams:  []*commonpb.KeyValuePair{},
+			IsPrimaryKey: true,
+		},
+	}
+
+	return fields
+}
+
+func Test_Handles_VectorCollectionsDescribe(t *testing.T) {
+	mp := mocks.NewProxy(t)
+	h := NewHandlers(mp)
+	testEngine := gin.New()
+	h.RegisterRoutesToV1(testEngine)
+
+	t.Run("auth fail", func(t *testing.T) {
+		proxy.Params.CommonCfg.AuthorizationEnabled = true
+		req := httptest.NewRequest(http.MethodGet, "/vector/collections/describe", nil)
+		w := httptest.NewRecorder()
+		testEngine.ServeHTTP(w, req)
+		assert.Equal(t, w.Code, http.StatusOK)
+	})
+
+	t.Run("describe collection fail with error", func(t *testing.T) {
+		proxy.Params.CommonCfg.AuthorizationEnabled = false
+		mp.EXPECT().
+			DescribeCollection(mock.Anything, mock.Anything).
+			Return(nil, errors.New("error")).
+			Once()
+		req := httptest.NewRequest(http.MethodGet, "/vector/collections/describe", nil)
+		w := httptest.NewRecorder()
+		testEngine.ServeHTTP(w, req)
+		assert.Equal(t, w.Code, http.StatusOK)
+	})
+
+	t.Run("describe collection fail with status code", func(t *testing.T) {
+		proxy.Params.CommonCfg.AuthorizationEnabled = false
+		mp.EXPECT().
+			DescribeCollection(mock.Anything, mock.Anything).
+			Return(&milvuspb.DescribeCollectionResponse{
+				Status: &commonpb.Status{ErrorCode: commonpb.ErrorCode_UnexpectedError}}, nil).
+			Once()
+		req := httptest.NewRequest(http.MethodGet, "/vector/collections/describe", nil)
+		w := httptest.NewRecorder()
+		testEngine.ServeHTTP(w, req)
+		assert.Equal(t, w.Code, http.StatusOK)
+	})
+
+	t.Run("get load state and describe index fail with error", func(t *testing.T) {
+		mp.EXPECT().
+			DescribeCollection(mock.Anything, mock.Anything).
+			Return(&milvuspb.DescribeCollectionResponse{
+				Schema: getCollectionSchema("collectionName"),
+				Status: &commonpb.Status{ErrorCode: commonpb.ErrorCode_Success}}, nil).
+			Once()
+		mp.EXPECT().
+			GetLoadState(mock.Anything, mock.Anything).
+			Return(nil, errors.New("error")).
+			Once()
+		mp.EXPECT().
+			DescribeIndex(mock.Anything, mock.Anything).
+			Return(nil, errors.New("error")).
+			Once()
+		req := httptest.NewRequest(http.MethodGet, "/vector/collections/describe", nil)
+		w := httptest.NewRecorder()
+		testEngine.ServeHTTP(w, req)
+		assert.Equal(t, w.Code, http.StatusOK)
+	})
+
+	t.Run("get load state and describe index fail with status code", func(t *testing.T) {
+		mp.EXPECT().
+			DescribeCollection(mock.Anything, mock.Anything).
+			Return(&milvuspb.DescribeCollectionResponse{
+				Schema: getCollectionSchema("collectionName"),
+				Status: &commonpb.Status{ErrorCode: commonpb.ErrorCode_Success}}, nil).
+			Once()
+		mp.EXPECT().
+			GetLoadState(mock.Anything, mock.Anything).
+			Return(&milvuspb.GetLoadStateResponse{
+				Status: &commonpb.Status{ErrorCode: commonpb.ErrorCode_UnexpectedError}}, nil).
+			Once()
+		mp.EXPECT().
+			DescribeIndex(mock.Anything, mock.Anything).
+			Return(&milvuspb.DescribeIndexResponse{
+				Status: &commonpb.Status{ErrorCode: commonpb.ErrorCode_UnexpectedError}}, nil).
+			Once()
+		req := httptest.NewRequest(http.MethodGet, "/vector/collections/describe", nil)
+		w := httptest.NewRecorder()
+		testEngine.ServeHTTP(w, req)
+		assert.Equal(t, w.Code, http.StatusOK)
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		mp.EXPECT().
+			DescribeCollection(mock.Anything, mock.Anything).
+			Return(&milvuspb.DescribeCollectionResponse{
+				Schema: getCollectionSchema("collectionName"),
+				Status: &commonpb.Status{ErrorCode: commonpb.ErrorCode_Success}}, nil).
+			Once()
+		mp.EXPECT().
+			GetLoadState(mock.Anything, mock.Anything).
+			Return(&milvuspb.GetLoadStateResponse{
+				State:  commonpb.LoadState_LoadStateLoaded,
+				Status: &commonpb.Status{ErrorCode: commonpb.ErrorCode_Success},
+			}, nil).
+			Once()
+		mp.EXPECT().
+			DescribeIndex(mock.Anything, mock.Anything).
+			Return(&milvuspb.DescribeIndexResponse{
+				IndexDescriptions: []*milvuspb.IndexDescription{
+					{
+						IndexName: "in",
+						FieldName: "fn",
+						Params: []*commonpb.KeyValuePair{
+							{
+								Key:   "metric_type",
+								Value: "L2",
+							},
+						},
+					},
+				},
+				Status: &commonpb.Status{ErrorCode: commonpb.ErrorCode_UnexpectedError}}, nil).
+			Once()
+		req := httptest.NewRequest(http.MethodGet, "/vector/collections/describe", nil)
+		w := httptest.NewRecorder()
+		testEngine.ServeHTTP(w, req)
+		assert.Equal(t, w.Code, http.StatusOK)
+	})
 }

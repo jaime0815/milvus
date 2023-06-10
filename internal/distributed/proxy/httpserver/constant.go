@@ -32,8 +32,9 @@ const (
 
 	HTTPReturnIndexName        = "indexName"
 	HTTPReturnIndexField       = "fieldName"
-	HTTPReturnIndexMetricsType = "metricType"
+	HTTPReturnIndexMetricsType = "metric_type"
 
+	MetricType              = "metricType"
 	DefaultMetricType       = "L2"
 	DefaultPrimaryFieldName = "id"
 	DefaultVectorFieldName  = "vector"
