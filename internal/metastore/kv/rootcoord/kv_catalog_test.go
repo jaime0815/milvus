@@ -1973,6 +1973,7 @@ func TestRBAC_Grant(t *testing.T) {
 		validRole       = "role1"
 		invalidRole     = "role2"
 		keyNotExistRole = "role3"
+		errorSaveRole   = "role100"
 
 		validUser   = "user1"
 		invalidUser = "user2"
@@ -1992,9 +1993,14 @@ func TestRBAC_Grant(t *testing.T) {
 		validRoleValue := crypto.MD5(validRoleKey)
 
 		invalidRoleKey := funcutil.HandleTenantForEtcdKey(GranteePrefix, tenant, fmt.Sprintf("%s/%s/%s", invalidRole, object, objName))
+		invalidRoleKeyWithDb := funcutil.HandleTenantForEtcdKey(GranteePrefix, tenant, fmt.Sprintf("%s/%s/%s", invalidRole, object, funcutil.CombineObjectName(util.DefaultDBName, objName)))
 
 		keyNotExistRoleKey := funcutil.HandleTenantForEtcdKey(GranteePrefix, tenant, fmt.Sprintf("%s/%s/%s", keyNotExistRole, object, objName))
-		keyNotExistRoleValue := crypto.MD5(keyNotExistRoleKey)
+		keyNotExistRoleKeyWithDb := funcutil.HandleTenantForEtcdKey(GranteePrefix, tenant, fmt.Sprintf("%s/%s/%s", keyNotExistRole, object, funcutil.CombineObjectName(util.DefaultDBName, objName)))
+		keyNotExistRoleValueWithDb := crypto.MD5(keyNotExistRoleKeyWithDb)
+
+		errorSaveRoleKey := funcutil.HandleTenantForEtcdKey(GranteePrefix, tenant, fmt.Sprintf("%s/%s/%s", errorSaveRole, object, objName))
+		errorSaveRoleKeyWithDb := funcutil.HandleTenantForEtcdKey(GranteePrefix, tenant, fmt.Sprintf("%s/%s/%s", errorSaveRole, object, funcutil.CombineObjectName(util.DefaultDBName, objName)))
 
 		// Mock return in kv_catalog.go:AlterGrant:L815
 		kvmock.EXPECT().Load(validRoleKey).Call.
@@ -2004,16 +2010,33 @@ func TestRBAC_Grant(t *testing.T) {
 			Return("", func(key string) error {
 				return fmt.Errorf("mock load error, key=%s", key)
 			})
+		kvmock.EXPECT().Load(invalidRoleKeyWithDb).Call.
+			Return("", func(key string) error {
+				return fmt.Errorf("mock load error, key=%s", key)
+			})
 		kvmock.EXPECT().Load(keyNotExistRoleKey).Call.
 			Return("", func(key string) error {
 				return common.NewKeyNotExistError(key)
 			})
-		kvmock.EXPECT().Save(keyNotExistRoleKey, mock.Anything).Return(nil)
+		kvmock.EXPECT().Load(keyNotExistRoleKeyWithDb).Call.
+			Return("", func(key string) error {
+				return common.NewKeyNotExistError(key)
+			})
+		kvmock.EXPECT().Load(errorSaveRoleKey).Call.
+			Return("", func(key string) error {
+				return common.NewKeyNotExistError(key)
+			})
+		kvmock.EXPECT().Load(errorSaveRoleKeyWithDb).Call.
+			Return("", func(key string) error {
+				return common.NewKeyNotExistError(key)
+			})
+		kvmock.EXPECT().Save(keyNotExistRoleKeyWithDb, mock.Anything).Return(nil)
+		kvmock.EXPECT().Save(errorSaveRoleKeyWithDb, mock.Anything).Return(errors.New("mock save error role"))
 
 		validPrivilegeKey := funcutil.HandleTenantForEtcdKey(GranteeIDPrefix, tenant, fmt.Sprintf("%s/%s", validRoleValue, validPrivilege))
 		invalidPrivilegeKey := funcutil.HandleTenantForEtcdKey(GranteeIDPrefix, tenant, fmt.Sprintf("%s/%s", validRoleValue, invalidPrivilege))
 		keyNotExistPrivilegeKey := funcutil.HandleTenantForEtcdKey(GranteeIDPrefix, tenant, fmt.Sprintf("%s/%s", validRoleValue, keyNotExistPrivilege))
-		keyNotExistPrivilegeKey2 := funcutil.HandleTenantForEtcdKey(GranteeIDPrefix, tenant, fmt.Sprintf("%s/%s", keyNotExistRoleValue, keyNotExistPrivilege2))
+		keyNotExistPrivilegeKey2WithDb := funcutil.HandleTenantForEtcdKey(GranteeIDPrefix, tenant, fmt.Sprintf("%s/%s", keyNotExistRoleValueWithDb, keyNotExistPrivilege2))
 
 		// Mock return in kv_catalog.go:AlterGrant:L838
 		kvmock.EXPECT().Load(validPrivilegeKey).Call.Return("", nil)
@@ -2025,7 +2048,7 @@ func TestRBAC_Grant(t *testing.T) {
 			Return("", func(key string) error {
 				return common.NewKeyNotExistError(key)
 			})
-		kvmock.EXPECT().Load(keyNotExistPrivilegeKey2).Call.
+		kvmock.EXPECT().Load(keyNotExistPrivilegeKey2WithDb).Call.
 			Return("", func(key string) error {
 				return common.NewKeyNotExistError(key)
 			})
@@ -2054,9 +2077,11 @@ func TestRBAC_Grant(t *testing.T) {
 				{false, validUser, invalidRole, invalidPrivilege, false, "grant invalid role with invalid privilege"},
 				{false, validUser, invalidRole, validPrivilege, false, "grant invalid role with valid privilege"},
 				{false, validUser, invalidRole, keyNotExistPrivilege, false, "grant invalid role with not exist privilege"},
+				{false, validUser, errorSaveRole, keyNotExistPrivilege, false, "grant error role with not exist privilege"},
 				// not exist role
 				{false, validUser, keyNotExistRole, validPrivilege, true, "grant not exist role with exist privilege"},
 				{true, validUser, keyNotExistRole, keyNotExistPrivilege2, false, "grant not exist role with exist privilege"},
+				{true, validUser, keyNotExistRole, keyNotExistPrivilege2, false, "grant not exist role with not exist privilege"},
 			}
 
 			for _, test := range tests {
@@ -2121,6 +2146,7 @@ func TestRBAC_Grant(t *testing.T) {
 						Role:       &milvuspb.RoleEntity{Name: test.roleName},
 						Object:     &milvuspb.ObjectEntity{Name: object},
 						ObjectName: objName,
+						DbName:     util.DefaultDBName,
 						Grantor: &milvuspb.GrantorEntity{
 							User:      &milvuspb.UserEntity{Name: test.userName},
 							Privilege: &milvuspb.PrivilegeEntity{Name: test.privilegeName}},
@@ -2185,6 +2211,10 @@ func TestRBAC_Grant(t *testing.T) {
 			fmt.Sprintf("%s/%s/%s", "role1", "obj1", "obj_name1"))
 		kvmock.EXPECT().Load(validGranteeKey).Call.
 			Return(func(key string) string { return crypto.MD5(key) }, nil)
+		validGranteeKey2 := funcutil.HandleTenantForEtcdKey(GranteePrefix, tenant,
+			fmt.Sprintf("%s/%s/%s", "role1", "obj1", "foo.obj_name2"))
+		kvmock.EXPECT().Load(validGranteeKey2).Call.
+			Return(func(key string) string { return crypto.MD5(key) }, nil)
 		kvmock.EXPECT().Load(mock.Anything).Call.
 			Return("", errors.New("mock Load error"))
 
@@ -2235,10 +2265,23 @@ func TestRBAC_Grant(t *testing.T) {
 				Object:     &milvuspb.ObjectEntity{Name: "obj1"},
 				ObjectName: "obj_name1",
 				Role:       &milvuspb.RoleEntity{Name: "role1"}}, "valid role with valid entity"},
+			{true, &milvuspb.GrantEntity{
+				Object:     &milvuspb.ObjectEntity{Name: "obj1"},
+				ObjectName: "obj_name2",
+				DbName:     "foo",
+				Role:       &milvuspb.RoleEntity{Name: "role1"}}, "valid role and dbName with valid entity"},
+			{false, &milvuspb.GrantEntity{
+				Object:     &milvuspb.ObjectEntity{Name: "obj1"},
+				ObjectName: "obj_name2",
+				DbName:     "foo2",
+				Role:       &milvuspb.RoleEntity{Name: "role1"}}, "valid role and invalid dbName with valid entity"},
 		}
 
 		for _, test := range tests {
 			t.Run(test.description, func(t *testing.T) {
+				if test.entity.DbName == "" {
+					test.entity.DbName = util.DefaultDBName
+				}
 				grants, err := c.ListGrant(ctx, tenant, test.entity)
 				if test.isValid {
 					assert.NoError(t, err)
@@ -2334,10 +2377,10 @@ func TestRBAC_Grant(t *testing.T) {
 					assert.NoError(t, err)
 					assert.Equal(t, 4, len(policy))
 					ps := []string{
-						funcutil.PolicyForPrivilege("role1", "obj1", "obj_name1", "PrivilegeLoad"),
-						funcutil.PolicyForPrivilege("role1", "obj1", "obj_name1", "PrivilegeRelease"),
-						funcutil.PolicyForPrivilege("role2", "obj2", "obj_name2", "PrivilegeLoad"),
-						funcutil.PolicyForPrivilege("role2", "obj2", "obj_name2", "PrivilegeRelease"),
+						funcutil.PolicyForPrivilege("role1", "obj1", "obj_name1", "PrivilegeLoad", "default"),
+						funcutil.PolicyForPrivilege("role1", "obj1", "obj_name1", "PrivilegeRelease", "default"),
+						funcutil.PolicyForPrivilege("role2", "obj2", "obj_name2", "PrivilegeLoad", "default"),
+						funcutil.PolicyForPrivilege("role2", "obj2", "obj_name2", "PrivilegeRelease", "default"),
 					}
 					assert.ElementsMatch(t, ps, policy)
 				} else {

@@ -549,6 +549,7 @@ func (c *Core) initRbac() error {
 			Role:       &milvuspb.RoleEntity{Name: util.RolePublic},
 			Object:     &milvuspb.ObjectEntity{Name: commonpb.ObjectType_Global.String()},
 			ObjectName: util.AnyWord,
+			DbName:     util.AnyWord,
 			Grantor: &milvuspb.GrantorEntity{
 				User:      &milvuspb.UserEntity{Name: util.UserRoot},
 				Privilege: &milvuspb.PrivilegeEntity{Name: globalPrivilege},
@@ -563,6 +564,7 @@ func (c *Core) initRbac() error {
 			Role:       &milvuspb.RoleEntity{Name: util.RolePublic},
 			Object:     &milvuspb.ObjectEntity{Name: commonpb.ObjectType_Collection.String()},
 			ObjectName: util.AnyWord,
+			DbName:     util.AnyWord,
 			Grantor: &milvuspb.GrantorEntity{
 				User:      &milvuspb.UserEntity{Name: util.UserRoot},
 				Privilege: &milvuspb.PrivilegeEntity{Name: collectionPrivilege},
@@ -2586,7 +2588,7 @@ func (c *Core) OperatePrivilege(ctx context.Context, in *milvuspb.OperatePrivile
 		}
 		if err := c.proxyClientManager.RefreshPolicyInfoCache(ctx, &proxypb.RefreshPolicyInfoCacheRequest{
 			OpType: opType,
-			OpKey:  funcutil.PolicyForPrivilege(in.Entity.Role.Name, in.Entity.Object.Name, in.Entity.ObjectName, in.Entity.Grantor.Privilege.Name),
+			OpKey:  funcutil.PolicyForPrivilege(in.Entity.Role.Name, in.Entity.Object.Name, in.Entity.ObjectName, in.Entity.Grantor.Privilege.Name, in.Entity.DbName),
 		}); err != nil {
 			errMsg := "fail to refresh policy info cache"
 			log.Error(errMsg, zap.Any("in", in), zap.Error(err))
