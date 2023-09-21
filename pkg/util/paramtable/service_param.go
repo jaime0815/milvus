@@ -696,7 +696,7 @@ func (k *KafkaConfig) Init(base *BaseTable) {
 
 	k.ReadTimeout = ParamItem{
 		Key:          "kafka.readTimeout",
-		DefaultValue: "3",
+		DefaultValue: "5",
 		Version:      "2.3.1",
 		Export:       true,
 	}
