@@ -11,7 +11,6 @@ import (
 	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/milvus-io/milvus/pkg/mq/msgstream/mqwrapper"
 	"github.com/milvus-io/milvus/pkg/util/merr"
-	"github.com/milvus-io/milvus/pkg/util/paramtable"
 )
 
 type Consumer struct {
@@ -141,8 +140,7 @@ func (kc *Consumer) Chan() <-chan mqwrapper.Message {
 					}
 					return
 				default:
-					readTimeout := paramtable.Get().KafkaCfg.ReadTimeout.GetAsDuration(time.Second)
-					e, err := kc.c.ReadMessage(readTimeout)
+					e, err := kc.c.ReadMessage(3 * time.Second)
 					if err != nil {
 						// if we failed to read message in 30 Seconds, print out a warn message since there should always be a tt
 						log.Warn("consume msg failed", zap.Any("topic", kc.topic), zap.String("groupID", kc.groupID), zap.Error(err))
