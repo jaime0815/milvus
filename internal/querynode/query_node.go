@@ -449,6 +449,8 @@ func (node *QueryNode) Stop() error {
 			}
 		}
 
+		log.Info("All channel and segment have been released!")
+
 		node.UpdateStateCode(commonpb.StateCode_Abnormal)
 		node.rpcLock.Lock()
 		defer node.rpcLock.Unlock()
@@ -463,6 +465,7 @@ func (node *QueryNode) Stop() error {
 			node.metaReplica.freeAll()
 		}
 
+		log.Info("QueryNode  ShardClusterService to close")
 		if node.ShardClusterService != nil {
 			node.ShardClusterService.close()
 		}
@@ -471,6 +474,7 @@ func (node *QueryNode) Stop() error {
 			node.queryShardService.close()
 		}
 
+		log.Info("QueryNode  session to close")
 		if node.session != nil {
 			node.session.Stop()
 		}

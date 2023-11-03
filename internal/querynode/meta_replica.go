@@ -30,6 +30,9 @@ import (
 	"sync"
 
 	"github.com/milvus-io/milvus-proto/go-api/v2/schemapb"
+	"github.com/samber/lo"
+	"go.uber.org/zap"
+
 	"github.com/milvus-io/milvus/internal/common"
 	"github.com/milvus-io/milvus/internal/log"
 	"github.com/milvus-io/milvus/internal/metrics"
@@ -37,8 +40,6 @@ import (
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
 	"github.com/milvus-io/milvus/internal/proto/querypb"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
-	"github.com/samber/lo"
-	"go.uber.org/zap"
 )
 
 var (
@@ -880,6 +881,8 @@ func (replica *metaReplica) getExcludedSegments(collectionID UniqueID) ([]*datap
 
 // freeAll will free all meta info from collectionReplica
 func (replica *metaReplica) freeAll() {
+	log.Info("start metaReplica freeAll ")
+
 	replica.mu.Lock()
 	defer replica.mu.Unlock()
 
@@ -891,6 +894,7 @@ func (replica *metaReplica) freeAll() {
 	replica.partitions = make(map[UniqueID]*Partition)
 	replica.growingSegments = make(map[UniqueID]*Segment)
 	replica.sealedSegments = make(map[UniqueID]*Segment)
+	log.Info("end metaReplica freeAll ")
 }
 
 func (replica *metaReplica) addSegmentsLoadingList(segmentIDs []UniqueID) {

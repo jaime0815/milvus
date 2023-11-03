@@ -30,6 +30,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
+
 	"github.com/milvus-io/milvus/internal/log"
 	"github.com/milvus-io/milvus/internal/metrics"
 	"github.com/milvus-io/milvus/internal/proto/internalpb"
@@ -132,6 +133,8 @@ func (s *searchTask) searchOnHistorical() error {
 		return errors.New("search context timeout")
 	}
 
+	log.Ctx(ctx).Info("searchTask searchOnHistorical", zap.Int64("collection", s.CollectionID))
+
 	// check if collection has been released, check streaming since it's released first
 	_, err := s.QS.metaReplica.getCollectionByID(s.CollectionID)
 	if err != nil {
@@ -144,6 +147,7 @@ func (s *searchTask) searchOnHistorical() error {
 		return fmt.Errorf("retrieve failed, collection has been released, collectionID = %d", s.CollectionID)
 	}
 
+	log.Ctx(ctx).Info("searchTask searchOnHistorical newSearchRequest", zap.Int64("collection", s.CollectionID))
 	segmentIDs := s.req.GetSegmentIDs()
 	searchReq, err2 := newSearchRequest(s.QS.collection, s.req, s.PlaceholderGroup)
 	if err2 != nil {
@@ -155,11 +159,15 @@ func (s *searchTask) searchOnHistorical() error {
 	if err != nil {
 		return err
 	}
+
+	log.Ctx(ctx).Info("searchTask searchOnHistorical finished", zap.Int64("collection", s.CollectionID))
+
 	defer deleteSearchResults(partResults)
 	return s.reduceResults(ctx, searchReq, partResults)
 }
 
 func (s *searchTask) Execute(ctx context.Context) error {
+	log.Ctx(ctx).Info("searchTask Execute", zap.Int64("collection", s.CollectionID))
 	if s.DataScope == querypb.DataScope_Streaming {
 		return s.searchOnStreaming()
 	} else if s.DataScope == querypb.DataScope_Historical {

@@ -31,6 +31,8 @@ func validateOnHistoricalReplica(ctx context.Context, replica ReplicaInterface, 
 	var err error
 	var searchPartIDs []UniqueID
 
+	log.Ctx(ctx).Info("start validate on historical replica", zap.Int64("collectionID", collectionID), zap.Int64s("partitionIDs", partitionIDs), zap.Int64s("segmentIDs", segmentIDs))
+
 	// no partition id specified, get all partition ids in collection
 	if len(partitionIDs) == 0 {
 		searchPartIDs, err = replica.getPartitionIDs(collectionID)
