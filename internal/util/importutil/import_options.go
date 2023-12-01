@@ -23,8 +23,9 @@ import (
 	"strings"
 
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
+	"github.com/milvus-io/milvus/internal/log"
 	"github.com/milvus-io/milvus/internal/util/funcutil"
-	"github.com/milvus-io/milvus/internal/util/tsoutil"
+	"go.uber.org/zap"
 )
 
 // Extra option keys to pass through import API
@@ -97,17 +98,18 @@ func ParseTSFromOptions(options []*commonpb.KeyValuePair) (uint64, uint64, error
 	value, ok := importOptions[StartTs]
 	if ok {
 		pTs, _ := strconv.ParseInt(value, 10, 64)
-		tsStart = tsoutil.ComposeTS(pTs, 0)
+		tsStart = uint64(pTs)
 	} else {
 		tsStart = 0
 	}
 	value, ok = importOptions[EndTs]
 	if ok {
 		pTs, _ := strconv.ParseInt(value, 10, 64)
-		tsEnd = tsoutil.ComposeTS(pTs, 0)
+		tsEnd = uint64(pTs)
 	} else {
 		tsEnd = math.MaxUint64
 	}
+	log.Info("parse ts from options", zap.Uint64("start_ts", tsStart), zap.Uint64("end_ts", tsEnd))
 	return tsStart, tsEnd, nil
 }
 
