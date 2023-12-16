@@ -26,7 +26,9 @@ import (
 	"time"
 
 	"github.com/cockroachdb/errors"
+	"github.com/golang/protobuf/proto"
 	"github.com/samber/lo"
+	"github.com/tidwall/gjson"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -4293,7 +4295,8 @@ func (node *Proxy) GetMetrics(ctx context.Context, req *milvuspb.GetMetricsReque
 		}, nil
 	}
 
-	metricType, err := metricsinfo.ParseMetricType(req.Request)
+	ret := gjson.Parse(req.GetRequest())
+	metricType, err := metricsinfo.ParseMetricRequestType(ret)
 	if err != nil {
 		log.Warn("Proxy.GetMetrics failed to parse metric type",
 			zap.Int64("nodeID", paramtable.GetNodeID()),
@@ -4356,7 +4359,8 @@ func (node *Proxy) GetProxyMetrics(ctx context.Context, req *milvuspb.GetMetrics
 		}, nil
 	}
 
-	metricType, err := metricsinfo.ParseMetricType(req.Request)
+	ret := gjson.Parse(req.GetRequest())
+	metricType, err := metricsinfo.ParseMetricRequestType(ret)
 	if err != nil {
 		log.Warn("Proxy.GetProxyMetrics failed to parse metric type",
 			zap.Error(err))
@@ -6418,4 +6422,47 @@ func (node *Proxy) ListImports(ctx context.Context, req *internalpb.ListImportsR
 func DeregisterSubLabel(subLabel string) {
 	rateCol.DeregisterSubLabel(internalpb.RateType_DQLQuery.String(), subLabel)
 	rateCol.DeregisterSubLabel(internalpb.RateType_DQLSearch.String(), subLabel)
+}
+
+func (node *Proxy) RegisterRestRouter(router gin.IRouter) {
+	// Cluster request
+	router.GET("/_cluster/info", getClusterInfo(node))
+	router.GET("/_cluster/configs", getConfigs(nil))
+	router.GET("/_cluster/clients", getConnectedClients)
+
+	// Node request
+	router.GET("/_qnode/stats", nil)
+	router.GET("/_qnode/segments", nil)
+	router.GET("/_qnode/channels", nil)
+	router.GET("/_qnode/collections", nil)
+	router.GET("/_qnode/replica", nil)
+
+	// Database request
+	router.GET("/_db/stats", nil)
+	router.GET("/_db/x/collections", nil)
+
+	// Collection request
+	router.GET("/_qcollection/stats")
+	router.GET("/_qcollection/segments")
+	router.GET("/_qcollection/channels")
+
+	router.GET("/_dcollection/stats")
+	router.GET("/_dcollection/segments")
+	router.GET("/_dcollection/channels")
+
+	// Partition request
+	router.GET("/_partition/stats")
+
+	// Segment request
+	router.GET("/_segment/stats")
+
+	// Replica request
+	router.GET("/_replica/stats")
+
+	// Channel request
+	router.GET("/_channel/stats")
+
+	// Task request
+	router.GET("/_task/all")
+
 }

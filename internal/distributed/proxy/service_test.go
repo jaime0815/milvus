@@ -31,6 +31,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/gin-gonic/gin"
+	"github.com/milvus-io/milvus/internal/util/mhttp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
@@ -1176,7 +1177,7 @@ func TestHttpAuthenticate(t *testing.T) {
 		defer hookutil.SetMockAPIHook("", nil)
 		ctx.Request.Header.Set("Authorization", "Bearer 123456")
 		authenticate(ctx)
-		ctxName, _ := ctx.Get(httpserver.ContextUsername)
+		ctxName, _ := ctx.Get(mhttp.ContextUsername)
 		assert.Equal(t, "foo", ctxName)
 	}
 }

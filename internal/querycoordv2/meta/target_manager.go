@@ -18,6 +18,7 @@ package meta
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"runtime"
 	"sync"
@@ -715,4 +716,32 @@ func (mgr *TargetManager) CanSegmentBeMoved(collectionID, segmentID int64) bool 
 	}
 
 	return false
+}
+
+func (mgr *TargetManager) GetTargetJSON(scope TargetScope, verbose bool) (string, error) {
+	mgr.rwMutex.RLock()
+	defer mgr.rwMutex.RUnlock()
+
+	ret := mgr.getTarget(scope)
+	if verbose {
+		v, err := json.Marshal(ret)
+		return string(v), err
+	}
+
+	collectionTargetMap := lo.MapValues(
+		ret.collectionTargetMap,
+		func(v *CollectionTarget, k int64) *CollectionTarget {
+			return v.GetReducedCollectionTarget()
+		},
+	)
+	v, err := json.Marshal(&target{collectionTargetMap: collectionTargetMap})
+	return string(v), err
+}
+
+func (mgr *TargetManager) getTarget(scope TargetScope) *target {
+	if scope == CurrentTarget {
+		return mgr.current
+	}
+
+	return mgr.next
 }

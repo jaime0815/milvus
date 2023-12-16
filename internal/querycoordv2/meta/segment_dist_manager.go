@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"encoding/json"
 	"sync"
 
 	"github.com/samber/lo"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/milvus-io/milvus/internal/proto/datapb"
 	"github.com/milvus-io/milvus/internal/proto/querypb"
+	"github.com/milvus-io/milvus/internal/util/metrics"
 	"github.com/milvus-io/milvus/pkg/util/typeutil"
 )
 
@@ -118,10 +120,10 @@ func WithChannel(channelName string) SegmentDistFilter {
 
 type Segment struct {
 	*datapb.SegmentInfo
-	Node               int64                             // Node the segment is in
-	Version            int64                             // Version is the timestamp of loading segment
-	LastDeltaTimestamp uint64                            // The timestamp of the last delta record
-	IndexInfo          map[int64]*querypb.FieldIndexInfo // index info of loaded segment
+	Node               int64                             `json:"nodeID,omitempty"`             // Node the segment is in
+	Version            int64                             `json:"version,omitempty"`            // Version is the timestamp of loading segment
+	LastDeltaTimestamp uint64                            `json:"lastDeltaTimestamp,omitempty"` // The timestamp of the last delta record
+	IndexInfo          map[int64]*querypb.FieldIndexInfo `json:"fieldIDToIndexInfo,omitempty"`          // index info of loaded segment
 }
 
 func SegmentFromInfo(info *datapb.SegmentInfo) *Segment {
@@ -132,9 +134,24 @@ func SegmentFromInfo(info *datapb.SegmentInfo) *Segment {
 
 func (segment *Segment) Clone() *Segment {
 	return &Segment{
-		SegmentInfo: proto.Clone(segment.SegmentInfo).(*datapb.SegmentInfo),
-		Node:        segment.Node,
-		Version:     segment.Version,
+		SegmentInfo:        proto.Clone(segment.SegmentInfo).(*datapb.SegmentInfo),
+		Node:               segment.Node,
+		Version:            segment.Version,
+		LastDeltaTimestamp: segment.LastDeltaTimestamp,
+		IndexInfo:          segment.IndexInfo,
+	}
+}
+
+func (segment *Segment) GetReducedSegment() *Segment {
+	s := segment.Clone()
+	return &Segment{
+		SegmentInfo:        metrics.PruneSegmentInfo(s.SegmentInfo),
+		Node:               s.Node,
+		Version:            s.Version,
+		LastDeltaTimestamp: s.LastDeltaTimestamp,
+		IndexInfo: lo.MapValues(s.IndexInfo, func(v *querypb.FieldIndexInfo, k int64) *querypb.FieldIndexInfo {
+			return metrics.PruneFieldIndexInfo(v)
+		}),
 	}
 }
 
@@ -142,7 +159,7 @@ type SegmentDistManager struct {
 	rwmutex sync.RWMutex
 
 	// nodeID -> []*Segment
-	segments map[typeutil.UniqueID]nodeSegments
+	segments map[typeutil.UniqueID]nodeSegments `json:"nodeIDToSegments,omitempty"`
 }
 
 type nodeSegments struct {
@@ -226,4 +243,25 @@ func (m *SegmentDistManager) GetByFilter(filters ...SegmentDistFilter) []*Segmen
 		ret = append(ret, nodeSegments.Filter(criterion, mergedFilters)...)
 	}
 	return ret
+}
+
+
+func (m *SegmentDistManager) GetSegmentDistJSON(verbose bool) (string, error) {
+	m.rwmutex.RLock()
+	m.rwmutex.RUnlock()
+
+	var sdm *SegmentDistManager
+	if verbose {
+		sdm = m
+	} else {
+		segments := lo.MapValues(m.segments, func(v []*Segment, k UniqueID) []*Segment {
+			return lo.Map(v, func(s *Segment, i int) *Segment {
+				return s.GetReducedSegment()
+			})
+		})
+		sdm = &SegmentDistManager{segments: segments}
+	}
+
+	v, err := json.Marshal(sdm)
+	return string(v), err
 }

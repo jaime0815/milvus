@@ -17,12 +17,14 @@
 package meta
 
 import (
+	"encoding/json"
 	"sync"
 
 	"github.com/samber/lo"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/milvus-io/milvus/internal/proto/datapb"
+	"github.com/milvus-io/milvus/internal/util/metrics"
 	"github.com/milvus-io/milvus/pkg/util/typeutil"
 )
 
@@ -112,8 +114,8 @@ func WithChannelName2Channel(channelName string) ChannelDistFilter {
 
 type DmChannel struct {
 	*datapb.VchannelInfo
-	Node    int64
-	Version int64
+	Node    int64 `json:"nodeID,omitempty"`
+	Version int64 `json:"version,omitempty"`
 }
 
 func DmChannelFromVChannel(channel *datapb.VchannelInfo) *DmChannel {
@@ -127,6 +129,15 @@ func (channel *DmChannel) Clone() *DmChannel {
 		VchannelInfo: proto.Clone(channel.VchannelInfo).(*datapb.VchannelInfo),
 		Node:         channel.Node,
 		Version:      channel.Version,
+	}
+}
+
+func (channel *DmChannel) GetReducedDmChannel() *DmChannel {
+	o := channel.Clone()
+	return &DmChannel{
+		VchannelInfo: metrics.PruneVChannelInfo(o.VchannelInfo),
+		Node:         o.Node,
+		Version:      o.Version,
 	}
 }
 
@@ -166,7 +177,7 @@ type ChannelDistManager struct {
 	rwmutex sync.RWMutex
 
 	// NodeID -> Channels
-	channels map[typeutil.UniqueID]nodeChannels
+	channels map[typeutil.UniqueID][]*DmChannel `json:"nodeIDToChannels,omitempty"`
 
 	// CollectionID -> Channels
 	collectionIndex map[int64][]*DmChannel
@@ -289,4 +300,24 @@ func (m *ChannelDistManager) updateCollectionIndex() {
 			}
 		}
 	}
+}
+
+func (m *ChannelDistManager) GetChannelDistJSON(verbose bool) (string, error) {
+	m.rwmutex.Lock()
+	defer m.rwmutex.Unlock()
+
+	var cdm *ChannelDistManager
+	if verbose {
+		cdm = m
+	} else {
+		channels := lo.MapValues(m.channels, func(v []*DmChannel, k UniqueID) []*DmChannel {
+			return lo.Map(v, func(s *DmChannel, i int) *DmChannel {
+				return s.GetReducedDmChannel()
+			})
+		})
+		cdm = &ChannelDistManager{channels: channels}
+	}
+
+	v, err := json.Marshal(cdm)
+	return string(v), err
 }

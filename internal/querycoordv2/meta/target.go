@@ -19,6 +19,7 @@ package meta
 import (
 	"time"
 
+	"github.com/milvus-io/milvus/internal/util/metrics"
 	"github.com/samber/lo"
 
 	"github.com/milvus-io/milvus/internal/proto/datapb"
@@ -28,10 +29,11 @@ import (
 
 // CollectionTarget collection target is immutable,
 type CollectionTarget struct {
-	segments   map[int64]*datapb.SegmentInfo
-	dmChannels map[string]*DmChannel
-	partitions typeutil.Set[int64] // stores target partitions info
-	version    int64
+	segments   map[int64]*datapb.SegmentInfo  `json:"segments,omitempty"`
+	dmChannels map[string]*DmChannel `json:"dmChannels,omitempty"`
+	// stores target partitions info
+	partitions typeutil.Set[int64] `json:"partitions,omitempty"`
+	version    int64 `json:"version,omitempty"`
 }
 
 func NewCollectionTarget(segments map[int64]*datapb.SegmentInfo, dmChannels map[string]*DmChannel, partitionIDs []int64) *CollectionTarget {
@@ -157,9 +159,35 @@ func (p *CollectionTarget) IsEmpty() bool {
 	return len(p.dmChannels)+len(p.segments) == 0
 }
 
+func (p *CollectionTarget) GetReducedCollectionTarget() *CollectionTarget {
+	segments := lo.MapValues(
+		p.segments,
+		func(v *datapb.SegmentInfo, k int64) *datapb.SegmentInfo {
+			return metrics.PruneSegmentInfo(v)
+		},
+		)
+
+	dmlChannels := lo.MapValues(
+		p.dmChannels,
+		func(v *DmChannel, k string) *DmChannel {
+			return &DmChannel{
+				VchannelInfo: metrics.PruneVChannelInfo(v.VchannelInfo),
+				Node:         v.Node,
+				Version:      v.Version,
+			}
+		},
+	)
+
+	return &CollectionTarget{
+		segments:   segments,
+		dmChannels: dmlChannels,
+		version:   p.version,
+	}
+}
+
 type target struct {
 	// just maintain target at collection level
-	collectionTargetMap map[int64]*CollectionTarget
+	collectionTargetMap map[int64]*CollectionTarget `json:"collection_target,omitempty"`
 }
 
 func newTarget() *target {

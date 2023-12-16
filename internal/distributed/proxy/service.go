@@ -63,6 +63,7 @@ import (
 	"github.com/milvus-io/milvus/internal/util/componentutil"
 	"github.com/milvus-io/milvus/internal/util/dependency"
 	_ "github.com/milvus-io/milvus/internal/util/grpcclient"
+	"github.com/milvus-io/milvus/internal/util/mhttp"
 	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/milvus-io/milvus/pkg/metrics"
 	"github.com/milvus-io/milvus/pkg/tracer"
@@ -127,7 +128,7 @@ func authenticate(c *gin.Context) {
 	if ok {
 		if proxy.PasswordVerify(c, username, password) {
 			log.Debug("auth successful", zap.String("username", username))
-			c.Set(httpserver.ContextUsername, username)
+			c.Set(mhttp.ContextUsername, username)
 			return
 		}
 	}
@@ -135,12 +136,12 @@ func authenticate(c *gin.Context) {
 	if rawToken != "" && !strings.Contains(rawToken, util.CredentialSeperator) {
 		user, err := proxy.VerifyAPIKey(rawToken)
 		if err == nil {
-			c.Set(httpserver.ContextUsername, user)
+			c.Set(mhttp.ContextUsername, user)
 			return
 		}
 		log.Warn("fail to verify apikey", zap.Error(err))
 	}
-	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{httpserver.HTTPReturnCode: merr.Code(merr.ErrNeedAuthenticate), httpserver.HTTPReturnMessage: merr.ErrNeedAuthenticate.Error()})
+	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{mhttp.HTTPReturnCode: merr.Code(merr.ErrNeedAuthenticate), mhttp.HTTPReturnMessage: merr.ErrNeedAuthenticate.Error()})
 }
 
 // registerHTTPServer register the http server, panic when failed
@@ -224,12 +225,12 @@ func (s *Server) startHTTPServer(errChan chan error) {
 	})
 	ginHandler.Use(ginLogger, gin.Recovery())
 	ginHandler.Use(func(c *gin.Context) {
-		_, err := strconv.ParseBool(c.Request.Header.Get(httpserver.HTTPHeaderAllowInt64))
+		_, err := strconv.ParseBool(c.Request.Header.Get(mhttp.HTTPHeaderAllowInt64))
 		if err != nil {
 			if paramtable.Get().HTTPCfg.AcceptTypeAllowInt64.GetAsBool() {
 				c.Request.Header.Set(httpserver.HTTPHeaderAllowInt64, "true")
 			} else {
-				c.Request.Header.Set(httpserver.HTTPHeaderAllowInt64, "false")
+				c.Request.Header.Set(mhttp.HTTPHeaderAllowInt64, "false")
 			}
 		}
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
