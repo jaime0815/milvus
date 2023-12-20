@@ -39,14 +39,11 @@ const (
 	// MetricRequestTypeKey is a key for identify request type.
 	MetricRequestTypeKey = "req_type"
 
-	// QuerySegmentStats request for segment stats on the query node
-	QuerySegmentStats = "query_segment_stats"
+	// QuerySegmentDist request for segment distribution on the query node
+	QuerySegmentDist = "query_segment_dist"
 
-	// QueryCurrentTarget request for current target on the querycoord
-	QueryCurrentTarget = "query_current_target"
-
-	// QueryNextTarget request for next target on the querycoord
-	QueryNextTarget = "query_next_target"
+	// QueryChannelDist request for channel distribution on the query node
+	QueryChannelDist = "query_channel_dist"
 
 	// MetricRequestParamKey is a key as a request parameter
 	MetricRequestParamKey = "req_params"

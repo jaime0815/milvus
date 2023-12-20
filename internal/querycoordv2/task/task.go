@@ -97,6 +97,7 @@ type Task interface {
 	SetReason(reason string)
 	String() string
 
+	MarshalJSON() ([]byte, error)
 	RecordStartTs()
 	GetTaskLatency() int64
 }
@@ -278,6 +279,10 @@ func (task *baseTask) SetReason(reason string) {
 	task.reason = reason
 }
 
+func (task *baseTask) MarshalJSON() ([]byte, error) {
+	return nil, nil
+}
+
 func (task *baseTask) String() string {
 	var actionsStr string
 	for _, action := range task.actions {
@@ -326,10 +331,10 @@ func NewSegmentTask(ctx context.Context,
 			return nil, errors.WithStack(merr.WrapErrParameterInvalid("SegmentAction", "other action", "all actions must be with the same type"))
 		}
 		if segmentID == -1 {
-			segmentID = action.SegmentID()
-			shard = action.Shard()
-		} else if segmentID != action.SegmentID() {
-			return nil, errors.WithStack(merr.WrapErrParameterInvalid(segmentID, action.SegmentID(), "all actions must operate the same segment"))
+			segmentID = action.GetSegmentID()
+			shard = action.GetShard()
+		} else if segmentID != action.GetSegmentID() {
+			return nil, errors.WithStack(merr.WrapErrParameterInvalid(segmentID, action.GetSegmentID(), "all actions must operate the same segment"))
 		}
 	}
 
@@ -346,7 +351,7 @@ func (task *SegmentTask) SegmentID() typeutil.UniqueID {
 }
 
 func (task *SegmentTask) Index() string {
-	return fmt.Sprintf("%s[segment=%d][growing=%t]", task.baseTask.Index(), task.segmentID, task.Actions()[0].(*SegmentAction).Scope() == querypb.DataScope_Streaming)
+	return fmt.Sprintf("%s[segment=%d][growing=%t]", task.baseTask.Index(), task.segmentID, task.Actions()[0].(*SegmentAction).GetScope() == querypb.DataScope_Streaming)
 }
 
 func (task *SegmentTask) String() string {

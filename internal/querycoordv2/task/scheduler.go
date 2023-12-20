@@ -67,7 +67,7 @@ type replicaSegmentIndex struct {
 }
 
 func NewReplicaSegmentIndex(task *SegmentTask) replicaSegmentIndex {
-	isGrowing := task.Actions()[0].(*SegmentAction).Scope() == querypb.DataScope_Streaming
+	isGrowing := task.Actions()[0].(*SegmentAction).GetScope() == querypb.DataScope_Streaming
 	return replicaSegmentIndex{
 		ReplicaID: task.ReplicaID(),
 		SegmentID: task.SegmentID(),

@@ -17,7 +17,6 @@
 package meta
 
 import (
-	"encoding/json"
 	"sync"
 
 	"github.com/samber/lo"
@@ -323,25 +322,4 @@ func (mgr *LeaderViewManager) GetLatestShardLeaderByFilter(filters ...LeaderView
 	return lo.MaxBy(views, func(v1, v2 *LeaderView) bool {
 		return v1.Version > v2.Version
 	})
-}
-
-func (mgr *LeaderViewManager) GetLeaderViewsJSON(verbose bool) (string, error) {
-	mgr.rwmutex.RLock()
-	defer mgr.rwmutex.RUnlock()
-
-	lvs := make([]*LeaderView, 0)
-	for _, views := range mgr.views {
-		if verbose {
-			lvs = append(lvs, lo.MapToSlice(views, func(k string, v *LeaderView) *LeaderView {
-				return v
-			})...)
-		} else {
-			lvs = append(lvs, lo.MapToSlice(views, func(k string, v *LeaderView) *LeaderView {
-				return v.GetReducedLeaderView()
-			})...)
-		}
-	}
-
-	v, err := json.Marshal(lvs)
-	return string(v), err
 }

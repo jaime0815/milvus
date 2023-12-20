@@ -55,29 +55,29 @@ type Action interface {
 }
 
 type BaseAction struct {
-	nodeID typeutil.UniqueID
-	typ    ActionType
-	shard  string
+	NodeID typeutil.UniqueID `json:"nodeID,omitempty"`
+	Typ    ActionType `json:"actionType,omitempty"`
+	Shard string `json:"shard,omitempty"`
 }
 
 func NewBaseAction(nodeID typeutil.UniqueID, typ ActionType, shard string) *BaseAction {
 	return &BaseAction{
-		nodeID: nodeID,
-		typ:    typ,
-		shard:  shard,
+		NodeID: nodeID,
+		Typ:    typ,
+		Shard:  shard,
 	}
 }
 
 func (action *BaseAction) Node() int64 {
-	return action.nodeID
+	return action.NodeID
 }
 
 func (action *BaseAction) Type() ActionType {
-	return action.typ
+	return action.Typ
 }
 
-func (action *BaseAction) Shard() string {
-	return action.shard
+func (action *BaseAction) GetShard() string {
+	return action.Shard
 }
 
 func (action *BaseAction) String() string {
@@ -87,8 +87,8 @@ func (action *BaseAction) String() string {
 type SegmentAction struct {
 	*BaseAction
 
-	segmentID typeutil.UniqueID
-	scope     querypb.DataScope
+	SegmentID typeutil.UniqueID `json:"segmentID,omitempty"`
+	Scope     querypb.DataScope `json:"dataScope,omitempty"`
 
 	rpcReturned atomic.Bool
 }
@@ -101,18 +101,18 @@ func NewSegmentActionWithScope(nodeID typeutil.UniqueID, typ ActionType, shard s
 	base := NewBaseAction(nodeID, typ, shard)
 	return &SegmentAction{
 		BaseAction:  base,
-		segmentID:   segmentID,
-		scope:       scope,
+		SegmentID:   segmentID,
+		Scope:       scope,
 		rpcReturned: *atomic.NewBool(false),
 	}
 }
 
-func (action *SegmentAction) SegmentID() typeutil.UniqueID {
-	return action.segmentID
+func (action *SegmentAction) GetSegmentID() typeutil.UniqueID {
+	return action.SegmentID
 }
 
-func (action *SegmentAction) Scope() querypb.DataScope {
-	return action.scope
+func (action *SegmentAction) GetScope() querypb.DataScope {
+	return action.Scope
 }
 
 func (action *SegmentAction) IsFinished(distMgr *meta.DistributionManager) bool {
@@ -148,7 +148,7 @@ func (action *SegmentAction) IsFinished(distMgr *meta.DistributionManager) bool 
 			segments = append(segments, segment.GetID())
 		}
 		segments = append(segments, growing...)
-		if !funcutil.SliceContain(segments, action.SegmentID()) {
+		if !funcutil.SliceContain(segments, action.GetSegmentID()) {
 			return true
 		}
 		return action.rpcReturned.Load()
@@ -174,7 +174,7 @@ func NewChannelAction(nodeID typeutil.UniqueID, typ ActionType, channelName stri
 }
 
 func (action *ChannelAction) ChannelName() string {
-	return action.shard
+	return action.Shard
 }
 
 func (action *ChannelAction) IsFinished(distMgr *meta.DistributionManager) bool {

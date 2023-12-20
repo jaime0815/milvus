@@ -192,24 +192,24 @@ func (s * Server) registerMetricsRequest( ) {
 		return s.getSystemInfoMetrics(ctx, req)
 	}
 
-	QueryCurrentTargetAction := func(ctx context.Context, req *milvuspb.GetMetricsRequest, jsonReq gjson.Result) (string, error) {
+	QuerySegmentDistAction := func(ctx context.Context, req *milvuspb.GetMetricsRequest, jsonReq gjson.Result) (string, error) {
 		verbose := metricsinfo.RequestWithVerbose(jsonReq)
-		return s.targetMgr.GetTargetJSON(meta.CurrentTarget, verbose)
+		return s.dist.GetSegmentDistJSON(verbose)
 	}
 
-	QueryNextTargetAction := func(ctx context.Context, req *milvuspb.GetMetricsRequest, jsonReq gjson.Result) (string, error) {
+	QueryChannelDistAction := func(ctx context.Context, req *milvuspb.GetMetricsRequest, jsonReq gjson.Result) (string, error) {
 		verbose := metricsinfo.RequestWithVerbose(jsonReq)
-		return s.targetMgr.GetTargetJSON(meta.NextTarget, verbose)
+		return s.dist.GetChannelDistJSON(verbose)
 	}
 
-	QueryNextTargetAction := func(ctx context.Context, req *milvuspb.GetMetricsRequest, jsonReq gjson.Result) (string, error) {
+	xxAction := func(ctx context.Context, req *milvuspb.GetMetricsRequest, jsonReq gjson.Result) (string, error) {
 		verbose := metricsinfo.RequestWithVerbose(jsonReq)
-		return s.targetMgr.GetTargetJSON(meta.NextTarget, verbose)
+		return "", nil
 	}
 
 	metricsinfo.RegisterMetricsRequest(metricsinfo.SystemInfoMetrics, getSystemInfoAction)
-	metricsinfo.RegisterMetricsRequest(metricsinfo.QueryCurrentTarget, QueryCurrentTargetAction)
-	metricsinfo.RegisterMetricsRequest(metricsinfo.QueryNextTarget, QueryNextTargetAction)
+	metricsinfo.RegisterMetricsRequest(metricsinfo.QuerySegmentDist, QuerySegmentDistAction)
+	metricsinfo.RegisterMetricsRequest(metricsinfo.QueryChannelDist, QueryChannelDistAction)
 }
 
 func (s *Server) Init() error {
