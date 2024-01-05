@@ -1,7 +1,7 @@
 var MILVUS_URI = "http://127.0.0.1:9091/api/v1"
 
 function renderNodesMetrics(data) {
-    let tableHTML = '<thead class="thead-dark"><tr>' +
+    let tableHTML = '<thead class="thead-light"><tr>' +
         '<th scope="col">Node Name</th>' +
         '<th scope="col">CPU Usage</th>' +
         '<th scope="col">Usage/Memory(GB)</th>' +
@@ -37,32 +37,71 @@ function renderNodesMetrics(data) {
 }
 
 
-function renderNodesInfo(data) {
-    let tableHTML = '<thead class="thead-dark"><tr>' +
+function renderComponentInfo(data) {
+    let nodeHTML = '<thead class="thead-light"><tr>' +
         ' <th scope="col">Name</th>' +
         ' <th scope="col">IP</th>' +
         ' <th scope="col">Start Time</th>' +
         ' <th scope="col">State</th>' +
         ' <th scope="col">Reason</th>' +
-        '</tr></thead>';
+        '</tr></thead><tbody>';
 
-    tableHTML += '<tbody>';
+    let coordHTML = '<thead class="thead-light"><tr>' +
+        ' <th scope="col">Name</th>' +
+        ' <th scope="col">IP</th>' +
+        ' <th scope="col">Start Time</th>' +
+        ' <th scope="col">State</th>' +
+        ' <th scope="col">isStandy</th>' +
+        ' <th scope="col">Reason</th>' +
+        '</tr></thead><tbody>';
+
+    const tableHtmls = new Map([
+        ['rootcoord', coordHTML],
+        ['datacoord', coordHTML],
+        ['querycoord', coordHTML],
+        ['querynode', nodeHTML],
+        ['datanode', nodeHTML],
+        ['indexnode', nodeHTML],
+        ['proxy', nodeHTML],
+    ]);
+
     data.nodes_info.forEach(node => {
-        tableHTML += '<tr >';
-        tableHTML += `<td>${node.infos['name']}</td>`;
+        let type = node.infos['type']
+        if (!tableHtmls.has(type)) {
+            console.log("can't find " + "type:" + type)
+            return
+        }
+
+        let html = '<tr>';
+        html += `<td>${node.infos['name']}</td>`;
         let hardwareInfo = node.infos['hardware_infos']
-        tableHTML += `<td>${hardwareInfo['ip']}</td>`;
-        tableHTML += `<td>${node.infos['created_time']}</td>`;
-        tableHTML += `<td>Unhealthy</td>`;
-        tableHTML += `<td>"node is starting"</td>`;
-        tableHTML += '</tr>';
-    });
-    tableHTML += '</tbody>';
-    document.getElementById('nodeInfo').innerHTML = tableHTML;
+        html += `<td>${hardwareInfo['ip']}</td>`;
+        html += `<td>${node.infos['created_time']}</td>`;
+        html += `<td>Healthy</td>`;
+        if (type === "rootcoord" || type === "datacoord" || type === "querycoord") {
+            html += `<td>false</td>`;
+        }
+        html += `<td>node is started</td>`;
+        html += '</tr>';
+
+        let oldHtml = tableHtmls.get(type)
+        const updatedValue = oldHtml + html;
+        tableHtmls.set(type, updatedValue)
+        });
+
+    for (const [key, value] of tableHtmls.entries()) {
+        console.log(key)
+        console.log(value)
+
+        updatedValue = value + '</tbody>';
+        console.log("key:" + key + ", value:" + value)
+        document.getElementById(key).innerHTML = updatedValue;
+    }
+
 }
 
 function renderSysInfo(data) {
-    let tableHTML = '<thead class="thead-dark"><tr>' +
+    let tableHTML = '<thead class="thead-light"><tr>' +
         ' <th scope="col">Attribute</th>' +
         ' <th scope="col">Value</th>' +
         ' <th scope="col">Description</th>' +
@@ -114,7 +153,7 @@ function readSysInfo(systemInfo) {
 }
 
 function renderConfigs(obj) {
-    let tableHTML = '<thead class="thead-dark"><tr>' +
+    let tableHTML = '<thead class="thead-light"><tr>' +
         ' <th scope="col">Attribute</th>' +
         ' <th scope="col">Value</th>' +
         '</tr></thead>';

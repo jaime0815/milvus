@@ -25,7 +25,7 @@
                 .then(text => {
                     data = JSON.parse(text)
                     // renderSysInfo(data)
-                    // renderNodesInfo(data)
+                    // renderComponentInfo(data)
 
                 })
                 .catch(error => {
@@ -45,7 +45,7 @@
                 Channel Checkpoints
             </h2>
             <table id="channelCP" class="table table-hover">
-                <thead class="thead-dark">
+                <thead class="thead-light">
                 <tr>
                     <th scope="col">Channel Name</th>
                     <th scope="col">Collection ID</th>
@@ -77,7 +77,7 @@
                 Watched Channels On Datanode
             </h2>
             <table id="watchedChDataNode" class="table table-hover">
-                <thead class="thead-dark">
+                <thead class="thead-light">
                 <tr>
                     <th scope="col">Channel Name</th>
                     <th scope="col">Collection ID</th>
@@ -115,7 +115,7 @@
                 Watched Channels On QueryNode
             </h2>
             <table id="watchedChQueryNode" class="table table-hover">
-                <thead class="thead-dark">
+                <thead class="thead-light">
                 <tr>
                     <th scope="col">Channel Name</th>
                     <th scope="col">Collection ID</th>

@@ -24,7 +24,7 @@
               .then(text => {
                 data = JSON.parse(text)
                 renderSysInfo(data)
-                renderNodesInfo(data)
+                renderComponentInfo(data)
                 renderNodesMetrics(data)
               })
               .catch(error => {
@@ -47,84 +47,50 @@
 
 
           <h2>
-            Node Information
+            Component Information
           </h2>
-          <table id="nodeInfo" class="table table-hover"></table>
-
-
+          <table id="rootcoord" class="table table-hover"></table>
+          <table id="datacoord" class="table table-hover"></table>
+          <table id="querycoord" class="table table-hover"></table>
+          <table id="querynode" class="table table-hover"></table>
+          <table id="datanode" class="table table-hover"></table>
+          <table id="indexnode" class="table table-hover"></table>
+          <table id="proxy" class="table table-hover"></table>
           <h2>
-            Node Metrics
+            Node Activity Metrics
           </h2>
           <table id="nodeMetrics" class="table table-hover"></table>
 
           <h2>
-            Segment Distribution
-          </h2>
-          <table id="segmentDist" class="table table-hover">
-            <!--FAKE	TODO:node id  sealed segment count/ growing segment count/ indexed segment count/ rowcount-->
-            <thead class="thead-dark">
-            <tr>
-              <th scope="col">NodeName</th>
-              <th scope="col">Sealed Segment Count</th>
-              <th scope="col">Growing Segment Count</th>
-              <th scope="col">Indexed Segment Count</th>
-              <th scope="col">Segments Row Count</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr>
-              <td>faked1</td>
-              <td>10</td>
-              <td>5</td>
-              <td>3</td>
-            </tr>
-            <tr>
-              <td>faked2</td>
-              <td>8</td>
-              <td>2</td>
-              <td>1</td>
-            </tr>
-            </tbody>
-          </table>
-
-
-          <h2>
-            Channel Distribution
-          </h2>
-          <!--	TODO: node name  pchannelCount vchannelCount -->
-          <table id="channelDist" class="table table-hover">
-            <thead class="thead-dark">
-            <tr>
-              <th scope="col">NodeName</th>
-              <th scope="col">Consume Channel Count</th>
-              <th scope="col">Produce Channel Count</th>
-              <th scope="col">PChannel Count</th>
-              <th scope="col">VChannel Count</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr>
-              <td>faked-querynode1</td>
-              <td>10</td>
-              <td>5</td>
-              <td>3</td>
-              <td>6</td>
-            </tr>
-            <tr>
-              <td>faked-querynode2</td>
-              <td>8</td>
-              <td>2</td>
-              <td>3</td>
-              <td>9</td>
-            </tr>
-            </tbody>
-          </table>
-
-          <h2>
             Connected Clients
           </h2>
-          <table id="clients" class="table table-hover"></table>
-
+          <table id="clients" class="table table-hover">
+            <thead class="thead-light">
+            <tr>
+              <th scope="col">Host</th>
+              <th scope="col">User</th>
+              <th scope="col">SdkType</th>
+              <th scope="col">SdkVersion</th>
+              <th scope="col">LocalTime</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+              <td>127.0.0.1</td>
+              <td>admin</td>
+              <td>Go</td>
+              <td>2.1.4</td>
+              <td>2022-11-12 18:11:22</td>
+            </tr>
+            <tr>
+              <td>127.0.0.1</td>
+              <td>admin</td>
+              <td>Python</td>
+              <td>2.1.4</td>
+              <td>2022-11-12 18:11:22</td>
+            </tr>
+            </tbody>
+          </table>
         </div>
         <div class="col-md-2">
         </div>

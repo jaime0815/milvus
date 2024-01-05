@@ -25,7 +25,7 @@
                 .then(text => {
                     data = JSON.parse(text)
                     // renderSysInfo(data)
-                    // renderNodesInfo(data)
+                    // renderComponentInfo(data)
 
                 })
                 .catch(error => {
@@ -46,7 +46,7 @@
             </h2>
             <!--	TODO: -->
             <table id="loadingSegments" class="table table-hover">
-                <thead class="thead-dark">
+                <thead class="thead-light">
                 <tr>
                     <th scope="col">segmentID</th>
                     <th scope="col">collectionName</th>
@@ -79,7 +79,7 @@
             </h2>
             <!--	TODO: -->
             <table id="releasingSegments" class="table table-hover">
-                <thead class="thead-dark">
+                <thead class="thead-light">
                 <tr>
                     <th scope="col">segmentID</th>
                     <th scope="col">collectionName</th>
@@ -112,7 +112,7 @@
             </h2>
             <!--	TODO: -->
             <table id="loadedSegments" class="table table-hover">
-                <thead class="thead-dark">
+                <thead class="thead-light">
                 <tr>
                     <th scope="col">segmentID</th>
                     <th scope="col">collectionName</th>
@@ -146,7 +146,7 @@
             </h2>
             <!--	TODO: data from data component -->
             <table id="segments" class="table table-hover">
-                <thead class="thead-dark">
+                <thead class="thead-light">
                 <tr>
                     <th scope="col">segmentID</th>
                     <th scope="col">collectionName</th>

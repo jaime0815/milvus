@@ -25,7 +25,7 @@
                 .then(text => {
                     data = JSON.parse(text)
                     // renderSysInfo(data)
-                    // renderNodesInfo(data)
+                    // renderComponentInfo(data)
 
                 })
                 .catch(error => {
@@ -45,7 +45,7 @@
                 Database List
             </h2>
             <table id="databases" class="table table-hover">
-                <thead class="thead-dark">
+                <thead class="thead-light">
                 <tr>
                     <th scope="col">Database ID</th>
                     <th scope="col">Name</th>
@@ -70,7 +70,7 @@
                 Collection Meta
             </h2>
             <table id="collectionMeta" class="table table-hover">
-                <thead class="thead-dark">
+                <thead class="thead-light">
                 <tr>
                     <th scope="col">Collection ID</th>
                     <th scope="col">Collection Name</th>
@@ -111,7 +111,7 @@
                 Collection Metrics
             </h2>
             <table id="collectionMetrics" class="table table-hover">
-                <thead class="thead-dark">
+                <thead class="thead-light">
                 <tr>
                     <th scope="col">Collection Name</th>
                     <th scope="col">isQueryable</th>
