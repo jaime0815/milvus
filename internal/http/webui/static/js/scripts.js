@@ -51,7 +51,7 @@ function renderComponentInfo(data) {
         ' <th scope="col">IP</th>' +
         ' <th scope="col">Start Time</th>' +
         ' <th scope="col">State</th>' +
-        ' <th scope="col">isStandy</th>' +
+        ' <th scope="col">Primary</th>' +
         ' <th scope="col">Reason</th>' +
         '</tr></thead><tbody>';
 
@@ -79,9 +79,9 @@ function renderComponentInfo(data) {
         html += `<td>${node.infos['created_time']}</td>`;
         html += `<td>Healthy</td>`;
         if (type === "rootcoord" || type === "datacoord" || type === "querycoord") {
-            html += `<td>false</td>`;
+            html += `<td>true</td>`;
         }
-        html += `<td>node is started</td>`;
+        html += `<td>nothing</td>`;
         html += '</tr>';
 
         let oldHtml = tableHtmls.get(type)
@@ -90,14 +90,9 @@ function renderComponentInfo(data) {
         });
 
     for (const [key, value] of tableHtmls.entries()) {
-        console.log(key)
-        console.log(value)
-
         updatedValue = value + '</tbody>';
-        console.log("key:" + key + ", value:" + value)
         document.getElementById(key).innerHTML = updatedValue;
     }
-
 }
 
 function renderSysInfo(data) {
