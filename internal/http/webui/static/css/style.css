@@ -1,0 +1,26 @@
+.table {
+    table-layout: fixed;
+}
+
+.table th,
+.table td {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: normal;     /* Allow text to wrap onto the next line */
+    overflow-wrap: break-word;
+}
+
+/*.table thead {*/
+/*    text-align: center;*/
+/*}*/
+
+.row h2 {
+    margin-top: 50px;
+}
+
+.separate-line {
+    height: 1px;
+    background-color: #000;
+    margin: 40px 0;
+}

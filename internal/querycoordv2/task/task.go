@@ -18,6 +18,7 @@ package task
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -97,7 +98,10 @@ type Task interface {
 	SetReason(reason string)
 	String() string
 
+	// MarshalJSON marshal task info to json
 	MarshalJSON() ([]byte, error)
+	// GetSimplifiedTask Clone and return a reduced task
+	GetSimplifiedTask() Task
 	RecordStartTs()
 	GetTaskLatency() int64
 }
@@ -280,7 +284,44 @@ func (task *baseTask) SetReason(reason string) {
 }
 
 func (task *baseTask) MarshalJSON() ([]byte, error) {
-	return nil, nil
+	return json.Marshal(&struct {
+		TaskID       int64    `json:"taskID,omitempty"`
+		CollectionID int64    `json:"collectionID,omitempty"`
+		Replica      int64    `json:"replicaID,omitempty"`
+		Shard        string   `json:"shard,omitempty"`
+		LoadType     string   `json:"loadType,omitempty"`
+		Source       string   `json:"source,omitempty"`
+		Status       string   `json:"status,omitempty"`
+		Priority     string   `json:"priority,omitempty"`
+		Actions      []Action `json:"actions,omitempty"`
+		Step         int      `json:"step,omitempty"`
+		Reason       string   `json:"reason,omitempty"`
+	}{
+		TaskID:       task.id,
+		CollectionID: task.collectionID,
+		Replica:      task.replicaID,
+		Shard:        task.shard,
+		LoadType:     task.loadType.String(),
+		Source:       task.source.String(),
+		Status:       task.status.Load(),
+		Priority:     TaskPriorityName[task.priority],
+		Actions:      task.actions,
+		Step:         task.step,
+		Reason:       task.reason,
+	})
+}
+
+func (task *baseTask) GetSimplifiedTask() Task {
+	return &baseTask{
+		id:           task.id,
+		source:       task.source,
+		collectionID: task.collectionID,
+		replicaID:    task.replicaID,
+		shard:        task.shard,
+		loadType:     task.loadType,
+		status:       task.status,
+		reason:       task.reason,
+	}
 }
 
 func (task *baseTask) String() string {

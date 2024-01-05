@@ -17,12 +17,14 @@
 package meta
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 
 	"github.com/cockroachdb/errors"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
+	"golang.org/x/exp/maps"
 
 	"github.com/milvus-io/milvus/internal/metastore"
 	"github.com/milvus-io/milvus/internal/proto/querypb"
@@ -465,4 +467,21 @@ func (m *ReplicaManager) GetResourceGroupByCollection(collection typeutil.Unique
 	replicas := m.GetByCollection(collection)
 	ret := typeutil.NewSet(lo.Map(replicas, func(r *Replica, _ int) string { return r.GetResourceGroup() })...)
 	return ret
+}
+
+func (m *ReplicaManager) GetJSONReplicas() string {
+	m.rwmutex.RLock()
+	defer m.rwmutex.RUnlock()
+
+	ret, err :=  json.Marshal(&struct {
+		Replicas []*Replica `json:"replicas"`
+	}{
+		Replicas: maps.Values(m.replicas),
+	})
+
+	if err != nil {
+		log.Warn("failed to marshal replicas", zap.Error(err))
+		return ""
+	}
+	return string(ret)
 }

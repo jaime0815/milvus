@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/errors"
+	"github.com/goccy/go-json"
 	"github.com/samber/lo"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -144,6 +145,7 @@ type Scheduler interface {
 	GetExecutedFlag(nodeID int64) <-chan struct{}
 	GetChannelTaskNum() int
 	GetSegmentTaskNum() int
+	GetJSONTasks(verbose bool) string
 
 	GetSegmentTaskDelta(nodeID int64, collectionID int64) int
 	GetChannelTaskDelta(nodeID int64, collectionID int64) int
@@ -563,6 +565,43 @@ func (scheduler *taskScheduler) GetSegmentTaskNum() int {
 	defer scheduler.rwmutex.RUnlock()
 
 	return len(scheduler.segmentTasks)
+}
+
+func (scheduler *taskScheduler) GetJSONTasks(verbose bool) string {
+	scheduler.rwmutex.RLock()
+	defer scheduler.rwmutex.RUnlock()
+
+	var tasks []Task
+	for _, task := range scheduler.channelTasks {
+		if verbose {
+			tasks = append(tasks, task)
+		} else {
+			tasks = append(tasks, task.GetSimplifiedTask())
+		}
+	}
+
+	for _, task := range scheduler.segmentTasks {
+		if verbose {
+			tasks = append(tasks, task)
+		} else {
+			tasks = append(tasks, task.GetSimplifiedTask())
+		}
+	}
+
+	if len(tasks) == 0 {
+		return ""
+	}
+
+	jsonObject := &struct {
+		Tasks []Task `json:"tasks,omitempty"`
+	}{Tasks: tasks}
+
+	ret, err := json.Marshal(jsonObject)
+	if err != nil {
+		log.Warn("marshal tasks fail", zap.Error(err))
+		return ""
+	}
+	return string(ret)
 }
 
 // schedule selects some tasks to execute, follow these steps for each started selected tasks:

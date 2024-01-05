@@ -18,13 +18,17 @@ package meta
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/samber/lo"
+	"go.uber.org/zap"
+	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/milvus-io/milvus/internal/proto/datapb"
 	"github.com/milvus-io/milvus/internal/util/metrics"
+	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/milvus-io/milvus/pkg/util/typeutil"
 )
 
@@ -132,7 +136,7 @@ func (channel *DmChannel) Clone() *DmChannel {
 	}
 }
 
-func (channel *DmChannel) GetReducedDmChannel() *DmChannel {
+func (channel *DmChannel) GetSimplifiedDmChannel() *DmChannel {
 	o := channel.Clone()
 	return &DmChannel{
 		VchannelInfo: metrics.PruneVChannelInfo(o.VchannelInfo),
@@ -302,22 +306,38 @@ func (m *ChannelDistManager) updateCollectionIndex() {
 	}
 }
 
-func (m *ChannelDistManager) GetChannelDistJSON(verbose bool) (string, error) {
+func (m *ChannelDistManager) GetJSONChannelDist(verbose bool) string {
 	m.rwmutex.Lock()
 	defer m.rwmutex.Unlock()
 
-	var cdm *ChannelDistManager
-	if verbose {
-		cdm = m
-	} else {
-		channels := lo.MapValues(m.channels, func(v []*DmChannel, k UniqueID) []*DmChannel {
-			return lo.Map(v, func(s *DmChannel, i int) *DmChannel {
-				return s.GetReducedDmChannel()
+	var flattenedChannels []*DmChannel
+	for _, nodeChannel := range maps.Values(m.channels) {
+		if !verbose {
+			simplifiedChannels := lo.Map(nodeChannel, func(s *DmChannel, i int) *DmChannel {
+				return s.GetSimplifiedDmChannel()
 			})
-		})
-		cdm = &ChannelDistManager{channels: channels}
+			flattenedChannels = append(flattenedChannels, simplifiedChannels...)
+		} else {
+			flattenedChannels = append(flattenedChannels, nodeChannel...)
+		}
 	}
 
-	v, err := json.Marshal(cdm)
-	return string(v), err
+	log.Info("=== GetJSONChannelDist", zap.Any("channels", flattenedChannels))
+	if len(flattenedChannels) == 0 {
+		return ""
+	}
+
+	jsonObject := &struct {
+		Channels []*DmChannel `json:"channels,omitempty"`
+	}{Channels: flattenedChannels}
+
+	v, err := json.Marshal(jsonObject)
+	if err != nil {
+		log.Error("failed to marshal dist channel", zap.Error(err))
+		return ""
+	}
+	fmt.Println("----", string(v))
+	log.Info("=== GetJSONChannelDist Marshal", zap.Any("channels", v))
+
+	return string(v)
 }

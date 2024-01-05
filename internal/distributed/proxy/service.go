@@ -96,6 +96,9 @@ type Server struct {
 	ctx                context.Context
 	wg                 sync.WaitGroup
 	proxy              types.ProxyComponent
+	httpListener       net.Listener
+	grpcListener       net.Listener
+	tcpServer          cmux.CMux
 	httpServer         *http.Server
 	grpcInternalServer *grpc.Server
 	grpcExternalServer *grpc.Server
@@ -158,7 +161,30 @@ func (s *Server) registerHTTPServer() {
 	}
 	metricsGinHandler := gin.Default()
 	apiv1 := metricsGinHandler.Group(apiPathPrefix)
-	httpserver.NewHandlers(s.proxy).RegisterRoutesTo(apiv1)
+	apiv1.Use(func(c *gin.Context) {
+		_, err := strconv.ParseBool(c.Request.Header.Get(mhttp.HTTPHeaderAllowInt64))
+		if err != nil {
+			httpParams := &paramtable.Get().HTTPCfg
+			if httpParams.AcceptTypeAllowInt64.GetAsBool() {
+				c.Request.Header.Set(mhttp.HTTPHeaderAllowInt64, "true")
+			} else {
+				c.Request.Header.Set(mhttp.HTTPHeaderAllowInt64, "false")
+			}
+		}
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, POST")
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+		c.Next()
+	})
+	handlers := httpserver.NewHandlers(s.proxy)
+	handlers.RegisterRoutesTo(apiv1)
+	s.proxy.RegisterRestRouter(apiv1)
+
 	management.Register(&management.Handler{
 		Path:        management.RootPath,
 		HandlerFunc: nil,

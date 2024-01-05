@@ -6427,18 +6427,20 @@ func DeregisterSubLabel(subLabel string) {
 func (node *Proxy) RegisterRestRouter(router gin.IRouter) {
 	// Cluster request
 	router.GET("/_cluster/info", getClusterInfo(node))
-	router.GET("/_cluster/configs", getConfigs(nil))
+	router.GET("/_cluster/configs", getConfigs(paramtable.Get().GetAll()))
 	router.GET("/_cluster/clients", getConnectedClients)
 
+	// Hook request
+	router.GET("/_hook/configs",  getConfigs(paramtable.GetHookParams().GetAll()))
+
 	// Node request
-	router.GET("/_qnode/stats", nil)
-	router.GET("/_qnode/segments", nil)
-	router.GET("/_qnode/channels", nil)
-	router.GET("/_qnode/collections", nil)
-	router.GET("/_qnode/replica", nil)
+	router.GET("/_qnode/segments", getQueryComponentMetrics(node, metricsinfo.QuerySegmentDist))
+	router.GET("/_qnode/channels", getQueryComponentMetrics(node, metricsinfo.QueryChannelDist))
+	router.GET("/_qnode/tasks", getQueryComponentMetrics(node, metricsinfo.QueryTasks))
+	router.GET("/_qnode/resource_groups", getQueryComponentMetrics(node, metricsinfo.QueryResourceGroups))
 
 	// Database request
-	router.GET("/_db/stats", nil)
+	router.GET("/_db/list", nil)
 	router.GET("/_db/x/collections", nil)
 
 	// Collection request
@@ -6451,18 +6453,21 @@ func (node *Proxy) RegisterRestRouter(router gin.IRouter) {
 	router.GET("/_dcollection/channels")
 
 	// Partition request
-	router.GET("/_partition/stats")
+	//router.GET("/_partition/stats")
 
 	// Segment request
-	router.GET("/_segment/stats")
+	//router.GET("/_segment/stats")
 
 	// Replica request
-	router.GET("/_replica/stats")
+	//router.GET("/_replica/stats")
+	router.GET("/_replica/all", getQueryComponentMetrics(node, metricsinfo.QueryReplicas))
 
 	// Channel request
-	router.GET("/_channel/stats")
+	//router.GET("/_channel/stats")
 
 	// Task request
-	router.GET("/_task/all")
+	//router.GET("/_task/all")
+	router.GET("/_task/qnode_all", getQueryComponentMetrics(node, metricsinfo.QueryTasks))
+	//router.GET("/_task/dnode_all")
 
 }

@@ -19,11 +19,12 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/milvuspb"
+	"github.com/tidwall/gjson"
+	"go.uber.org/zap"
+
 	"github.com/milvus-io/milvus/pkg/common"
 	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/milvus-io/milvus/pkg/util/commonpbutil"
-	"github.com/tidwall/gjson"
-	"go.uber.org/zap"
 )
 
 const (
@@ -45,6 +46,15 @@ const (
 	// QueryChannelDist request for channel distribution on the query node
 	QueryChannelDist = "query_channel_dist"
 
+	// QueryTasks request for get tasks on the querycoord
+	QueryTasks = "query_tasks"
+
+	// QueryReplicas request for get replica on the querycoord
+	QueryReplicas = "query_replica"
+
+	// QueryResourceGroups request for get resource groups on the querycoord
+	QueryResourceGroups = "query_resource_group"
+
 	// MetricRequestParamKey is a key as a request parameter
 	MetricRequestParamKey = "req_params"
 
@@ -57,9 +67,10 @@ type MetricsRequestAction func(ctx context.Context, req *milvuspb.GetMetricsRequ
 var metricsReqType2Action = make(map[string]MetricsRequestAction)
 
 func RegisterMetricsRequest(reqType string, action MetricsRequestAction) {
-	action, ok := metricsReqType2Action[reqType]
+	_, ok := metricsReqType2Action[reqType]
 	if ok {
 		log.Info("metrics request type already exists", zap.String("reqType", reqType))
+		return
 	}
 
 	metricsReqType2Action[reqType] = action
@@ -69,8 +80,7 @@ func ExecuteMetricsRequest(ctx context.Context, req *milvuspb.GetMetricsRequest)
 	jsonReq := gjson.Parse(req.Request)
 	reqType, err := ParseMetricRequestType(jsonReq)
 	if err != nil {
-		msg := "failed to parse metric type"
-		log.Warn(msg, zap.Error(err))
+		log.Warn("failed to parse metric type", zap.Error(err))
 		return "", err
 	}
 

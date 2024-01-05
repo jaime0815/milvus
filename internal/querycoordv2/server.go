@@ -187,29 +187,41 @@ func (s *Server) initSession() error {
 	return nil
 }
 
-func (s * Server) registerMetricsRequest( ) {
+func (s *Server) registerMetricsRequest() {
 	getSystemInfoAction := func(ctx context.Context, req *milvuspb.GetMetricsRequest, jsonReq gjson.Result) (string, error) {
 		return s.getSystemInfoMetrics(ctx, req)
 	}
 
 	QuerySegmentDistAction := func(ctx context.Context, req *milvuspb.GetMetricsRequest, jsonReq gjson.Result) (string, error) {
 		verbose := metricsinfo.RequestWithVerbose(jsonReq)
-		return s.dist.GetSegmentDistJSON(verbose)
+		return s.dist.GetJSONSegmentDist(verbose), nil
 	}
 
 	QueryChannelDistAction := func(ctx context.Context, req *milvuspb.GetMetricsRequest, jsonReq gjson.Result) (string, error) {
 		verbose := metricsinfo.RequestWithVerbose(jsonReq)
-		return s.dist.GetChannelDistJSON(verbose)
+		return s.dist.GetJSONChannelDist(verbose), nil
 	}
 
-	xxAction := func(ctx context.Context, req *milvuspb.GetMetricsRequest, jsonReq gjson.Result) (string, error) {
+	QueryTasksAction := func(ctx context.Context, req *milvuspb.GetMetricsRequest, jsonReq gjson.Result) (string, error) {
 		verbose := metricsinfo.RequestWithVerbose(jsonReq)
-		return "", nil
+		return s.taskScheduler.GetJSONTasks(verbose), nil
+	}
+
+	QueryReplicasAction := func(ctx context.Context, req *milvuspb.GetMetricsRequest, jsonReq gjson.Result) (string, error) {
+		return s.meta.GetJSONReplicas(), nil
+	}
+
+	QueryResourceGroupsAction := func(ctx context.Context, req *milvuspb.GetMetricsRequest, jsonReq gjson.Result) (string, error) {
+		return s.meta.GetJSONResourceGroups(), nil
 	}
 
 	metricsinfo.RegisterMetricsRequest(metricsinfo.SystemInfoMetrics, getSystemInfoAction)
 	metricsinfo.RegisterMetricsRequest(metricsinfo.QuerySegmentDist, QuerySegmentDistAction)
 	metricsinfo.RegisterMetricsRequest(metricsinfo.QueryChannelDist, QueryChannelDistAction)
+	metricsinfo.RegisterMetricsRequest(metricsinfo.QueryTasks, QueryTasksAction)
+	metricsinfo.RegisterMetricsRequest(metricsinfo.QueryReplicas, QueryReplicasAction)
+	metricsinfo.RegisterMetricsRequest(metricsinfo.QueryResourceGroups, QueryResourceGroupsAction)
+	log.Info("register metrics actions finished")
 }
 
 func (s *Server) Init() error {

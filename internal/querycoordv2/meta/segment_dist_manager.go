@@ -20,8 +20,11 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/samber/lo"
-	"google.golang.org/protobuf/proto"
+	"go.uber.org/zap"
+	"golang.org/x/exp/maps"
 
 	"github.com/milvus-io/milvus/internal/proto/datapb"
 	"github.com/milvus-io/milvus/internal/proto/querypb"
@@ -123,7 +126,7 @@ type Segment struct {
 	Node               int64                             `json:"nodeID,omitempty"`             // Node the segment is in
 	Version            int64                             `json:"version,omitempty"`            // Version is the timestamp of loading segment
 	LastDeltaTimestamp uint64                            `json:"lastDeltaTimestamp,omitempty"` // The timestamp of the last delta record
-	IndexInfo          map[int64]*querypb.FieldIndexInfo `json:"fieldIDToIndexInfo,omitempty"`          // index info of loaded segment
+	IndexInfo          map[int64]*querypb.FieldIndexInfo `json:"fieldIDToIndexInfo,omitempty"` // index info of loaded segment
 }
 
 func SegmentFromInfo(info *datapb.SegmentInfo) *Segment {
@@ -142,7 +145,7 @@ func (segment *Segment) Clone() *Segment {
 	}
 }
 
-func (segment *Segment) GetReducedSegment() *Segment {
+func (segment *Segment) GetSimplifiedSegment() *Segment {
 	s := segment.Clone()
 	return &Segment{
 		SegmentInfo:        metrics.PruneSegmentInfo(s.SegmentInfo),
@@ -245,23 +248,37 @@ func (m *SegmentDistManager) GetByFilter(filters ...SegmentDistFilter) []*Segmen
 	return ret
 }
 
-
-func (m *SegmentDistManager) GetSegmentDistJSON(verbose bool) (string, error) {
+func (m *SegmentDistManager) GetJSONSegmentDist(verbose bool) string {
 	m.rwmutex.RLock()
 	m.rwmutex.RUnlock()
 
-	var sdm *SegmentDistManager
-	if verbose {
-		sdm = m
-	} else {
-		segments := lo.MapValues(m.segments, func(v []*Segment, k UniqueID) []*Segment {
-			return lo.Map(v, func(s *Segment, i int) *Segment {
-				return s.GetReducedSegment()
+	var flattenedSegments []*Segment
+	for _, nodeSeg := range maps.Values(m.segments) {
+		if !verbose {
+			simplifiedSegs := lo.Map(nodeSeg, func(s *Segment, i int) *Segment {
+				return s.GetSimplifiedSegment()
 			})
-		})
-		sdm = &SegmentDistManager{segments: segments}
+			flattenedSegments = append(flattenedSegments, simplifiedSegs...)
+		} else {
+			flattenedSegments = append(flattenedSegments, nodeSeg...)
+		}
 	}
 
-	v, err := json.Marshal(sdm)
-	return string(v), err
+	if len(flattenedSegments) == 0 {
+		return ""
+	}
+
+	log.Info("=== GetJSONSegmentDist", zap.Any("segments", flattenedSegments))
+	jsonObject := &struct {
+		Segments []*Segment `json:"segments,omitempty"`
+	}{Segments: flattenedSegments}
+
+	v, err := json.Marshal(jsonObject)
+	if err != nil {
+		log.Error("failed to marshal dist segments", zap.Error(err))
+		return ""
+	}
+	log.Info("=== GetJSONSegmentDist", zap.Any("segments", v))
+
+	return string(v)
 }

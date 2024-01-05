@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/samber/lo"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
+	"golang.org/x/exp/maps"
 
 	"github.com/milvus-io/milvus-proto/go-api/v2/rgpb"
 	"github.com/milvus-io/milvus/internal/metastore"
@@ -918,3 +920,22 @@ func (rm *ResourceManager) validateResourceGroupIsDeletable(rgName string) error
 	}
 	return nil
 }
+
+func (rm *ResourceManager) GetJSONResourceGroups() string {
+	rm.rwmutex.RLock()
+	defer rm.rwmutex.RUnlock()
+
+	ret, err := json.Marshal(&struct {
+		ResourceGroups []*ResourceGroup `json:"resourceGroups"`
+	}{
+		ResourceGroups: maps.Values(rm.groups),
+	})
+
+	if err != nil {
+		log.Error("failed to marshal resource groups", zap.Error(err))
+		return ""
+	}
+
+	return string(ret)
+}
+
