@@ -20,7 +20,7 @@
 
     // load cluster information data
     document.addEventListener("DOMContentLoaded", function() {
-      fetch(MILVUS_URI + "/")
+      fetch(MILVUS_URI + "")
               .then(response => response.json())
               .then(text => {
                 data = JSON.parse(text)

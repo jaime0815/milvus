@@ -1,4 +1,4 @@
-var MILVUS_URI = "http://localhost:9091/api/v1"
+var MILVUS_URI = "http://127.0.0.1:9091/api/v1"
 
 function renderNodesMetrics(data) {
     let tableHTML = '<thead class="thead-dark"><tr>' +
