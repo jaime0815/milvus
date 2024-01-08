@@ -268,7 +268,6 @@ func (m *SegmentDistManager) GetJSONSegmentDist(verbose bool) string {
 		return ""
 	}
 
-	log.Info("=== GetJSONSegmentDist", zap.Any("segments", flattenedSegments))
 	jsonObject := &struct {
 		Segments []*Segment `json:"segments,omitempty"`
 	}{Segments: flattenedSegments}
@@ -278,7 +277,5 @@ func (m *SegmentDistManager) GetJSONSegmentDist(verbose bool) string {
 		log.Error("failed to marshal dist segments", zap.Error(err))
 		return ""
 	}
-	log.Info("=== GetJSONSegmentDist", zap.Any("segments", v))
-
 	return string(v)
 }

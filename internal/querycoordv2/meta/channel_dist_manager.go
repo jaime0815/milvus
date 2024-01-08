@@ -18,7 +18,6 @@ package meta
 
 import (
 	"encoding/json"
-	"fmt"
 	"sync"
 
 	"github.com/samber/lo"
@@ -322,7 +321,6 @@ func (m *ChannelDistManager) GetJSONChannelDist(verbose bool) string {
 		}
 	}
 
-	log.Info("=== GetJSONChannelDist", zap.Any("channels", flattenedChannels))
 	if len(flattenedChannels) == 0 {
 		return ""
 	}
@@ -336,8 +334,6 @@ func (m *ChannelDistManager) GetJSONChannelDist(verbose bool) string {
 		log.Error("failed to marshal dist channel", zap.Error(err))
 		return ""
 	}
-	fmt.Println("----", string(v))
-	log.Info("=== GetJSONChannelDist Marshal", zap.Any("channels", v))
 
 	return string(v)
 }
