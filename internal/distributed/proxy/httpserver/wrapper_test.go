@@ -12,6 +12,15 @@ import (
 
 func TestWrapHandler(t *testing.T) {
 	testWrapFunc := func(c *gin.Context) (interface{}, error) {
+		queryParams := c.Request.URL.Query()
+
+		// Print or use the query parameters as needed
+		for key, values := range queryParams {
+			for _, value := range values {
+				println(key, ":", value)
+			}
+		}
+
 		Case := c.Param("case")
 		switch Case {
 		case "0":
@@ -28,7 +37,7 @@ func TestWrapHandler(t *testing.T) {
 	testEngine.GET("/test/:case", wrappedHandler)
 
 	t.Run("status ok", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/test/0", nil)
+		req := httptest.NewRequest(http.MethodGet, "/test/0?verbose=false", nil)
 		w := httptest.NewRecorder()
 		testEngine.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)

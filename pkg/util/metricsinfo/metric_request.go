@@ -40,6 +40,9 @@ const (
 	// MetricRequestTypeKey is a key for identify request type.
 	MetricRequestTypeKey = "req_type"
 
+	// MetricRequestParamsSeparator is a separator that parameter value will be joined be separator
+	MetricRequestParamsSeparator = ","
+
 	// QuerySegmentDist request for segment distribution on the query node
 	QuerySegmentDist = "query_segment_dist"
 
@@ -55,11 +58,8 @@ const (
 	// QueryResourceGroups request for get resource groups on the querycoord
 	QueryResourceGroups = "query_resource_group"
 
-	// MetricRequestParamKey is a key as a request parameter
-	MetricRequestParamKey = "req_params"
-
 	// MetricRequestParamVerboseKey as a request parameter decide to whether return verbose value
-	MetricRequestParamVerboseKey = "req_params.verbose"
+	MetricRequestParamVerboseKey = "verbose"
 )
 
 type MetricsRequestAction func(ctx context.Context, req *milvuspb.GetMetricsRequest, jsonReq gjson.Result) (string, error)
@@ -99,17 +99,12 @@ func ExecuteMetricsRequest(ctx context.Context, req *milvuspb.GetMetricsRequest)
 	return actionRet, nil
 }
 
-func ParseMetricRequestParams(jsonReq gjson.Result) (gjson.Result, error) {
-	v := jsonReq.Get(MetricRequestParamKey)
-	if v.Exists() {
-		return v, nil
-	}
-	return gjson.Result{}, fmt.Errorf("%s not found in request", MetricRequestParamKey)
-}
-
 func RequestWithVerbose(jsonReq gjson.Result) bool {
 	v := jsonReq.Get(MetricRequestParamVerboseKey)
-	return v.Exists()
+	if !v.Exists() {
+		return false
+	}
+	return v.Bool()
 }
 
 // ParseMetricRequestType returns the metric type of req
@@ -136,6 +131,20 @@ func ConstructRequestByMetricType(metricType string) (*milvuspb.GetMetricsReques
 		return nil, fmt.Errorf("failed to construct request by metric type %s: %s", metricType, err.Error())
 	}
 	// TODO:: switch metricType to different msgType and return err when metricType is not supported
+	return &milvuspb.GetMetricsRequest{
+		Base: commonpbutil.NewMsgBase(
+			commonpbutil.WithMsgType(commonpb.MsgType_SystemInfo),
+		),
+		Request: string(binary),
+	}, nil
+}
+
+func ConstructGetMetricsRequest(m map[string]interface{}) (*milvuspb.GetMetricsRequest, error) {
+	binary, err := json.Marshal(m)
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct request: %s", err.Error())
+	}
+
 	return &milvuspb.GetMetricsRequest{
 		Base: commonpbutil.NewMsgBase(
 			commonpbutil.WithMsgType(commonpb.MsgType_SystemInfo),
