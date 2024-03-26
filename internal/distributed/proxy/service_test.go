@@ -31,7 +31,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/gin-gonic/gin"
-	"github.com/milvus-io/milvus/internal/util/mhttp"
+	"github.com/milvus-io/milvus/internal/http/httpserver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
@@ -45,7 +45,6 @@ import (
 	"github.com/milvus-io/milvus-proto/go-api/v2/federpb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/milvuspb"
 	grpcproxyclient "github.com/milvus-io/milvus/internal/distributed/proxy/client"
-	"github.com/milvus-io/milvus/internal/distributed/proxy/httpserver"
 	"github.com/milvus-io/milvus/internal/mocks"
 	"github.com/milvus-io/milvus/internal/proxy"
 	"github.com/milvus-io/milvus/internal/util/hookutil"
@@ -1177,7 +1176,7 @@ func TestHttpAuthenticate(t *testing.T) {
 		defer hookutil.SetMockAPIHook("", nil)
 		ctx.Request.Header.Set("Authorization", "Bearer 123456")
 		authenticate(ctx)
-		ctxName, _ := ctx.Get(mhttp.ContextUsername)
+		ctxName, _ := ctx.Get(httpserver.ContextUsername)
 		assert.Equal(t, "foo", ctxName)
 	}
 }

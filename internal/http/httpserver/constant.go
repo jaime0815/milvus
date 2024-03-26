@@ -1,4 +1,4 @@
-package mhttp
+package httpserver
 
 import (
 	"time"
