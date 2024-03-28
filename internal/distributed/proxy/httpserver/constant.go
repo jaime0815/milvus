@@ -1,8 +1,6 @@
 package httpserver
 
 import (
-	"time"
-
 	"github.com/milvus-io/milvus/pkg/util/metric"
 )
 
