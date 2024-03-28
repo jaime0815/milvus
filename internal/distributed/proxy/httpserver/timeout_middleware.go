@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
 	mhttp "github.com/milvus-io/milvus/internal/http"
 )
 

@@ -56,8 +56,8 @@ type Action interface {
 
 type BaseAction struct {
 	NodeID typeutil.UniqueID `json:"nodeID,omitempty"`
-	Typ    ActionType `json:"actionType,omitempty"`
-	Shard string `json:"shard,omitempty"`
+	Typ    ActionType        `json:"actionType,omitempty"`
+	Shard  string            `json:"shard,omitempty"`
 }
 
 func NewBaseAction(nodeID typeutil.UniqueID, typ ActionType, shard string) *BaseAction {

@@ -473,12 +473,11 @@ func (m *ReplicaManager) GetJSONReplicas() string {
 	m.rwmutex.RLock()
 	defer m.rwmutex.RUnlock()
 
-	ret, err :=  json.Marshal(&struct {
+	ret, err := json.Marshal(&struct {
 		Replicas []*Replica `json:"replicas"`
 	}{
 		Replicas: maps.Values(m.replicas),
 	})
-
 	if err != nil {
 		log.Warn("failed to marshal replicas", zap.Error(err))
 		return ""

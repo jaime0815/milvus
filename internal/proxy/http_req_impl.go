@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+
 	mhttp "github.com/milvus-io/milvus/internal/http"
 	"github.com/milvus-io/milvus/internal/proxy/connection"
 	"github.com/milvus-io/milvus/pkg/util/merr"
@@ -54,7 +55,6 @@ func getClusterInfo(node *Proxy) gin.HandlerFunc {
 		}
 
 		resp, err := node.metricsCacheManager.GetSystemInfoMetrics()
-
 		// fetch metrics from remote and update local cache if getting metrics failed from local cache
 		if err != nil {
 			var err1 error
@@ -79,7 +79,6 @@ func getClusterInfo(node *Proxy) gin.HandlerFunc {
 
 		c.IndentedJSON(http.StatusOK, resp.GetResponse())
 	}
-
 }
 
 func getConnectedClients(c *gin.Context) {

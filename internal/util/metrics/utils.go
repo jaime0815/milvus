@@ -1,28 +1,29 @@
 package metrics
 
 import (
+	"github.com/samber/lo"
+
 	"github.com/milvus-io/milvus/internal/proto/datapb"
 	"github.com/milvus-io/milvus/internal/proto/querypb"
-	"github.com/samber/lo"
 )
 
 func PruneFieldIndexInfo(f *querypb.FieldIndexInfo) *querypb.FieldIndexInfo {
 	return &querypb.FieldIndexInfo{
-		FieldID:              f.FieldID,
-		IndexID:              f.IndexID,
-		BuildID:              f.BuildID,
-		IndexSize:            f.IndexSize,
-		NumRows:              f.NumRows,
+		FieldID:   f.FieldID,
+		IndexID:   f.IndexID,
+		BuildID:   f.BuildID,
+		IndexSize: f.IndexSize,
+		NumRows:   f.NumRows,
 	}
 }
 
 func PruneSegmentInfo(s *datapb.SegmentInfo) *datapb.SegmentInfo {
-	return &datapb.SegmentInfo {
-		ID: s.ID,
+	return &datapb.SegmentInfo{
+		ID:        s.ID,
 		NumOfRows: s.NumOfRows,
-		State: s.State,
+		State:     s.State,
 		Compacted: s.Compacted,
-		Level: s.Level,
+		Level:     s.Level,
 	}
 }
 

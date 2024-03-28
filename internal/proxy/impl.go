@@ -6431,7 +6431,7 @@ func (node *Proxy) RegisterRestRouter(router gin.IRouter) {
 	router.GET("/_cluster/clients", getConnectedClients)
 
 	// Hook request
-	router.GET("/_hook/configs",  getConfigs(paramtable.GetHookParams().GetAll()))
+	router.GET("/_hook/configs", getConfigs(paramtable.GetHookParams().GetAll()))
 
 	// Node request
 	router.GET("/_qnode/segments", getQueryComponentMetrics(node, metricsinfo.QuerySegmentDist))
@@ -6453,21 +6453,21 @@ func (node *Proxy) RegisterRestRouter(router gin.IRouter) {
 	router.GET("/_dcollection/channels")
 
 	// Partition request
-	//router.GET("/_partition/stats")
+	// router.GET("/_partition/stats")
 
 	// Segment request
-	//router.GET("/_segment/stats")
+	// router.GET("/_segment/stats")
 
 	// Replica request
-	//router.GET("/_replica/stats")
+	// router.GET("/_replica/stats")
 	router.GET("/_replica/all", getQueryComponentMetrics(node, metricsinfo.QueryReplicas))
 
 	// Channel request
-	//router.GET("/_channel/stats")
+	// router.GET("/_channel/stats")
 
 	// Task request
-	//router.GET("/_task/all")
+	// router.GET("/_task/all")
 	router.GET("/_task/qnode_all", getQueryComponentMetrics(node, metricsinfo.QueryTasks))
-	//router.GET("/_task/dnode_all")
+	// router.GET("/_task/dnode_all")
 
 }

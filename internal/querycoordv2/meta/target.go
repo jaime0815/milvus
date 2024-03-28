@@ -19,7 +19,6 @@ package meta
 import (
 	"time"
 
-	"github.com/milvus-io/milvus/internal/util/metrics"
 	"github.com/samber/lo"
 
 	"github.com/milvus-io/milvus/internal/proto/datapb"
@@ -165,7 +164,7 @@ func (p *CollectionTarget) GetReducedCollectionTarget() *CollectionTarget {
 		func(v *datapb.SegmentInfo, k int64) *datapb.SegmentInfo {
 			return metrics.PruneSegmentInfo(v)
 		},
-		)
+	)
 
 	dmlChannels := lo.MapValues(
 		p.dmChannels,
@@ -181,7 +180,7 @@ func (p *CollectionTarget) GetReducedCollectionTarget() *CollectionTarget {
 	return &CollectionTarget{
 		segments:   segments,
 		dmChannels: dmlChannels,
-		version:   p.version,
+		version:    p.version,
 	}
 }
 

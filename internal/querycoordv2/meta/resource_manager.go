@@ -930,7 +930,6 @@ func (rm *ResourceManager) GetJSONResourceGroups() string {
 	}{
 		ResourceGroups: maps.Values(rm.groups),
 	})
-
 	if err != nil {
 		log.Error("failed to marshal resource groups", zap.Error(err))
 		return ""
@@ -938,4 +937,3 @@ func (rm *ResourceManager) GetJSONResourceGroups() string {
 
 	return string(ret)
 }
-
