@@ -31,7 +31,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/gin-gonic/gin"
-	"github.com/milvus-io/milvus/internal/http/httpserver"
+	"github.com/milvus-io/milvus/internal/distributed/proxy/httpserver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"

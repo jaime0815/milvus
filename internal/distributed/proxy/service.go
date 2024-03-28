@@ -32,7 +32,6 @@ import (
 	"github.com/gin-gonic/gin"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
-	httpserver2 "github.com/milvus-io/milvus/internal/http/httpserver"
 	"github.com/soheilhy/cmux"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -127,24 +126,24 @@ func NewServer(ctx context.Context, factory dependency.Factory) (*Server, error)
 }
 
 func authenticate(c *gin.Context) {
-	username, password, ok := httpserver2.ParseUsernamePassword(c)
+	username, password, ok := httpserver.ParseUsernamePassword(c)
 	if ok {
 		if proxy.PasswordVerify(c, username, password) {
 			log.Debug("auth successful", zap.String("username", username))
-			c.Set(httpserver2.ContextUsername, username)
+			c.Set(httpserver.ContextUsername, username)
 			return
 		}
 	}
-	rawToken := httpserver2.GetAuthorization(c)
+	rawToken := httpserver.GetAuthorization(c)
 	if rawToken != "" && !strings.Contains(rawToken, util.CredentialSeperator) {
 		user, err := proxy.VerifyAPIKey(rawToken)
 		if err == nil {
-			c.Set(httpserver2.ContextUsername, user)
+			c.Set(httpserver.ContextUsername, user)
 			return
 		}
 		log.Warn("fail to verify apikey", zap.Error(err))
 	}
-	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{httpserver2.HTTPReturnCode: merr.Code(merr.ErrNeedAuthenticate), httpserver2.HTTPReturnMessage: merr.ErrNeedAuthenticate.Error()})
+	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{httpserver.HTTPReturnCode: merr.Code(merr.ErrNeedAuthenticate), httpserver.HTTPReturnMessage: merr.ErrNeedAuthenticate.Error()})
 }
 
 // registerHTTPServer register the http server, panic when failed
@@ -162,13 +161,13 @@ func (s *Server) registerHTTPServer() {
 	metricsGinHandler := gin.Default()
 	apiv1 := metricsGinHandler.Group(apiPathPrefix)
 	apiv1.Use(func(c *gin.Context) {
-		_, err := strconv.ParseBool(c.Request.Header.Get(httpserver2.HTTPHeaderAllowInt64))
+		_, err := strconv.ParseBool(c.Request.Header.Get(httpserver.HTTPHeaderAllowInt64))
 		if err != nil {
 			httpParams := &paramtable.Get().HTTPCfg
 			if httpParams.AcceptTypeAllowInt64.GetAsBool() {
-				c.Request.Header.Set(httpserver2.HTTPHeaderAllowInt64, "true")
+				c.Request.Header.Set(httpserver.HTTPHeaderAllowInt64, "true")
 			} else {
-				c.Request.Header.Set(httpserver2.HTTPHeaderAllowInt64, "false")
+				c.Request.Header.Set(httpserver.HTTPHeaderAllowInt64, "false")
 			}
 		}
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
@@ -181,7 +180,7 @@ func (s *Server) registerHTTPServer() {
 		}
 		c.Next()
 	})
-	handlers := httpserver2.NewHandlers(s.proxy)
+	handlers := httpserver.NewHandlers(s.proxy)
 	handlers.RegisterRoutesTo(apiv1)
 	s.proxy.RegisterRestRouter(apiv1)
 
@@ -251,12 +250,12 @@ func (s *Server) startHTTPServer(errChan chan error) {
 	})
 	ginHandler.Use(ginLogger, gin.Recovery())
 	ginHandler.Use(func(c *gin.Context) {
-		_, err := strconv.ParseBool(c.Request.Header.Get(httpserver2.HTTPHeaderAllowInt64))
+		_, err := strconv.ParseBool(c.Request.Header.Get(httpserver.HTTPHeaderAllowInt64))
 		if err != nil {
 			if paramtable.Get().HTTPCfg.AcceptTypeAllowInt64.GetAsBool() {
 				c.Request.Header.Set(httpserver.HTTPHeaderAllowInt64, "true")
 			} else {
-				c.Request.Header.Set(httpserver2.HTTPHeaderAllowInt64, "false")
+				c.Request.Header.Set(httpserver.HTTPHeaderAllowInt64, "false")
 			}
 		}
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
@@ -276,9 +275,9 @@ func (s *Server) startHTTPServer(errChan chan error) {
 		ginHandler.Use(authenticate)
 	}
 	app := ginHandler.Group("/v1")
-	httpserver2.NewHandlersV1(s.proxy).RegisterRoutesToV1(app)
+	httpserver.NewHandlersV1(s.proxy).RegisterRoutesToV1(app)
 	appV2 := ginHandler.Group("/v2/vectordb")
-	httpserver2.NewHandlersV2(s.proxy).RegisterRoutesToV2(appV2)
+	httpserver.NewHandlersV2(s.proxy).RegisterRoutesToV2(appV2)
 	s.httpServer = &http.Server{Handler: ginHandler, ReadHeaderTimeout: time.Second}
 	errChan <- nil
 	if err := s.httpServer.Serve(s.listenerManager.HTTPListener()); err != nil && err != cmux.ErrServerClosed {

@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/milvus-io/milvus/internal/http/httpserver"
+	"github.com/milvus-io/milvus/internal/distributed/proxy/httpserver"
 	"github.com/milvus-io/milvus/internal/proxy/connection"
 	"github.com/milvus-io/milvus/pkg/util/merr"
 	"github.com/milvus-io/milvus/pkg/util/metricsinfo"
@@ -96,22 +96,23 @@ func getConnectedClients(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, string(ret))
 }
 
-func parseReqParams(c *gin.Context) map[string]interface{} {
+func buildReqParams(c *gin.Context, metricsType string) map[string]interface{} {
 	ret := make(map[string]interface{})
+	ret[metricsinfo.MetricTypeKey] = metricsType
 	queryParams := c.Request.URL.Query()
 	for key, values := range queryParams {
-		ret[key] = strings.Join(values, metricsinfo.MetricRequestParamsSeparator)
+		if len(values) > 1 {
+			ret[key] = strings.Join(values, metricsinfo.MetricRequestParamsSeparator)
+		} else {
+			ret[key] = values[0]
+		}
 	}
 	return ret
 }
 
-func getQueryComponentMetrics(node *Proxy, condition string) gin.HandlerFunc {
+func getQueryComponentMetrics(node *Proxy, metricsType string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		params := map[string]interface{}{
-			metricsinfo.MetricTypeKey:         condition,
-			metricsinfo.MetricRequestParamKey: parseReqParams(c),
-		}
-
+		params := buildReqParams(c, metricsType)
 		req, err := metricsinfo.ConstructGetMetricsRequest(params)
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{
