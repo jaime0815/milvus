@@ -299,7 +299,7 @@ func (task *baseTask) MarshalJSON() ([]byte, error) {
 	}{
 		TaskID:       task.id,
 		CollectionID: task.collectionID,
-		Replica:      task.replicaID,
+		Replica:      task.replica.GetID(),
 		Shard:        task.shard,
 		LoadType:     task.loadType.String(),
 		Source:       task.source.String(),
@@ -316,7 +316,7 @@ func (task *baseTask) GetSimplifiedTask() Task {
 		id:           task.id,
 		source:       task.source,
 		collectionID: task.collectionID,
-		replicaID:    task.replicaID,
+		replica:      task.replica,
 		shard:        task.shard,
 		loadType:     task.loadType,
 		status:       task.status,

@@ -22,9 +22,7 @@ package datanode
 import (
 	"context"
 	"fmt"
-
-	"github.com/cockroachdb/errors"
-	"github.com/samber/lo"
+	
 	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
 

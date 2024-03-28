@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	mhttp "github.com/milvus-io/milvus/internal/http"
 )
 
 func defaultResponse(c *gin.Context) {
@@ -133,13 +134,13 @@ func checkWriteHeaderCode(code int) {
 
 func timeoutMiddleware(handler gin.HandlerFunc) gin.HandlerFunc {
 	t := &Timeout{
-		timeout:  HTTPDefaultTimeout,
+		timeout:  mhttp.HTTPDefaultTimeout,
 		handler:  handler,
 		response: defaultResponse,
 	}
 	bufPool := &BufferPool{}
 	return func(c *gin.Context) {
-		timeoutSecond, err := strconv.ParseInt(c.Request.Header.Get(HTTPHeaderRequestTimeout), 10, 64)
+		timeoutSecond, err := strconv.ParseInt(c.Request.Header.Get(mhttp.HTTPHeaderRequestTimeout), 10, 64)
 		if err == nil {
 			t.timeout = time.Duration(timeoutSecond) * time.Second
 		}

@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/milvus-io/milvus/internal/distributed/proxy/httpserver"
+	mhttp "github.com/milvus-io/milvus/internal/http"
 	"github.com/milvus-io/milvus/internal/proxy/connection"
 	"github.com/milvus-io/milvus/pkg/util/merr"
 	"github.com/milvus-io/milvus/pkg/util/metricsinfo"
@@ -33,8 +33,8 @@ func getConfigs(configs map[string]string) gin.HandlerFunc {
 		bs, err := json.Marshal(configs)
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{
-				httpserver.HTTPReturnCode:    http.StatusInternalServerError,
-				httpserver.HTTPReturnMessage: err.Error(),
+				mhttp.HTTPReturnCode:    http.StatusInternalServerError,
+				mhttp.HTTPReturnMessage: err.Error(),
 			})
 			return
 		}
@@ -47,8 +47,8 @@ func getClusterInfo(node *Proxy) gin.HandlerFunc {
 		req, err := metricsinfo.ConstructRequestByMetricType(metricsinfo.SystemInfoMetrics)
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{
-				httpserver.HTTPReturnCode:    http.StatusInternalServerError,
-				httpserver.HTTPReturnMessage: err.Error(),
+				mhttp.HTTPReturnCode:    http.StatusInternalServerError,
+				mhttp.HTTPReturnMessage: err.Error(),
 			})
 			return
 		}
@@ -61,8 +61,8 @@ func getClusterInfo(node *Proxy) gin.HandlerFunc {
 			resp, err1 = getSystemInfoMetrics(c, req, node)
 			if err1 != nil {
 				c.JSON(http.StatusOK, gin.H{
-					httpserver.HTTPReturnCode:    http.StatusInternalServerError,
-					httpserver.HTTPReturnMessage: err1.Error(),
+					mhttp.HTTPReturnCode:    http.StatusInternalServerError,
+					mhttp.HTTPReturnMessage: err1.Error(),
 				})
 				return
 			}
@@ -71,8 +71,8 @@ func getClusterInfo(node *Proxy) gin.HandlerFunc {
 
 		if !merr.Ok(resp.GetStatus()) {
 			c.JSON(http.StatusOK, gin.H{
-				httpserver.HTTPReturnCode:    resp.GetStatus().GetCode(),
-				httpserver.HTTPReturnMessage: resp.Status.Reason,
+				mhttp.HTTPReturnCode:    resp.GetStatus().GetCode(),
+				mhttp.HTTPReturnMessage: resp.Status.Reason,
 			})
 			return
 		}
@@ -87,8 +87,8 @@ func getConnectedClients(c *gin.Context) {
 	ret, err := json.Marshal(clients)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
-			httpserver.HTTPReturnCode:    http.StatusInternalServerError,
-			httpserver.HTTPReturnMessage: err.Error(),
+			mhttp.HTTPReturnCode:    http.StatusInternalServerError,
+			mhttp.HTTPReturnMessage: err.Error(),
 		})
 		return
 	}
@@ -99,6 +99,7 @@ func getConnectedClients(c *gin.Context) {
 func buildReqParams(c *gin.Context, metricsType string) map[string]interface{} {
 	ret := make(map[string]interface{})
 	ret[metricsinfo.MetricTypeKey] = metricsType
+
 	queryParams := c.Request.URL.Query()
 	for key, values := range queryParams {
 		if len(values) > 1 {
@@ -116,8 +117,8 @@ func getQueryComponentMetrics(node *Proxy, metricsType string) gin.HandlerFunc {
 		req, err := metricsinfo.ConstructGetMetricsRequest(params)
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{
-				httpserver.HTTPReturnCode:    http.StatusInternalServerError,
-				httpserver.HTTPReturnMessage: err.Error(),
+				mhttp.HTTPReturnCode:    http.StatusInternalServerError,
+				mhttp.HTTPReturnMessage: err.Error(),
 			})
 			return
 		}
@@ -125,24 +126,24 @@ func getQueryComponentMetrics(node *Proxy, metricsType string) gin.HandlerFunc {
 		resp, err := node.queryCoord.GetMetrics(c, req)
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{
-				httpserver.HTTPReturnCode:    http.StatusInternalServerError,
-				httpserver.HTTPReturnMessage: err.Error(),
+				mhttp.HTTPReturnCode:    http.StatusInternalServerError,
+				mhttp.HTTPReturnMessage: err.Error(),
 			})
 			return
 		}
 
 		if !merr.Ok(resp.GetStatus()) {
 			c.JSON(http.StatusOK, gin.H{
-				httpserver.HTTPReturnCode:    resp.GetStatus().GetCode(),
-				httpserver.HTTPReturnMessage: resp.Status.Reason,
+				mhttp.HTTPReturnCode:    resp.GetStatus().GetCode(),
+				mhttp.HTTPReturnMessage: resp.Status.Reason,
 			})
 			return
 		}
 
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{
-				httpserver.HTTPReturnCode:    http.StatusInternalServerError,
-				httpserver.HTTPReturnMessage: err.Error(),
+				mhttp.HTTPReturnCode:    http.StatusInternalServerError,
+				mhttp.HTTPReturnMessage: err.Error(),
 			})
 			return
 		}
