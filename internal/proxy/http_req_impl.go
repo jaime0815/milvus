@@ -95,6 +95,8 @@ func getConnectedClients(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, string(ret))
 }
 
+// buildReqParams fetch all parameters from query parameter of URL, add them into a map data structure.
+// put key and value from query parameter into map, concatenate values with separator if values size is greater than 1
 func buildReqParams(c *gin.Context, metricsType string) map[string]interface{} {
 	ret := make(map[string]interface{})
 	ret[metricsinfo.MetricTypeKey] = metricsType

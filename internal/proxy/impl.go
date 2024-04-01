@@ -6437,7 +6437,6 @@ func (node *Proxy) RegisterRestRouter(router gin.IRouter) {
 	router.GET("/_qnode/segments", getQueryComponentMetrics(node, metricsinfo.QuerySegmentDist))
 	router.GET("/_qnode/channels", getQueryComponentMetrics(node, metricsinfo.QueryChannelDist))
 	router.GET("/_qnode/tasks", getQueryComponentMetrics(node, metricsinfo.QueryTasks))
-	router.GET("/_qnode/resource_groups", getQueryComponentMetrics(node, metricsinfo.QueryResourceGroups))
 
 	// Database request
 	router.GET("/_db/list", nil)
@@ -6453,21 +6452,23 @@ func (node *Proxy) RegisterRestRouter(router gin.IRouter) {
 	router.GET("/_dcollection/channels")
 
 	// Partition request
-	// router.GET("/_partition/stats")
+	// TODO router.GET("/_partition/stats")
 
 	// Segment request
-	// router.GET("/_segment/stats")
+	// TODO router.GET("/_segment/stats")
 
 	// Replica request
-	// router.GET("/_replica/stats")
-	router.GET("/_replica/all", getQueryComponentMetrics(node, metricsinfo.QueryReplicas))
+	router.GET("/_replica/list", getQueryComponentMetrics(node, metricsinfo.QueryReplicas))
+
+	// Resource group
+	router.GET("/_rg/list", getQueryComponentMetrics(node, metricsinfo.QueryResourceGroups))
 
 	// Channel request
-	// router.GET("/_channel/stats")
+	// TODO router.GET("/_channel/stats")
 
 	// Task request
-	// router.GET("/_task/all")
+	// TODO router.GET("/_task/all")
 	router.GET("/_task/qnode_all", getQueryComponentMetrics(node, metricsinfo.QueryTasks))
-	// router.GET("/_task/dnode_all")
+	// TODO router.GET("/_task/dnode_all")
 
 }
