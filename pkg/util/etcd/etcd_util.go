@@ -62,17 +62,21 @@ func GetEtcdClient(
 // GetRemoteEtcdClient returns client of remote etcd by given endpoints
 func GetRemoteEtcdClient(endpoints []string) (*clientv3.Client, error) {
 	return clientv3.New(clientv3.Config{
-		Endpoints:   endpoints,
-		DialTimeout: 5 * time.Second,
+		Endpoints:          endpoints,
+		DialTimeout:        5 * time.Second,
+		MaxCallSendMsgSize: 52428800,
+		MaxCallRecvMsgSize: 52428800,
 	})
 }
 
 func GetRemoteEtcdClientWithAuth(endpoints []string, userName, password string) (*clientv3.Client, error) {
 	return clientv3.New(clientv3.Config{
-		Endpoints:   endpoints,
-		DialTimeout: 5 * time.Second,
-		Username:    userName,
-		Password:    password,
+		Endpoints:          endpoints,
+		DialTimeout:        5 * time.Second,
+		Username:           userName,
+		Password:           password,
+		MaxCallSendMsgSize: 52428800,
+		MaxCallRecvMsgSize: 52428800,
 	})
 }
 
@@ -84,6 +88,9 @@ func GetRemoteEtcdSSLClient(endpoints []string, certFile string, keyFile string,
 func GetRemoteEtcdSSLClientWithCfg(endpoints []string, certFile string, keyFile string, caCertFile string, minVersion string, cfg clientv3.Config) (*clientv3.Client, error) {
 	cfg.Endpoints = endpoints
 	cfg.DialTimeout = 5 * time.Second
+	cfg.MaxCallRecvMsgSize = 52428800
+	cfg.MaxCallSendMsgSize = 52428800
+
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return nil, errors.Wrap(err, "load etcd cert key pair error")
