@@ -21,9 +21,6 @@ import (
 	"strconv"
 	"time"
 
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/milvuspb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/msgpb"
@@ -36,8 +33,59 @@ import (
 	"github.com/milvus-io/milvus/pkg/util/paramtable"
 	"github.com/milvus-io/milvus/pkg/util/retry"
 	"github.com/milvus-io/milvus/pkg/util/typeutil"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
 )
 
+func buildInsertMsg(ctx context.Context, channelName string, partitionID UniqueID, partitionName string, segmentID UniqueID,
+	insertMsg *msgstream.InsertMsg, rows int) *msgstream.InsertMsg {
+	insertReq := &msgpb.InsertRequest{
+		Base: commonpbutil.NewMsgBase(
+			commonpbutil.WithMsgType(commonpb.MsgType_Insert),
+			commonpbutil.WithTimeStamp(insertMsg.BeginTimestamp), // entity's timestamp was set to equal it.BeginTimestamp in preExecute()
+			commonpbutil.WithSourceID(insertMsg.Base.SourceID),
+		),
+		CollectionID:   insertMsg.CollectionID,
+		PartitionID:    partitionID,
+		CollectionName: insertMsg.CollectionName,
+		PartitionName:  partitionName,
+		SegmentID:      segmentID,
+		ShardName:      channelName,
+		Version:        msgpb.InsertDataVersion_ColumnBased,
+		FieldsData:     make([]*schemapb.FieldData, rows),
+		Timestamps:     make([]uint64, 0, rows),
+		RowIDs:         make([]int64, 0, rows),
+	}
+
+	return &msgstream.InsertMsg{
+		BaseMsg: msgstream.BaseMsg{
+			Ctx: ctx,
+		},
+		InsertRequest: insertReq,
+	}
+}
+
+func protoSize(msg *msgstream.InsertMsg) (int, error) {
+	curRowBytes, err := proto.Marshal(msg)
+	if err != nil {
+		log.Error("marshal insert msg fail", zap.Error(err))
+		return 0, err
+	}
+	return len(curRowBytes), nil
+}
+
+func appendMsg(target, source *msgstream.InsertMsg, sourceOffset int) {
+	typeutil.AppendFieldData(target.FieldsData, source.GetFieldsData(), int64(sourceOffset))
+	target.HashValues = append(target.HashValues, source.HashValues[sourceOffset])
+	target.Timestamps = append(target.Timestamps, source.Timestamps[sourceOffset])
+	target.RowIDs = append(target.RowIDs, source.RowIDs[sourceOffset])
+	target.NumRows++
+}
+
+// genInsertMsgsByPartition creates TsMsgs using insertMsg. If a tsMsg exceeds the size threshold, it will be split into multiple messages.
+// Note That: Be aware that the encoded message size may still surpass the configured `pulsar.maxMessageSize` with the
+// current splitting strategy. In such case, you can adjust `proxy.maxMessageSize` accordingly.
 func genInsertMsgsByPartition(ctx context.Context,
 	segmentID UniqueID,
 	partitionID UniqueID,
@@ -46,60 +94,35 @@ func genInsertMsgsByPartition(ctx context.Context,
 	channelName string,
 	insertMsg *msgstream.InsertMsg,
 ) ([]msgstream.TsMsg, error) {
-	threshold := Params.PulsarCfg.MaxMessageSize.GetAsInt()
-
-	// create empty insert message
-	createInsertMsg := func(segmentID UniqueID, channelName string) *msgstream.InsertMsg {
-		insertReq := &msgpb.InsertRequest{
-			Base: commonpbutil.NewMsgBase(
-				commonpbutil.WithMsgType(commonpb.MsgType_Insert),
-				commonpbutil.WithTimeStamp(insertMsg.BeginTimestamp), // entity's timestamp was set to equal it.BeginTimestamp in preExecute()
-				commonpbutil.WithSourceID(insertMsg.Base.SourceID),
-			),
-			CollectionID:   insertMsg.CollectionID,
-			PartitionID:    partitionID,
-			CollectionName: insertMsg.CollectionName,
-			PartitionName:  partitionName,
-			SegmentID:      segmentID,
-			ShardName:      channelName,
-			Version:        msgpb.InsertDataVersion_ColumnBased,
-			FieldsData:     make([]*schemapb.FieldData, len(insertMsg.GetFieldsData())),
-		}
-		msg := &msgstream.InsertMsg{
-			BaseMsg: msgstream.BaseMsg{
-				Ctx: ctx,
-			},
-			InsertRequest: insertReq,
-		}
-
-		return msg
-	}
-
 	repackedMsgs := make([]msgstream.TsMsg, 0)
-	requestSize := 0
-	msg := createInsertMsg(segmentID, channelName)
-	for _, offset := range rowOffsets {
-		curRowMessageSize, err := typeutil.EstimateEntitySize(insertMsg.GetFieldsData(), offset)
-		if err != nil {
-			return nil, err
-		}
-
-		// if insertMsg's size is greater than the threshold, split into multiple insertMsgs
-		if requestSize+curRowMessageSize >= threshold {
-			repackedMsgs = append(repackedMsgs, msg)
-			msg = createInsertMsg(segmentID, channelName)
-			requestSize = 0
-		}
-
-		typeutil.AppendFieldData(msg.FieldsData, insertMsg.GetFieldsData(), int64(offset))
-		msg.HashValues = append(msg.HashValues, insertMsg.HashValues[offset])
-		msg.Timestamps = append(msg.Timestamps, insertMsg.Timestamps[offset])
-		msg.RowIDs = append(msg.RowIDs, insertMsg.RowIDs[offset])
-		msg.NumRows++
-		requestSize += curRowMessageSize
+	if len(rowOffsets) == 0 {
+		return repackedMsgs, nil
 	}
-	repackedMsgs = append(repackedMsgs, msg)
 
+	msg := buildInsertMsg(ctx, channelName, partitionID, partitionName, segmentID, insertMsg, len(insertMsg.FieldsData))
+	appendMsg(msg, insertMsg, rowOffsets[0])
+	if len(rowOffsets) == 1 {
+		repackedMsgs = append(repackedMsgs, msg)
+		return repackedMsgs, nil
+	}
+
+	rowEncodedSize, err := protoSize(msg)
+	if err != nil {
+		return nil, err
+	}
+
+	threshold := Params.PulsarCfg.MaxMessageSize.GetAsInt()
+	eachGroupRows := threshold / rowEncodedSize
+	for idx := 1; idx < len(rowOffsets); idx++ {
+		offset := rowOffsets[idx]
+		if idx%eachGroupRows == 0 {
+			repackedMsgs = append(repackedMsgs, msg)
+			msg = buildInsertMsg(ctx, channelName, partitionID, partitionName, segmentID, insertMsg, eachGroupRows)
+		}
+		appendMsg(msg, insertMsg, offset)
+	}
+
+	repackedMsgs = append(repackedMsgs, msg)
 	return repackedMsgs, nil
 }
 

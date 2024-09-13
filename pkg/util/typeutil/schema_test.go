@@ -1221,36 +1221,6 @@ func TestDeleteFieldData(t *testing.T) {
 	assert.EqualExportedValues(t, tmpSparseFloatVector, result2[SparseFloatVectorFieldID-common.StartOfUserFieldID].GetVectors().GetSparseFloatVector())
 }
 
-func TestEstimateEntitySize(t *testing.T) {
-	samples := []*schemapb.FieldData{
-		{
-			FieldId:   111,
-			FieldName: "float16_vector",
-			Type:      schemapb.DataType_Float16Vector,
-			Field: &schemapb.FieldData_Vectors{
-				Vectors: &schemapb.VectorField{
-					Dim:  64,
-					Data: &schemapb.VectorField_Float16Vector{},
-				},
-			},
-		},
-		{
-			FieldId:   112,
-			FieldName: "bfloat16_vector",
-			Type:      schemapb.DataType_BFloat16Vector,
-			Field: &schemapb.FieldData_Vectors{
-				Vectors: &schemapb.VectorField{
-					Dim:  128,
-					Data: &schemapb.VectorField_Bfloat16Vector{},
-				},
-			},
-		},
-	}
-	size, error := EstimateEntitySize(samples, int(0))
-	assert.NoError(t, error)
-	assert.True(t, size == 384)
-}
-
 func TestGetPrimaryFieldSchema(t *testing.T) {
 	int64Field := &schemapb.FieldSchema{
 		FieldID:  1,

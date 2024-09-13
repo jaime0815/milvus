@@ -465,6 +465,7 @@ func NewInt32FieldData(fieldName string, numRows int) *schemapb.FieldData {
 	return &schemapb.FieldData{
 		Type:      schemapb.DataType_Int32,
 		FieldName: fieldName,
+		FieldId:   int64(101),
 		Field: &schemapb.FieldData_Scalars{
 			Scalars: &schemapb.ScalarField{
 				Data: &schemapb.ScalarField_IntData{
@@ -481,6 +482,7 @@ func NewInt32FieldDataWithValue(fieldName string, fieldValue interface{}) *schem
 	return &schemapb.FieldData{
 		Type:      schemapb.DataType_Int32,
 		FieldName: fieldName,
+		FieldId:   int64(101),
 		Field: &schemapb.FieldData_Scalars{
 			Scalars: &schemapb.ScalarField{
 				Data: &schemapb.ScalarField_IntData{
@@ -497,6 +499,7 @@ func NewInt64FieldData(fieldName string, numRows int) *schemapb.FieldData {
 	return &schemapb.FieldData{
 		Type:      schemapb.DataType_Int64,
 		FieldName: fieldName,
+		FieldId:   int64(101),
 		Field: &schemapb.FieldData_Scalars{
 			Scalars: &schemapb.ScalarField{
 				Data: &schemapb.ScalarField_LongData{
@@ -677,7 +680,8 @@ func NewArrayFieldData(fieldName string, numRows int) *schemapb.FieldData {
 			Scalars: &schemapb.ScalarField{
 				Data: &schemapb.ScalarField_ArrayData{
 					ArrayData: &schemapb.ArrayArray{
-						Data: GenerateArrayOfIntArray(numRows),
+						Data:        GenerateArrayOfIntArray(numRows),
+						ElementType: schemapb.DataType_Int32,
 					},
 				},
 			},

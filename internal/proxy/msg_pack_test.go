@@ -18,12 +18,10 @@ package proxy
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"google.golang.org/protobuf/proto"
-
+	"github.com/golang/protobuf/proto"
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/milvuspb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/msgpb"
@@ -35,7 +33,119 @@ import (
 	"github.com/milvus-io/milvus/pkg/util/funcutil"
 	"github.com/milvus-io/milvus/pkg/util/paramtable"
 	"github.com/milvus-io/milvus/pkg/util/testutils"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
+
+func buildInsertTask(rows int) *BaseInsertTask {
+	hash := []uint32{}
+	fieldDatas := []*schemapb.FieldData{}
+	if rows != 0 {
+		hash = testutils.GenerateHashKeys(rows)
+		fieldDatas = []*schemapb.FieldData{NewArrayFieldData("array_field", rows, 1000)}
+	}
+
+	insertMsg := &BaseInsertTask{
+		BaseMsg: msgstream.BaseMsg{
+			HashValues: hash,
+		},
+		InsertRequest: &msgpb.InsertRequest{
+			Base: &commonpb.MsgBase{
+				MsgType:  commonpb.MsgType_Insert,
+				MsgID:    0,
+				SourceID: paramtable.GetNodeID(),
+			},
+			DbName:         dbName,
+			CollectionName: "c1",
+			PartitionName:  "p1",
+			NumRows:        uint64(rows),
+			FieldsData:     fieldDatas,
+			Version:        msgpb.InsertDataVersion_ColumnBased,
+		},
+	}
+	insertMsg.Timestamps = make([]uint64, rows)
+	for index := range insertMsg.Timestamps {
+		insertMsg.Timestamps[index] = insertMsg.BeginTimestamp
+	}
+	insertMsg.RowIDs = make([]UniqueID, rows)
+	for index := range insertMsg.RowIDs {
+		insertMsg.RowIDs[index] = int64(index)
+	}
+
+	return insertMsg
+}
+
+func Test_enInsertMsgsByPartition(t *testing.T) {
+	t.Run("none row", func(t *testing.T) {
+		tsMsgs, err := genInsertMsgsByPartition(context.TODO(), 1, 1, "p", []int{}, "ch", nil)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(tsMsgs))
+	})
+
+	t.Run("only one row", func(t *testing.T) {
+		insertMsg := buildInsertTask(1)
+		tsMsgs, err := genInsertMsgsByPartition(context.TODO(), 1, 1, "p", []int{0}, "ch", insertMsg)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(tsMsgs))
+		element, ok := tsMsgs[0].(*msgstream.InsertMsg)
+		assert.True(t, ok)
+		assert.Equal(t, 1, len(element.FieldsData))
+		assert.Equal(t, 1, len(element.HashValues))
+		assert.Equal(t, 1, len(element.RowIDs))
+		assert.Equal(t, 1, len(element.Timestamps))
+		assert.Equal(t, uint64(1), element.NumRows)
+	})
+
+	t.Run("split rows", func(t *testing.T) {
+		insertMsg := buildInsertTask(1)
+		tsMsgs, err := genInsertMsgsByPartition(context.TODO(), 1, 1, "p", []int{0}, "ch", insertMsg)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(tsMsgs))
+		element, ok := tsMsgs[0].(*msgstream.InsertMsg)
+		assert.True(t, ok)
+		rowSize, err := protoSize(element)
+		assert.NoError(t, err)
+
+		paramtable.Get().Save(paramtable.Get().PulsarCfg.MaxMessageSize.Key, fmt.Sprintf("%d", rowSize))
+		defer paramtable.Get().Reset(paramtable.Get().PulsarCfg.MaxMessageSize.Key)
+
+		insertMsg = buildInsertTask(5)
+		tsMsgs, err = genInsertMsgsByPartition(context.TODO(), 1, 1, "p", []int{0, 1, 2, 3, 4}, "ch", insertMsg)
+		assert.NoError(t, err)
+		assert.Equal(t, 5, len(tsMsgs))
+	})
+}
+
+func NewArrayFieldData(fieldName string, numRows int, len int) *schemapb.FieldData {
+	return &schemapb.FieldData{
+		Type:      schemapb.DataType_Array,
+		FieldName: fieldName,
+		Field: &schemapb.FieldData_Scalars{
+			Scalars: &schemapb.ScalarField{
+				Data: &schemapb.ScalarField_ArrayData{
+					ArrayData: &schemapb.ArrayArray{
+						Data:        GenerateArrayOfIntArray(numRows, len),
+						ElementType: schemapb.DataType_Int8,
+					},
+				},
+			},
+		},
+	}
+}
+
+func GenerateArrayOfIntArray(numRows int, len int) []*schemapb.ScalarField {
+	ret := make([]*schemapb.ScalarField, 0, numRows)
+	for i := 0; i < numRows; i++ {
+		ret = append(ret, &schemapb.ScalarField{
+			Data: &schemapb.ScalarField_IntData{
+				IntData: &schemapb.IntArray{
+					Data: testutils.GenerateInt32Array(len),
+				},
+			},
+		})
+	}
+	return ret
+}
 
 func TestRepackInsertData(t *testing.T) {
 	nb := 10
