@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/milvus-io/milvus-proto/go-api/v2/schemapb"
 	"github.com/milvus-io/milvus/pkg/common"
 	"github.com/milvus-io/milvus/pkg/config"
 	"github.com/milvus-io/milvus/pkg/util/funcutil"
@@ -265,6 +266,9 @@ func (p *autoIndexConfig) panicIfNotValidAndSetDefaultMetricTypeHelper(key strin
 }
 
 func (p *autoIndexConfig) reset(key string, m map[string]string, mgr *config.Manager) {
-	j := funcutil.MapToJSON(m)
-	mgr.SetConfig(key, string(j))
+	ret, err := funcutil.MapToJSON(m)
+	if err != nil {
+		panic(fmt.Sprintf("%s: convert to json failed, parameters invalid, error: %s", key, err.Error()))
+	}
+	mgr.SetConfig(key, ret)
 }
