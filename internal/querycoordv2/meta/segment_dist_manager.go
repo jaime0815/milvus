@@ -166,7 +166,7 @@ type SegmentDistManager struct {
 }
 
 type nodeSegments struct {
-	segments        []*Segment
+	segments        []*Segment `json:"segments,omitempty"`
 	collSegments    map[int64][]*Segment
 	channelSegments map[string][]*Segment
 }
@@ -255,12 +255,12 @@ func (m *SegmentDistManager) GetJSONSegmentDist(verbose bool) string {
 	var flattenedSegments []*Segment
 	for _, nodeSeg := range maps.Values(m.segments) {
 		if !verbose {
-			simplifiedSegs := lo.Map(nodeSeg, func(s *Segment, i int) *Segment {
+			simplifiedSegs := lo.Map(nodeSeg.segments, func(s *Segment, i int) *Segment {
 				return s.GetSimplifiedSegment()
 			})
 			flattenedSegments = append(flattenedSegments, simplifiedSegs...)
 		} else {
-			flattenedSegments = append(flattenedSegments, nodeSeg...)
+			flattenedSegments = append(flattenedSegments, nodeSeg.segments...)
 		}
 	}
 

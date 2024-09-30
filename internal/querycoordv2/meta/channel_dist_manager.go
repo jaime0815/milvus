@@ -145,7 +145,7 @@ func (channel *DmChannel) GetSimplifiedDmChannel() *DmChannel {
 }
 
 type nodeChannels struct {
-	channels []*DmChannel
+	channels []*DmChannel `json:"channels,omitempty"`
 	// collection id => channels
 	collChannels map[int64][]*DmChannel
 	// channel name => DmChannel
@@ -180,7 +180,7 @@ type ChannelDistManager struct {
 	rwmutex sync.RWMutex
 
 	// NodeID -> Channels
-	channels map[typeutil.UniqueID][]*DmChannel `json:"nodeIDToChannels,omitempty"`
+	channels map[typeutil.UniqueID]nodeChannels `json:"nodeIDToChannels,omitempty"`
 
 	// CollectionID -> Channels
 	collectionIndex map[int64][]*DmChannel
@@ -312,12 +312,12 @@ func (m *ChannelDistManager) GetJSONChannelDist(verbose bool) string {
 	var flattenedChannels []*DmChannel
 	for _, nodeChannel := range maps.Values(m.channels) {
 		if !verbose {
-			simplifiedChannels := lo.Map(nodeChannel, func(s *DmChannel, i int) *DmChannel {
+			simplifiedChannels := lo.Map(nodeChannel.channels, func(s *DmChannel, i int) *DmChannel {
 				return s.GetSimplifiedDmChannel()
 			})
 			flattenedChannels = append(flattenedChannels, simplifiedChannels...)
 		} else {
-			flattenedChannels = append(flattenedChannels, nodeChannel...)
+			flattenedChannels = append(flattenedChannels, nodeChannel.channels...)
 		}
 	}
 

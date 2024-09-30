@@ -155,7 +155,7 @@ func (view *LeaderView) GetReducedLeaderView() *LeaderView {
 		Version:      v.Version,
 		Segments:     v.Segments,
 		GrowingSegments: lo.MapValues(v.GrowingSegments, func(v *Segment, k int64) *Segment {
-			return v.GetReducedSegment()
+			return v.GetSimplifiedSegment()
 		}),
 		TargetVersion: v.TargetVersion,
 	}

@@ -19,6 +19,7 @@ package meta
 import (
 	"time"
 
+	"github.com/milvus-io/milvus/internal/util/metrics"
 	"github.com/samber/lo"
 
 	"github.com/milvus-io/milvus/internal/proto/datapb"
@@ -28,11 +29,11 @@ import (
 
 // CollectionTarget collection target is immutable,
 type CollectionTarget struct {
-	segments   map[int64]*datapb.SegmentInfo  `json:"segments,omitempty"`
-	dmChannels map[string]*DmChannel `json:"dmChannels,omitempty"`
+	segments   map[int64]*datapb.SegmentInfo `json:"segments,omitempty"`
+	dmChannels map[string]*DmChannel         `json:"dmChannels,omitempty"`
 	// stores target partitions info
 	partitions typeutil.Set[int64] `json:"partitions,omitempty"`
-	version    int64 `json:"version,omitempty"`
+	version    int64               `json:"version,omitempty"`
 }
 
 func NewCollectionTarget(segments map[int64]*datapb.SegmentInfo, dmChannels map[string]*DmChannel, partitionIDs []int64) *CollectionTarget {
