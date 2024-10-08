@@ -50,7 +50,6 @@ function renderComponentInfo(data) {
 
     // Process each node's information
     data.nodes_info.forEach(node => {
-        // Build row HTML
         const hardwareInfo = node.infos['hardware_infos'];
         const tr = `
             <tr>
@@ -60,13 +59,10 @@ function renderComponentInfo(data) {
                 <td>Healthy</td>
                 <td>None</td>
             </tr>`;
-
-        // Update the corresponding table HTML
         tableHTML += tr
     });
 
     tableHTML += '</tbody>'
-    console.log(tableHTML)
     document.getElementById("components").innerHTML = tableHTML;
 }
 
@@ -86,6 +82,33 @@ function renderSysInfo(data) {
 
     // Display table in the div
     document.getElementById('sysInfo').innerHTML = tableHTML;
+}
+
+function renderClientsInfo(data) {
+    let tableHTML = '<thead class="thead-light"><tr>' +
+        '   <th scope="col">Host</th>' +
+        '   <th scope="col">User</th>' +
+        '   <th scope="col">SdkType</th>' +
+        '   <th scope="col">SdkVersion</th>' +
+        '   <th scope="col">LocalTime</th> ' +
+        '   <th scope="col">LastActiveTime</th> ' +
+         '</tr></thead>';
+
+    data.forEach(client => {
+        const tr = `
+            <tr>
+                <td>${client['host']}</td>
+                <td>${client['user'] || "default"}</td>
+                <td>${client['sdk_type']}</td>
+                <td>${client['sdk_version']}</td>
+                <td>${client['local_time']}</td>
+                <td>${client['reserved']['last_active_time']}</td>
+            </tr>`;
+        tableHTML += tr
+    });
+
+    tableHTML += '</tbody>'
+    document.getElementById("clients").innerHTML = tableHTML;
 }
 
 function readSysInfo(systemInfo) {

@@ -29,6 +29,16 @@
               .catch(error => {
                 console.error('Error fetching the JSON data:', error);
               });
+
+      fetch(MILVUS_URI + "/_cluster/clients")
+              .then(response => response.json())
+              .then(text => {
+                data = JSON.parse(text)
+                renderClientsInfo(data)
+              })
+              .catch(error => {
+                console.error('Error fetching the JSON data:', error);
+              });
     });
   </script>
 </head>
@@ -47,33 +57,7 @@
           <h2>
             Connected Clients
           </h2>
-          <table id="clients" class="table table-hover">
-            <thead class="thead-light">
-            <tr>
-              <th scope="col">Host</th>
-              <th scope="col">User</th>
-              <th scope="col">SdkType</th>
-              <th scope="col">SdkVersion</th>
-              <th scope="col">LocalTime</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr>
-              <td>127.0.0.1</td>
-              <td>admin</td>
-              <td>Go</td>
-              <td>2.1.4</td>
-              <td>2022-11-12 18:11:22</td>
-            </tr>
-            <tr>
-              <td>127.0.0.1</td>
-              <td>admin</td>
-              <td>Python</td>
-              <td>2.1.4</td>
-              <td>2022-11-12 18:11:22</td>
-            </tr>
-            </tbody>
-          </table>
+          <table id="clients" class="table table-hover"></table>
 
           <h2>
             Component Information
@@ -83,6 +67,7 @@
           <h2>
             Third Dependency
           </h2>
+          <!-- TODO -->
           <table id="third_dependency" class="table table-hover"></table>
         </div>
         <div class="col-md-2">

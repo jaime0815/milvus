@@ -6434,9 +6434,9 @@ func (node *Proxy) RegisterRestRouter(router gin.IRouter) {
 	router.GET("/_hook/configs", getConfigs(paramtable.GetHookParams().GetAll()))
 
 	// Node request
-	router.GET("/_qnode/segments", getQueryComponentMetrics(node, metricsinfo.QuerySegmentDist))
-	router.GET("/_qnode/channels", getQueryComponentMetrics(node, metricsinfo.QueryChannelDist))
-	router.GET("/_qnode/tasks", getQueryComponentMetrics(node, metricsinfo.QueryTasks))
+	router.GET("/_qcoord/segments", getQueryComponentMetrics(node, metricsinfo.QuerySegmentDist))
+	router.GET("/_qcoord/channels", getQueryComponentMetrics(node, metricsinfo.QueryChannelDist))
+	router.GET("/_qcoord/tasks", getQueryComponentMetrics(node, metricsinfo.QueryTasks))
 
 	// Database request
 	router.GET("/_db/list", nil)
@@ -6468,7 +6468,7 @@ func (node *Proxy) RegisterRestRouter(router gin.IRouter) {
 
 	// Task request
 	// TODO router.GET("/_task/all")
-	router.GET("/_task/qnode_all", getQueryComponentMetrics(node, metricsinfo.QueryTasks))
+	//router.GET("/_task/qnode_all", getQueryComponentMetrics(node, metricsinfo.QueryTasks))
 	// TODO router.GET("/_task/dnode_all")
 
 }
