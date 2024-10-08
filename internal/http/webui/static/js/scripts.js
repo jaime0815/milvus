@@ -36,63 +36,38 @@ function renderNodesMetrics(data) {
     document.getElementById('nodeMetrics').innerHTML = tableHTML;
 }
 
-
 function renderComponentInfo(data) {
-    let nodeHTML = '<thead class="thead-light"><tr>' +
-        ' <th scope="col">Name</th>' +
-        ' <th scope="col">IP</th>' +
-        ' <th scope="col">Start Time</th>' +
-        ' <th scope="col">State</th>' +
-        ' <th scope="col">Reason</th>' +
-        '</tr></thead><tbody>';
+    let tableHTML = `
+        <thead class="thead-light">
+            <tr>
+                <th scope="col">Name</th>
+                <th scope="col">IP</th>
+                <th scope="col">Start Time</th>
+                <th scope="col">State</th>
+                <th scope="col">Reason</th>
+            </tr>
+        </thead><tbody>`;
 
-    let coordHTML = '<thead class="thead-light"><tr>' +
-        ' <th scope="col">Name</th>' +
-        ' <th scope="col">IP</th>' +
-        ' <th scope="col">Start Time</th>' +
-        ' <th scope="col">State</th>' +
-        ' <th scope="col">Primary</th>' +
-        ' <th scope="col">Reason</th>' +
-        '</tr></thead><tbody>';
-
-    const tableHtmls = new Map([
-        ['rootcoord', coordHTML],
-        ['datacoord', coordHTML],
-        ['querycoord', coordHTML],
-        ['querynode', nodeHTML],
-        ['datanode', nodeHTML],
-        ['indexnode', nodeHTML],
-        ['proxy', nodeHTML],
-    ]);
-
+    // Process each node's information
     data.nodes_info.forEach(node => {
-        let type = node.infos['type']
-        if (!tableHtmls.has(type)) {
-            console.log("can't find " + "type:" + type)
-            return
-        }
+        // Build row HTML
+        const hardwareInfo = node.infos['hardware_infos'];
+        const tr = `
+            <tr>
+                <td>${node.infos['name']}</td>
+                <td>${hardwareInfo['ip']}</td>
+                <td>${node.infos['created_time']}</td>
+                <td>Healthy</td>
+                <td>None</td>
+            </tr>`;
 
-        let html = '<tr>';
-        html += `<td>${node.infos['name']}</td>`;
-        let hardwareInfo = node.infos['hardware_infos']
-        html += `<td>${hardwareInfo['ip']}</td>`;
-        html += `<td>${node.infos['created_time']}</td>`;
-        html += `<td>Healthy</td>`;
-        if (type === "rootcoord" || type === "datacoord" || type === "querycoord") {
-            html += `<td>true</td>`;
-        }
-        html += `<td>nothing</td>`;
-        html += '</tr>';
+        // Update the corresponding table HTML
+        tableHTML += tr
+    });
 
-        let oldHtml = tableHtmls.get(type)
-        const updatedValue = oldHtml + html;
-        tableHtmls.set(type, updatedValue)
-        });
-
-    for (const [key, value] of tableHtmls.entries()) {
-        updatedValue = value + '</tbody>';
-        document.getElementById(key).innerHTML = updatedValue;
-    }
+    tableHTML += '</tbody>'
+    console.log(tableHTML)
+    document.getElementById("components").innerHTML = tableHTML;
 }
 
 function renderSysInfo(data) {

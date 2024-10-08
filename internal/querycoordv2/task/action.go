@@ -81,7 +81,7 @@ func (action *BaseAction) GetShard() string {
 }
 
 func (action *BaseAction) String() string {
-	return fmt.Sprintf(`{[type=%v][node=%d][shard=%v]}`, action.Type(), action.Node(), action.Shard())
+	return fmt.Sprintf(`{[type=%v][node=%d][shard=%v]}`, action.Type(), action.Node(), action.Shard)
 }
 
 type SegmentAction struct {
@@ -123,13 +123,13 @@ func (action *SegmentAction) IsFinished(distMgr *meta.DistributionManager) bool 
 		}
 
 		// segment found in leader view
-		views := distMgr.LeaderViewManager.GetByFilter(meta.WithSegment2LeaderView(action.segmentID, false))
+		views := distMgr.LeaderViewManager.GetByFilter(meta.WithSegment2LeaderView(action.SegmentID, false))
 		if len(views) == 0 {
 			return false
 		}
 
 		// segment found in dist
-		segmentInTargetNode := distMgr.SegmentDistManager.GetByFilter(meta.WithNodeID(action.Node()), meta.WithSegmentID(action.SegmentID()))
+		segmentInTargetNode := distMgr.SegmentDistManager.GetByFilter(meta.WithNodeID(action.Node()), meta.WithSegmentID(action.SegmentID))
 		return len(segmentInTargetNode) > 0
 	} else if action.Type() == ActionTypeReduce {
 		// FIXME: Now shard leader's segment view is a map of segment ID to node ID,
@@ -160,7 +160,7 @@ func (action *SegmentAction) IsFinished(distMgr *meta.DistributionManager) bool 
 }
 
 func (action *SegmentAction) String() string {
-	return action.BaseAction.String() + fmt.Sprintf(`{[segmentID=%d][scope=%d]}`, action.SegmentID(), action.Scope())
+	return action.BaseAction.String() + fmt.Sprintf(`{[segmentID=%d][scope=%d]}`, action.SegmentID, action.Scope)
 }
 
 type ChannelAction struct {
@@ -246,7 +246,7 @@ func (action *LeaderAction) GetLeaderID() typeutil.UniqueID {
 }
 
 func (action *LeaderAction) IsFinished(distMgr *meta.DistributionManager) bool {
-	views := distMgr.LeaderViewManager.GetByFilter(meta.WithNodeID2LeaderView(action.leaderID), meta.WithChannelName2LeaderView(action.Shard()))
+	views := distMgr.LeaderViewManager.GetByFilter(meta.WithNodeID2LeaderView(action.leaderID), meta.WithChannelName2LeaderView(action.Shard))
 	if len(views) == 0 {
 		return false
 	}

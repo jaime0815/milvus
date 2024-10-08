@@ -464,7 +464,7 @@ func NewLeaderSegmentTask(ctx context.Context,
 	action *LeaderAction,
 ) *LeaderTask {
 	segmentID := action.SegmentID()
-	base := newBaseTask(ctx, source, collectionID, replica, action.Shard(), fmt.Sprintf("LeaderSegmentTask-%s-%d", action.Type().String(), segmentID))
+	base := newBaseTask(ctx, source, collectionID, replica, action.Shard, fmt.Sprintf("LeaderSegmentTask-%s-%d", action.Type().String(), segmentID))
 	base.actions = []Action{action}
 	return &LeaderTask{
 		baseTask:  base,
@@ -480,7 +480,7 @@ func NewLeaderPartStatsTask(ctx context.Context,
 	leaderID int64,
 	action *LeaderAction,
 ) *LeaderTask {
-	base := newBaseTask(ctx, source, collectionID, replica, action.Shard(), fmt.Sprintf("LeaderPartitionStatsTask-%s", action.Type().String()))
+	base := newBaseTask(ctx, source, collectionID, replica, action.Shard, fmt.Sprintf("LeaderPartitionStatsTask-%s", action.Type().String()))
 	base.actions = []Action{action}
 	return &LeaderTask{
 		baseTask: base,

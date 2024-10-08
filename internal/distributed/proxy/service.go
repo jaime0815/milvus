@@ -22,6 +22,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -182,7 +183,7 @@ func (s *Server) registerHTTPServer() {
 	})
 	handlers := httpserver.NewHandlers(s.proxy)
 	handlers.RegisterRoutesTo(apiv1)
-	s.proxy.RegisterRestRouter(apiv1)
+	s.proxy.(*proxy.Proxy).RegisterRestRouter(apiv1)
 
 	management.Register(&management.Handler{
 		Path:        management.RootPath,

@@ -528,8 +528,8 @@ func (scheduler *taskScheduler) calculateTaskDelta(collectionID int64, targetAct
 		switch action := action.(type) {
 		case *SegmentAction:
 			// skip growing segment's count, cause doesn't know realtime row number of growing segment
-			if action.Scope() == querypb.DataScope_Historical {
-				segment := scheduler.targetMgr.GetSealedSegment(collectionID, action.segmentID, meta.NextTargetFirst)
+			if action.Scope == querypb.DataScope_Historical {
+				segment := scheduler.targetMgr.GetSealedSegment(collectionID, action.SegmentID, meta.NextTargetFirst)
 				if segment != nil {
 					sum += int(segment.GetNumOfRows()) * delta
 				}
@@ -724,7 +724,7 @@ func (scheduler *taskScheduler) preProcess(task Task) bool {
 				// causes a few time to load delta log, if reduce the old delegator in advance,
 				// new delegator can't service search and query, will got no available channel error
 				channelAction := actions[step].(*ChannelAction)
-				leader := scheduler.distMgr.LeaderViewManager.GetLeaderShardView(channelAction.Node(), channelAction.Shard())
+				leader := scheduler.distMgr.LeaderViewManager.GetLeaderShardView(channelAction.Node(), channelAction.Shard)
 				ready = leader.UnServiceableError == nil
 			default:
 				ready = true
