@@ -40,11 +40,10 @@ function renderComponentInfo(data) {
     let tableHTML = `
         <thead class="thead-light">
             <tr>
-                <th scope="col">Name</th>
-                <th scope="col">IP</th>
+                <th scope="col">Node Name</th>
+                <th scope="col">Node IP</th>
                 <th scope="col">Start Time</th>
-                <th scope="col">State</th>
-                <th scope="col">Reason</th>
+                <th scope="col">Node Status</th>
             </tr>
         </thead><tbody>`;
 
@@ -56,8 +55,7 @@ function renderComponentInfo(data) {
                 <td>${node.infos['name']}</td>
                 <td>${hardwareInfo['ip']}</td>
                 <td>${node.infos['created_time']}</td>
-                <td>Healthy</td>
-                <td>None</td>
+                <td>${node.infos['has_error']? node.infos['error_reason'] : 'Healthy'}</td>
             </tr>`;
         tableHTML += tr
     });
@@ -77,7 +75,7 @@ function renderSysInfo(data) {
     tableHTML += '<tr>';
     tableHTML += `<td>Started Time</td>`;
     tableHTML += `<td>${data.nodes_info[0].infos['created_time']}</td>`;
-    tableHTML += `<td></td></tr>`;
+    tableHTML += `<td>The time when the system was started</td></tr>`;
     tableHTML += '</tbody>';
 
     // Display table in the div
@@ -85,6 +83,11 @@ function renderSysInfo(data) {
 }
 
 function renderClientsInfo(data) {
+    if (data.length === 0 ) {
+        document.getElementById("clients").innerHTML = "No clients connected"
+        return
+    }
+
     let tableHTML = '<thead class="thead-light"><tr>' +
         '   <th scope="col">Host</th>' +
         '   <th scope="col">User</th>' +
@@ -116,31 +119,31 @@ function readSysInfo(systemInfo) {
     row += '<tr>';
     row += `<td>GitCommit</td>`;
     row += `<td>${systemInfo.system_version}</td>`;
-    row += `<td></td>`;
+    row += `<td>Git commit SHA that the current build of the system is based on</td>`;
     row += '</tr>';
 
     row += '<tr>';
     row += `<td>Deploy Mode</td>`;
     row += `<td>${systemInfo.deploy_mode}</td>`;
-    row += `<td></td>`;
+    row += `<td>the mode in which the system is deployed</td>`;
     row += '</tr>';
 
     row += '<tr>';
     row += `<td>Build Version</td>`;
     row += `<td>${systemInfo.build_version}</td>`;
-    row += `<td></td>`;
+    row += `<td>the version of the system that was built</td>`;
     row += '</tr>';
 
     row += '<tr>';
     row += `<td>Build Time</td>`;
     row += `<td>${systemInfo.build_time}</td>`;
-    row += `<td></td>`;
+    row += `<td>the exact time when the system was built</td>`;
     row += '</tr>';
 
     row += '<tr>';
     row += `<td>Go Version</td>`;
     row += `<td>${systemInfo.used_go_version}</td>`;
-    row += `<td></td>`;
+    row += `<td>the version of the Golang that was used to build the system</td>`;
     row += '</tr>';
     return row
 }
@@ -159,4 +162,33 @@ function renderConfigs(obj) {
         tableHTML += '</tbody>';
     });
     document.getElementById('mConfig').innerHTML = tableHTML;
+}
+
+function renderDependencies(data) {
+    let tableHTML = '<thead class="thead-light"><tr>' +
+        '   <th scope="col">Sys Name</th>' +
+        '   <th scope="col">Cluster Health Status</th>' +
+        '   <th scope="col">Members Health Status</th>' +
+        '</tr></thead>';
+
+    Object.keys(data).forEach(key => {
+        row = data[key]
+        const tr = `
+            <tr>
+                <td><strong>${key === 'metastore'? 'metastore [' + row['meta_type'] + ']' : 'mq [' + row['mq_type'] + ']'} </strong> </td>
+                <td>${row['health_status']? 'true' : row['unhealthy_reason']}</td>
+                <td>${row['members_health']? row['members_health'].map(member => `
+                    <ul>
+                      <li>Endpoint: ${member.endpoint}, Health: ${member.health ? "Healthy" : "Unhealthy"}</li>
+                    </ul>`).join('') :
+                    `<ul>
+                        <li>No members</li>
+                    </ul>`}
+                </td>
+            </tr>`;
+        tableHTML += tr
+    });
+
+    tableHTML += '</tbody>'
+    document.getElementById("3rdDependency").innerHTML = tableHTML;
 }

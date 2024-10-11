@@ -22,6 +22,9 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/milvus-io/milvus/internal/util/dependency"
+	"github.com/milvus-io/milvus/pkg/util/etcd"
+	"github.com/milvus-io/milvus/pkg/util/paramtable"
 
 	mhttp "github.com/milvus-io/milvus/internal/http"
 	"github.com/milvus-io/milvus/internal/proxy/connection"
@@ -92,6 +95,33 @@ func getConnectedClients(c *gin.Context) {
 		return
 	}
 
+	c.IndentedJSON(http.StatusOK, string(ret))
+}
+
+func getDependencies(c *gin.Context) {
+	dependencies := make(map[string]interface{})
+	dependencies["mq"] = dependency.HealthCheck(paramtable.Get().MQCfg.Type.GetValue())
+	etcdConfig := paramtable.Get().EtcdCfg
+	dependencies["metastore"] = etcd.HealthCheck(
+		etcdConfig.UseEmbedEtcd.GetAsBool(),
+		etcdConfig.EtcdEnableAuth.GetAsBool(),
+		etcdConfig.EtcdAuthUserName.GetValue(),
+		etcdConfig.EtcdAuthPassword.GetValue(),
+		etcdConfig.EtcdUseSSL.GetAsBool(),
+		etcdConfig.Endpoints.GetAsStrings(),
+		etcdConfig.EtcdTLSCert.GetValue(),
+		etcdConfig.EtcdTLSKey.GetValue(),
+		etcdConfig.EtcdTLSCACert.GetValue(),
+		etcdConfig.EtcdTLSMinVersion.GetValue())
+	ret, err := json.Marshal(dependencies)
+
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			mhttp.HTTPReturnCode:    http.StatusInternalServerError,
+			mhttp.HTTPReturnMessage: err.Error(),
+		})
+		return
+	}
 	c.IndentedJSON(http.StatusOK, string(ret))
 }
 

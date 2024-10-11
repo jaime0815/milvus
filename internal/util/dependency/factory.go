@@ -4,11 +4,12 @@ import (
 	"context"
 
 	"github.com/cockroachdb/errors"
+	"github.com/milvus-io/milvus/pkg/common"
+	"github.com/milvus-io/milvus/pkg/metrics"
 	"go.uber.org/zap"
 
 	"github.com/milvus-io/milvus/internal/storage"
 	"github.com/milvus-io/milvus/pkg/log"
-	"github.com/milvus-io/milvus/pkg/metrics"
 	"github.com/milvus-io/milvus/pkg/mq/msgstream"
 	"github.com/milvus-io/milvus/pkg/util/paramtable"
 )
@@ -155,4 +156,20 @@ type Factory interface {
 	msgstream.Factory
 	Init(p *paramtable.ComponentParam)
 	NewPersistentStorageChunkManager(ctx context.Context) (storage.ChunkManager, error)
+}
+
+func HealthCheck(mqType string) *common.MQClusterStatus {
+	clusterStatus := &common.MQClusterStatus{MqType: mqType}
+	switch mqType {
+	case mqTypeNatsmq:
+		// TODO: implement health check for nats mq
+		clusterStatus.Health = true
+	case mqTypeRocksmq:
+		// TODO: implement health checker for rocks mq
+	case mqTypePulsar:
+		msgstream.PulsarHealthCheck(clusterStatus)
+	case mqTypeKafka:
+		msgstream.KafkaHealthCheck(clusterStatus)
+	}
+	return clusterStatus
 }

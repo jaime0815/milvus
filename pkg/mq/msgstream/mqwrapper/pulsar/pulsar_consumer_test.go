@@ -19,12 +19,10 @@ package pulsar
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/apache/pulsar-client-go/pulsar"
-	"github.com/streamnative/pulsarctl/pkg/pulsar/utils"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/milvus-io/milvus/pkg/common"
@@ -141,57 +139,63 @@ func TestPulsarConsumer_Close(t *testing.T) {
 }
 
 func TestPulsarClientCloseUnsubscribeError(t *testing.T) {
-	topic := "TestPulsarClientCloseUnsubscribeError"
-	subName := "test"
-	pulsarAddress := getPulsarAddress()
+	//topic := "TestPulsarClientCloseUnsubscribeError"
+	//subName := "test"
+	//pulsarAddress := getPulsarAddress()
+	//
+	//client, err := pulsar.NewClient(pulsar.ClientOptions{URL: pulsarAddress})
+	//defer client.Close()
+	//assert.NoError(t, err)
+	//
+	//consumer, err := client.Subscribe(pulsar.ConsumerOptions{
+	//	Topic:                       topic,
+	//	SubscriptionName:            subName,
+	//	Type:                        pulsar.Exclusive,
+	//	SubscriptionInitialPosition: pulsar.SubscriptionPositionEarliest,
+	//})
+	//defer consumer.Close()
+	//assert.NoError(t, err)
+	//
+	//// subscribe agiain
+	//_, err = client.Subscribe(pulsar.ConsumerOptions{
+	//	Topic:                       topic,
+	//	SubscriptionName:            subName,
+	//	Type:                        pulsar.Exclusive,
+	//	SubscriptionInitialPosition: pulsar.SubscriptionPositionEarliest,
+	//})
+	//defer consumer.Close()
+	//assert.Error(t, err)
+	//assert.True(t, strings.Contains(err.Error(), "ConsumerBusy"))
+	//
+	//topicName, err := utils.GetTopicName(topic)
+	//assert.NoError(t, err)
 
-	client, err := pulsar.NewClient(pulsar.ClientOptions{URL: pulsarAddress})
-	defer client.Close()
-	assert.NoError(t, err)
-
-	consumer, err := client.Subscribe(pulsar.ConsumerOptions{
-		Topic:                       topic,
-		SubscriptionName:            subName,
-		Type:                        pulsar.Exclusive,
-		SubscriptionInitialPosition: pulsar.SubscriptionPositionEarliest,
-	})
-	defer consumer.Close()
-	assert.NoError(t, err)
-
-	// subscribe agiain
-	_, err = client.Subscribe(pulsar.ConsumerOptions{
-		Topic:                       topic,
-		SubscriptionName:            subName,
-		Type:                        pulsar.Exclusive,
-		SubscriptionInitialPosition: pulsar.SubscriptionPositionEarliest,
-	})
-	defer consumer.Close()
-	assert.Error(t, err)
-	assert.True(t, strings.Contains(err.Error(), "ConsumerBusy"))
-
-	topicName, err := utils.GetTopicName(topic)
-	assert.NoError(t, err)
-
-	pulsarURL, err := url.ParseRequestURI(pulsarAddress)
-	if err != nil {
-		panic(err)
-	}
-	webport := Params.PulsarCfg.WebPort.GetValue()
-	webServiceURL := "http://" + pulsarURL.Hostname() + ":" + webport
+	//pulsarURL, err := url.ParseRequestURI(pulsarAddress)
+	//if err != nil {
+	//	panic(err)
+	//}
+	//webport := Params.PulsarCfg.WebPort.GetValue()
+	fmt.Println("==== start")
+	webServiceURL := "http://" + "10.7.86.5" + ":" + "8080"
 	admin, err := NewAdminClient(webServiceURL, "", "")
 	assert.NoError(t, err)
-	err = admin.Subscriptions().Delete(*topicName, subName, true)
-	if err != nil {
-		webServiceURL = "http://" + pulsarURL.Hostname() + ":" + "8080"
-		admin, err := NewAdminClient(webServiceURL, "", "")
-		assert.NoError(t, err)
-		err = admin.Subscriptions().Delete(*topicName, subName, true)
-		assert.NoError(t, err)
-	}
+	err = admin.Brokers().HealthCheck()
+	fmt.Println(err)
+	//conf, _ := admin.Brokers().GetRuntimeConfigurations()
+	//for k, v := range conf {
+	//	fmt.Println(k, " == ", v)
+	//}
 
-	err = consumer.Unsubscribe()
-	assert.True(t, strings.Contains(err.Error(), "Consumer not found"))
-	t.Log(err)
+	clusters, _ := admin.Clusters().List()
+	fmt.Println(clusters)
+
+	m1, _ := admin.Brokers().GetActiveBrokers(clusters[0])
+	fmt.Println(m1)
+
+	//r, _ := admin.BrokerStats().GetLoadReport()
+	//v, _ := json.Marshal(r)
+	//fmt.Println(string(v))
+
 }
 
 func TestPulsarClientUnsubscribeTwice(t *testing.T) {

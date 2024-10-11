@@ -6429,46 +6429,14 @@ func (node *Proxy) RegisterRestRouter(router gin.IRouter) {
 	router.GET("/_cluster/info", getClusterInfo(node))
 	router.GET("/_cluster/configs", getConfigs(paramtable.Get().GetAll()))
 	router.GET("/_cluster/clients", getConnectedClients)
+	router.GET("/_cluster/dependencies", getDependencies)
 
 	// Hook request
 	router.GET("/_hook/configs", getConfigs(paramtable.GetHookParams().GetAll()))
 
-	// Node request
+	// QueryCoord request
 	router.GET("/_qcoord/segments", getQueryComponentMetrics(node, metricsinfo.QuerySegmentDist))
 	router.GET("/_qcoord/channels", getQueryComponentMetrics(node, metricsinfo.QueryChannelDist))
 	router.GET("/_qcoord/tasks", getQueryComponentMetrics(node, metricsinfo.QueryTasks))
-
-	// Database request
-	router.GET("/_db/list", nil)
-	router.GET("/_db/x/collections", nil)
-
-	// Collection request
-	router.GET("/_qcollection/stats")
-	router.GET("/_qcollection/segments")
-	router.GET("/_qcollection/channels")
-
-	router.GET("/_dcollection/stats")
-	router.GET("/_dcollection/segments")
-	router.GET("/_dcollection/channels")
-
-	// Partition request
-	// TODO router.GET("/_partition/stats")
-
-	// Segment request
-	// TODO router.GET("/_segment/stats")
-
-	// Replica request
-	router.GET("/_replica/list", getQueryComponentMetrics(node, metricsinfo.QueryReplicas))
-
-	// Resource group
-	router.GET("/_rg/list", getQueryComponentMetrics(node, metricsinfo.QueryResourceGroups))
-
-	// Channel request
-	// TODO router.GET("/_channel/stats")
-
-	// Task request
-	// TODO router.GET("/_task/all")
-	//router.GET("/_task/qnode_all", getQueryComponentMetrics(node, metricsinfo.QueryTasks))
-	// TODO router.GET("/_task/dnode_all")
 
 }
