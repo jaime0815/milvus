@@ -192,9 +192,9 @@ func TestPulsarClientCloseUnsubscribeError(t *testing.T) {
 	m1, _ := admin.Brokers().GetActiveBrokers(clusters[0])
 	fmt.Println(m1)
 
-	//r, _ := admin.BrokerStats().GetLoadReport()
-	//v, _ := json.Marshal(r)
-	//fmt.Println(string(v))
+	// r, _ := admin.BrokerStats().GetLoadReport()
+	// v, _ := json.Marshal(r)
+	// fmt.Println(string(v))
 
 }
 

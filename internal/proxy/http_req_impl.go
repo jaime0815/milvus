@@ -22,14 +22,14 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/milvus-io/milvus/internal/util/dependency"
-	"github.com/milvus-io/milvus/pkg/util/etcd"
-	"github.com/milvus-io/milvus/pkg/util/paramtable"
 
 	mhttp "github.com/milvus-io/milvus/internal/http"
 	"github.com/milvus-io/milvus/internal/proxy/connection"
+	"github.com/milvus-io/milvus/internal/util/dependency"
+	"github.com/milvus-io/milvus/pkg/util/etcd"
 	"github.com/milvus-io/milvus/pkg/util/merr"
 	"github.com/milvus-io/milvus/pkg/util/metricsinfo"
+	"github.com/milvus-io/milvus/pkg/util/paramtable"
 )
 
 func getConfigs(configs map[string]string) gin.HandlerFunc {
@@ -114,7 +114,6 @@ func getDependencies(c *gin.Context) {
 		etcdConfig.EtcdTLSCACert.GetValue(),
 		etcdConfig.EtcdTLSMinVersion.GetValue())
 	ret, err := json.Marshal(dependencies)
-
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			mhttp.HTTPReturnCode:    http.StatusInternalServerError,

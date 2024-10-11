@@ -27,8 +27,6 @@ import (
 	"time"
 
 	"github.com/cockroachdb/errors"
-	"github.com/milvus-io/milvus/pkg/common"
-	"github.com/milvus-io/milvus/pkg/util"
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -36,7 +34,9 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
+	"github.com/milvus-io/milvus/pkg/common"
 	"github.com/milvus-io/milvus/pkg/log"
+	"github.com/milvus-io/milvus/pkg/util"
 )
 
 // GetEtcdClient returns etcd client
@@ -270,7 +270,8 @@ func HealthCheck(useEmbedEtcd bool,
 	certFile string,
 	keyFile string,
 	caCertFile string,
-	minVersion string) common.MetaClusterStatus {
+	minVersion string,
+) common.MetaClusterStatus {
 	var healthList []common.EPHealth
 	clusterStatus := common.MetaClusterStatus{MetaType: util.MetaStoreTypeEtcd}
 

@@ -6438,5 +6438,4 @@ func (node *Proxy) RegisterRestRouter(router gin.IRouter) {
 	router.GET("/_qcoord/segments", getQueryComponentMetrics(node, metricsinfo.QuerySegmentDist))
 	router.GET("/_qcoord/channels", getQueryComponentMetrics(node, metricsinfo.QueryChannelDist))
 	router.GET("/_qcoord/tasks", getQueryComponentMetrics(node, metricsinfo.QueryTasks))
-
 }

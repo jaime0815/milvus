@@ -22,14 +22,14 @@ import (
 	"math/rand"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	kafkamqwrapper "github.com/milvus-io/milvus/pkg/mq/msgstream/mqwrapper/kafka"
-	pulsarmqwrapper "github.com/milvus-io/milvus/pkg/mq/msgstream/mqwrapper/pulsar"
-	"github.com/milvus-io/milvus/pkg/util/paramtable"
 	"go.uber.org/zap"
 
 	pcommon "github.com/milvus-io/milvus/pkg/common"
 	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/milvus-io/milvus/pkg/mq/common"
+	kafkamqwrapper "github.com/milvus-io/milvus/pkg/mq/msgstream/mqwrapper/kafka"
+	pulsarmqwrapper "github.com/milvus-io/milvus/pkg/mq/msgstream/mqwrapper/pulsar"
+	"github.com/milvus-io/milvus/pkg/util/paramtable"
 )
 
 // unsubscribeChannels create consumer first, and unsubscribe channel through msgStream.close()
