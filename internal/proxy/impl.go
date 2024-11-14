@@ -3014,7 +3014,7 @@ func (node *Proxy) search(ctx context.Context, request *milvuspb.SearchRequest, 
 
 	defer func() {
 		span := tr.ElapseSpan()
-		if span >= paramtable.Get().ProxyCfg.SlowQuerySpanInSeconds.GetAsDuration(time.Second) {
+		if span >= 10 {
 			log.Info(rpcSlow(method), zap.Uint64("guarantee_timestamp", qt.GetGuaranteeTimestamp()),
 				zap.Int64("nq", qt.SearchRequest.GetNq()), zap.Duration("duration", span))
 			metrics.ProxySlowQueryCount.WithLabelValues(
@@ -3518,7 +3518,7 @@ func (node *Proxy) query(ctx context.Context, qt *queryTask, sp trace.Span) (*mi
 
 	defer func() {
 		span := tr.ElapseSpan()
-		if span >= paramtable.Get().ProxyCfg.SlowQuerySpanInSeconds.GetAsDuration(time.Second) {
+		if span >= 10 {
 			log.Info(
 				rpcSlow(method),
 				zap.String("expr", request.Expr),
