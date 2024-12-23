@@ -215,7 +215,7 @@ func (s *Server) registerMetricsRequest() {
 	}
 
 	QueryReplicasAction := func(ctx context.Context, req *milvuspb.GetMetricsRequest, jsonReq gjson.Result) (string, error) {
-		return s.meta.GetReplicasJSON(ctx), nil
+		return s.meta.GetReplicasJSON(ctx, s.meta), nil
 	}
 
 	QueryResourceGroupsAction := func(ctx context.Context, req *milvuspb.GetMetricsRequest, jsonReq gjson.Result) (string, error) {
