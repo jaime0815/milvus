@@ -17,13 +17,14 @@
 package proxy
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/samber/lo"
+	"go.uber.org/zap"
 
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/milvuspb"
@@ -112,7 +113,7 @@ func getDependencies(c *gin.Context) {
 	dependencies := make(map[string]interface{})
 	dependencies["mq"] = dependency.HealthCheck(paramtable.Get().MQCfg.Type.GetValue())
 	etcdConfig := &paramtable.Get().EtcdCfg
-	fmt.Println("================", etcdConfig.Endpoints.GetAsStrings())
+	log.Info("======getDependencies==========", zap.Any("endpoint", etcdConfig.Endpoints.GetAsStrings()))
 	dependencies["metastore"] = etcd.HealthCheck(
 		etcdConfig.UseEmbedEtcd.GetAsBool(),
 		etcdConfig.EtcdEnableAuth.GetAsBool(),

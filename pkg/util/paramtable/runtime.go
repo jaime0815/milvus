@@ -17,10 +17,11 @@
 package paramtable
 
 import (
-	"fmt"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/milvus-io/milvus/pkg/log"
 )
 
 var (
@@ -31,7 +32,7 @@ var (
 
 func Init() {
 	once.Do(func() {
-		fmt.Println("=========paramtable= Init() ==========")
+		log.Info("=========paramtable= Init() ==========")
 		baseTable := NewBaseTable()
 		params.Init(baseTable)
 		hookBaseTable := NewBaseTableFromYamlOnly(hookYamlFile)
