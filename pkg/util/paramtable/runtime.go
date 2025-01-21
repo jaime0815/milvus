@@ -17,6 +17,7 @@
 package paramtable
 
 import (
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -30,6 +31,7 @@ var (
 
 func Init() {
 	once.Do(func() {
+		fmt.Println("=========paramtable= Init() ==========")
 		baseTable := NewBaseTable()
 		params.Init(baseTable)
 		hookBaseTable := NewBaseTableFromYamlOnly(hookYamlFile)
