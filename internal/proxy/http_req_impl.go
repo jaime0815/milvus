@@ -109,30 +109,32 @@ func getConnectedClients(c *gin.Context) {
 	c.Data(http.StatusOK, contentType, ret)
 }
 
-func getDependencies(c *gin.Context) {
-	dependencies := make(map[string]interface{})
-	dependencies["mq"] = dependency.HealthCheck(paramtable.Get().MQCfg.Type.GetValue())
-	etcdConfig := &paramtable.Get().EtcdCfg
-	log.Info("======getDependencies==========", zap.Any("endpoint", etcdConfig.Endpoints.GetAsStrings()))
-	dependencies["metastore"] = etcd.HealthCheck(
-		etcdConfig.UseEmbedEtcd.GetAsBool(),
-		etcdConfig.EtcdEnableAuth.GetAsBool(),
-		etcdConfig.EtcdAuthUserName.GetValue(),
-		etcdConfig.EtcdAuthPassword.GetValue(),
-		etcdConfig.EtcdUseSSL.GetAsBool(),
-		etcdConfig.Endpoints.GetAsStrings(),
-		etcdConfig.EtcdTLSCert.GetValue(),
-		etcdConfig.EtcdTLSKey.GetValue(),
-		etcdConfig.EtcdTLSCACert.GetValue(),
-		etcdConfig.EtcdTLSMinVersion.GetValue())
-	ret, err := json.Marshal(dependencies)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-			mhttp.HTTPReturnMessage: err.Error(),
-		})
-		return
+func getDependencies() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		dependencies := make(map[string]interface{})
+		dependencies["mq"] = dependency.HealthCheck(paramtable.Get().MQCfg.Type.GetValue())
+		etcdConfig := &paramtable.Get().EtcdCfg
+		log.Info("======getDependencies==========", zap.Any("endpoint", etcdConfig.Endpoints.GetAsStrings()))
+		dependencies["metastore"] = etcd.HealthCheck(
+			etcdConfig.UseEmbedEtcd.GetAsBool(),
+			etcdConfig.EtcdEnableAuth.GetAsBool(),
+			etcdConfig.EtcdAuthUserName.GetValue(),
+			etcdConfig.EtcdAuthPassword.GetValue(),
+			etcdConfig.EtcdUseSSL.GetAsBool(),
+			etcdConfig.Endpoints.GetAsStrings(),
+			etcdConfig.EtcdTLSCert.GetValue(),
+			etcdConfig.EtcdTLSKey.GetValue(),
+			etcdConfig.EtcdTLSCACert.GetValue(),
+			etcdConfig.EtcdTLSMinVersion.GetValue())
+		ret, err := json.Marshal(dependencies)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+				mhttp.HTTPReturnMessage: err.Error(),
+			})
+			return
+		}
+		c.Data(http.StatusOK, contentType, ret)
 	}
-	c.Data(http.StatusOK, contentType, ret)
 }
 
 func getSlowQuery(node *Proxy) gin.HandlerFunc {
